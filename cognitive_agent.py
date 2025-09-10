@@ -63,7 +63,7 @@ class CognitiveAgent:
         intent = interpretation.get('intent', 'unknown')
         entities = interpretation.get('entities', [])
         relation = interpretation.get('relation')
-        key_topics = interpretation.get('key_topics', [])
+        
         structured_response = ""
 
         if intent == 'greeting': structured_response = "Hello User."
@@ -96,8 +96,11 @@ class CognitiveAgent:
         
         elif intent == 'question_about_entity' and entities:
             entity_name = entities[0]['name']
+            
             if "agent" in entity_name.lower():
                 agent_node = self.graph.get_node_by_name("agent")
+                
+                # --- THIS IS THE CORRECTED LOGIC BLOCK ---
                 if "name" in normalized_input:
                     name_edge = next((edge for edge in self.graph.get_edges_from_node(agent_node.id) if edge.type == "has_name"), None) if agent_node else None
                     if name_edge:
@@ -105,52 +108,34 @@ class CognitiveAgent:
                         structured_response = f"My name is {name_node.name.capitalize()}."
                     else:
                         structured_response = "I don't have a name yet."
+                # --- END OF CORRECTION ---
+                
                 else:
-                    # --- FIX: Gather raw facts and delegate to the synthesizer ---
                     facts_to_synthesize = []
                     all_relations = self.graph.get_edges_from_node(agent_node.id) if agent_node else []
-                    
-                    # Prioritize the most important facts first for a better response
                     for edge in all_relations:
-                        if edge.type == "is_a":
-                            target_node = self.graph.nodes[edge.target]
-                            facts_to_synthesize.append(f"I am a {target_node.name}.")
+                        if edge.type == "is_a": facts_to_synthesize.append(f"I am a {self.graph.nodes[edge.target].name}.")
                     for edge in all_relations:
-                        if edge.type == "has_name":
-                            target_node = self.graph.nodes[edge.target]
-                            facts_to_synthesize.append(f"My name is {target_node.name.capitalize()}.")
+                        if edge.type == "has_name": facts_to_synthesize.append(f"My name is {self.graph.nodes[edge.target].name.capitalize()}.")
                     for edge in all_relations:
-                        if edge.type == "can_do":
-                            target_node = self.graph.nodes[edge.target]
-                            facts_to_synthesize.append(f"I can {target_node.name}.")
-                            
+                        if edge.type == "can_do": facts_to_synthesize.append(f"I can {self.graph.nodes[edge.target].name}.")
                     if facts_to_synthesize:
                         structured_response = " ".join(facts_to_synthesize)
                     else:
                         structured_response = "I am an AI assistant designed to learn."
-                    # --- END FIX ---
             else:
+                print(f"  [CognitiveAgent]: Starting multi-hop reasoning for '{entity_name}'...")
                 clean_entity_name = self._clean_phrase(entity_name)
                 subject_node = self.graph.get_node_by_name(clean_entity_name)
                 if not subject_node:
                     structured_response = f"I don't have any information about {entity_name}."
                 else:
-                    response_parts = [subject_node.name.capitalize()]
-                    all_relations = self.graph.get_edges_from_node(subject_node.id)
-                    for edge in sorted(all_relations, key=lambda e: e.type):
-                        if edge.type == "might_relate": continue
-                        target_node = self.graph.nodes[edge.target]
-                        relation_verb = "is a" if edge.type == "is_a" else edge.type.replace('_', ' ')
-                        response_parts.append(f"{relation_verb} {target_node.name.capitalize()}")
-                    aliases = []
-                    incoming_relations = self.graph.get_edges_to_node(subject_node.id)
-                    for edge in incoming_relations:
-                        if edge.type == "is_a" and edge.weight > 0.8:
-                            alias_node = self.graph.nodes[edge.source]
-                            aliases.append(alias_node.name.capitalize())
-                    if aliases: response_parts.append(f"and is also known as {', '.join(aliases)}")
-                    if len(response_parts) == 1: structured_response = f"I know about {subject_node.name.capitalize()}, but I don't have any specific details."
-                    else: structured_response = " ".join(response_parts) + "."
+                    facts = self._gather_facts_multihop(subject_node, max_hops=2)
+                    if not facts:
+                        structured_response = f"I know the concept of {subject_node.name.capitalize()}, but I don't have any specific details."
+                    else:
+                        structured_response = ". ".join(sorted(list(facts))) + "."
+
         else: structured_response = "I'm not sure how to process that. Could you rephrase?"
         
         non_synthesize_triggers = [
@@ -164,11 +149,48 @@ class CognitiveAgent:
             final_response = structured_response
         else:
             print(f"  [Structured Response]: {structured_response}")
-            fluent_response = self.interpreter.synthesize(structured_response)
+            fluent_response = self.interpreter.synthesize(structured_response, original_question=user_input)
             print(f"  [Synthesized Response]: {fluent_response}")
             final_response = fluent_response
+            
         return final_response
 
+    def _gather_facts_multihop(self, start_node: ConceptNode, max_hops: int) -> set:
+        facts = set()
+        queue = [(start_node.id, 0)]
+        visited = {start_node.id}
+
+        while queue:
+            current_node_id, current_hop = queue.pop(0)
+            
+            if current_hop >= max_hops: continue
+            
+            current_node = self.graph.nodes.get(current_node_id)
+            if not current_node: continue
+
+            for edge in self.graph.get_edges_from_node(current_node_id):
+                if edge.type == "might_relate": continue
+                target_node = self.graph.nodes.get(edge.target)
+                if target_node:
+                    facts.add(f"{current_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name.capitalize()}")
+                    if edge.target not in visited:
+                        visited.add(edge.target)
+                        queue.append((edge.target, current_hop + 1))
+
+            for edge in self.graph.get_edges_to_node(current_node_id):
+                if edge.type == "might_relate": continue
+                source_node = self.graph.nodes.get(edge.source)
+                if source_node:
+                    fact_str = f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {current_node.name.capitalize()}"
+                    if edge.type == "is_a" and edge.weight > 0.8:
+                        fact_str = f"{source_node.name.capitalize()} is also known as {current_node.name.capitalize()}"
+                    facts.add(fact_str)
+                    if edge.source not in visited:
+                        visited.add(edge.source)
+                        queue.append((edge.source, current_hop + 1))
+        
+        return facts
+        
     def _clean_phrase(self, phrase: str) -> str:
         words = phrase.lower().split()
         if words and words[0] in ['a', 'an', 'the']: words = words[1:]
@@ -179,20 +201,15 @@ class CognitiveAgent:
         verb = relation.get('verb')
         object_ = relation.get('object')
         properties = relation.get('properties', {})
-        
         if not all([subject, verb, object_]): return False
-
         subject_name = subject if isinstance(subject, str) else subject.get('name')
         object_name = object_ if isinstance(object_, str) else object_.get('name')
-        
         if not all([subject_name, verb, object_name]):
             print(f"    [Agent Warning] Could not extract name from subject/object dict: {relation}")
             return False
-
         print(f"  [AGENT LEARNING: Processing interpreted statement: {subject_name} -> {verb} -> {object_name}]")
         self.learning_iterations += 1
         verb_cleaned = verb.lower().strip()
-
         if 'agent' in subject_name.lower() and verb_cleaned in ['be', 'is', 'are', 'is named', 'is_named']:
             if len(object_name.split()) == 1 and object_name[0].isupper():
                 relation_type = "has_name"; subject_name = "agent"
@@ -200,7 +217,6 @@ class CognitiveAgent:
         else:
             relation_type_map = {"be": "is_a", "is": "is_a", "are": "is_a", "cause": "causes", "causes": "causes", "locate_in": "is_located_in", "located_in": "is_located_in", "part_of": "is_part_of", "learn": "learns", "release": "released", "released": "released"}
             relation_type = relation_type_map.get(verb_cleaned, verb_cleaned.replace(' ', '_'))
-
         sub_node = self._add_or_update_concept(subject_name)
         obj_node = self._add_or_update_concept(object_name)
         if sub_node and obj_node:
