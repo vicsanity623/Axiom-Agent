@@ -1,0 +1,15 @@
+# Ignore the large language model file
+*.gguf
+
+# Ignore Python's automatic cache folder
+__pycache__/
+
+# Ignore the agent's memory and state files
+# These will be different on every machine and shouldn't be in version control
+my_agent_brain.json
+my_agent_state.json
+interpreter_cache.json
+notes.txt
+
+# Ignore system-specific files (like from macOS)
+.DS_Store

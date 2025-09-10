@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    
+    <!-- PWA and iOS Fullscreen Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Axiom Agent">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1a1a1a">
+    <!-- End PWA Tags -->
+
+    <title>Axiom Agent Interface</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+</head>
+<body>
+    <div class="chat-container">
+        <header class="chat-header">
+            <div class="chat-title">Axiom Agent</div>
+            <div id="status-indicator" class="status-indicator">Initializing...</div>
+        </header>
+        <div class="chat-messages" id="chat-messages">
+            <!-- Messages will be appended here by JavaScript -->
+            <div class="message system-message">
+                <div class="message-content">Hello! I'm the Axiom Agent. Please wait a moment while I load my cognitive core and interpreter.</div>
+            </div>
+        </div>
+        <div class="chat-input-area">
+            <textarea id="user-input" placeholder="Loading models, please wait..." rows="1" disabled></textarea>
+            <button id="send-button" disabled>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="send-icon"><path d="M7 11L12 6L17 11M12 18V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- NEW: Service Worker Registration ---
+        if ('serviceWorker' in navigator) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').then(registration => {
+              console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }, err => {
+              console.log('ServiceWorker registration failed: ', err);
+            });
+          });
+        }
+        // --- END NEW ---
+
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-button');
+        const statusIndicator = document.getElementById('status-indicator');
+
+        function scrollToBottom() {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function displayMessage(message, sender) {
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message', `${sender}-message`);
+            const contentElement = document.createElement('div');
+            contentElement.classList.add('message-content');
+            message = message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*(.*?)\*/g, '<i>$1</i>').replace(/\n/g, '<br>');
+            contentElement.innerHTML = message;
+            messageElement.appendChild(contentElement);
+            chatMessages.appendChild(messageElement);
+            scrollToBottom();
+        }
+
+        async function sendMessage() {
+            const message = userInput.value.trim();
+            if (message === '') return;
+
+            displayMessage(message, 'user');
+            userInput.value = '';
+            userInput.style.height = 'auto';
+
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<span class="loading-spinner"></span>';
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ message: message }),
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    displayMessage(data.response, 'ai');
+                } else {
+                    displayMessage(`Error: ${data.error || 'Failed to get response.'}`, 'ai-error');
+                    if (data.status && data.status.startsWith('loading')) {
+                        statusIndicator.textContent = "Agent Still Initializing...";
+                        statusIndicator.style.backgroundColor = '#f0ad4e';
+                    }
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                displayMessage('Network error or server issue. Please try again.', 'ai-error');
+            } finally {
+                sendButton.disabled = false;
+                sendButton.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="send-icon"><path d="M7 11L12 6L17 11M12 18V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+                userInput.focus();
+            }
+        }
+
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+
+        userInput.addEventListener('input', () => {
+            userInput.style.height = 'auto';
+            userInput.style.height = (userInput.scrollHeight) + 'px';
+        });
+
+        async function checkModelStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+                if (data.status === "ready") {
+                    statusIndicator.textContent = "Agent Ready";
+                    statusIndicator.style.backgroundColor = '#5cb85c';
+                    userInput.placeholder = "Message Axiom Agent...";
+                    userInput.disabled = false;
+                    sendButton.disabled = false;
+                    displayMessage("Agent initialization complete. You can now chat.", "system");
+                } else if (data.status.startsWith("error")) {
+                    statusIndicator.textContent = `Error Loading Agent`;
+                    statusIndicator.style.backgroundColor = '#d9534f';
+                    userInput.placeholder = "Error loading models.";
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                    displayMessage(`Failed to initialize agent: ${data.status}`, "system");
+                } else {
+                    statusIndicator.textContent = "Initializing Agent...";
+                    statusIndicator.style.backgroundColor = '#f0ad4e';
+                    userInput.placeholder = "Loading models, please wait...";
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                    setTimeout(checkModelStatus, 3000);
+                }
+            } catch (error) {
+                statusIndicator.textContent = "Server Disconnected";
+                statusIndicator.style.backgroundColor = '#d9534f';
+                userInput.placeholder = "Server connection lost.";
+                userInput.disabled = true;
+                sendButton.disabled = true;
+                console.error("Failed to fetch model status:", error);
+            }
+        }
+
+        window.onload = () => {
+            checkModelStatus();
+        };
+
+    </script>
+</body>
+</html>
