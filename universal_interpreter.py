@@ -45,7 +45,7 @@ class UniversalInterpreter:
                     "interpretations": list(self.interpretation_cache.items()),
                     "synthesis": list(self.synthesis_cache.items())
                 }
-                json.dump(cache_data, f, indent=2)
+                json.dump(cache_data, f, indent=4)
         except Exception as e:
             print(f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {e}")
             
@@ -85,7 +85,6 @@ class UniversalInterpreter:
         )
         examples_prompt = (
             "Here are some examples:\n"
-            # --- FIX: Restored the 'command' example ---
             "Input: 'show all facts'\n"
             'Output: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}\n\n'
             "Input: 'A restaurant is an establishment that prepares and serves food.'\n"
@@ -112,34 +111,53 @@ class UniversalInterpreter:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
             return {"intent": "unknown", "entities": [], "relation": None, "key_topics": user_input.split(), "full_text_rephrased": f"Could not fully interpret: '{user_input}'"}
 
-    def synthesize(self, structured_facts: str, original_question: str = None) -> str:
-        if structured_facts in self.synthesis_cache and not original_question:
+    # --- UPDATED: This method is now multi-modal ---
+    def synthesize(self, structured_facts: str, original_question: str = None, mode: str = "statement") -> str:
+        """
+        Uses the Mini LLM to convert structured facts into natural language.
+        Can operate in different modes: 'statement' (default) or 'clarification_question'.
+        """
+        # Caching is only effective for the default statement mode
+        if mode == "statement" and structured_facts in self.synthesis_cache and not original_question:
             print("  [Synthesizer Cache]: Hit!")
             return self.synthesis_cache[structured_facts]
-        print("  [Synthesizer Cache]: Miss. Running LLM for synthesis.")
+        print(f"  [Synthesizer Cache]: Miss. Running LLM for synthesis in '{mode}' mode.")
         
-        system_prompt = (
-            "You are a language rephrasing engine. Your task is to rephrase the provided 'Facts' into a single, natural English sentence. "
-            "You MUST NOT add, infer, or use any external knowledge. You MUST only use the information given in the 'Facts' string. "
-            "Your output must be ONLY the rephrased sentence and nothing else."
-        )
-        task_prompt = f"Facts: '{structured_facts}'"
-        if original_question:
-            task_prompt = f"Using ONLY the facts provided, answer the following question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
+        system_prompt = ""
+        task_prompt = ""
+        
+        if mode == "clarification_question":
+            system_prompt = (
+                "You are an inquisitive AI agent. Your task is to ask a clarifying question to a human user. "
+                "You have been given two conflicting facts. Formulate a single, polite, and simple question that will help you "
+                "determine the correct information. Do not state the facts directly. Your output must be ONLY the question."
+            )
+            task_prompt = f"Conflicting Facts: '{structured_facts}'"
+        else: # Default "statement" mode
+            system_prompt = (
+                "You are a language rephrasing engine. Your task is to rephrase the provided 'Facts' into a single, natural English sentence. "
+                "You MUST NOT add, infer, or use any external knowledge. You MUST only use the information given in the 'Facts' string. "
+                "Your output must be ONLY the rephrased sentence and nothing else."
+            )
+            task_prompt = f"Facts: '{structured_facts}'"
+            if original_question:
+                task_prompt = f"Using ONLY the facts provided, answer the following question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
+        
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\nRephrase the following facts into a single sentence, using the original question for context if provided.\n\n{task_prompt}[/INST]"
+            f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         )
         try:
             output = self.llm(
                 full_prompt, max_tokens=256, stop=["</s>", "\n"], echo=False, 
-                temperature=0.1
+                temperature=0.7 if mode == "clarification_question" else 0.1 # More creative for questions
             )
-            synthesized_text = output["choices"][0]["text"].strip()
+            synthesized_text = output["choices"][0]["text"].strip().replace('"', '')
 
             if "(" in synthesized_text:
                 synthesized_text = synthesized_text.split("(")[0].strip()
             
-            if not original_question:
+            # Only cache default statements, not questions or answers to questions
+            if mode == "statement" and not original_question:
                 self.synthesis_cache[structured_facts] = synthesized_text
                 self._save_cache()
             return synthesized_text
