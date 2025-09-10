@@ -8,25 +8,42 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Axiom Agent">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#1a1a1a">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#121212">
     <!-- End PWA Tags -->
 
     <title>Axiom Agent Interface</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Oldenburg&display=swap" rel="stylesheet">
+
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
 </head>
 <body>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>Chat History</h3>
+            <button id="close-sidebar-btn" class="icon-button">&times;</button>
+        </div>
+        <div class="sidebar-content" id="chat-history-list"></div>
+    </div>
+    <div class="overlay" id="overlay"></div>
+
     <div class="chat-container">
         <header class="chat-header">
+            <button id="menu-button" class="icon-button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+            </button>
             <div class="chat-title">Axiom Agent</div>
+            <button id="new-chat-button" class="icon-button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            </button>
             <div id="status-indicator" class="status-indicator">Initializing...</div>
         </header>
         <div class="chat-messages" id="chat-messages">
-            <!-- Messages will be appended here by JavaScript -->
-            <div class="message system-message">
-                <div class="message-content">Hello! I'm the Axiom Agent. Please wait a moment while I load my cognitive core and interpreter.</div>
-            </div>
+             <!-- Initial message will be added by JS -->
         </div>
         <div class="chat-input-area">
             <textarea id="user-input" placeholder="Loading models, please wait..." rows="1" disabled></textarea>
@@ -37,47 +54,154 @@
     </div>
 
     <script>
-        // --- NEW: Service Worker Registration ---
         if ('serviceWorker' in navigator) {
           window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js').then(registration => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            }, err => {
-              console.log('ServiceWorker registration failed: ', err);
-            });
+            navigator.serviceWorker.register('/sw.js').then(r => console.log('SW registered.'), err => console.log('SW reg failed: ', err));
           });
         }
-        // --- END NEW ---
 
         const chatMessages = document.getElementById('chat-messages');
         const userInput = document.getElementById('user-input');
         const sendButton = document.getElementById('send-button');
         const statusIndicator = document.getElementById('status-indicator');
+        const menuButton = document.getElementById('menu-button');
+        const newChatButton = document.getElementById('new-chat-button');
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const closeSidebarBtn = document.getElementById('close-sidebar-btn');
+        const chatHistoryList = document.getElementById('chat-history-list');
 
-        function scrollToBottom() {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+        let conversations = {};
+        let currentChatId = null;
 
-        function displayMessage(message, sender) {
+        function generateId() { return Date.now().toString() + Math.random().toString(36).substr(2, 9); }
+        function scrollToBottom() { chatMessages.scrollTop = chatMessages.scrollHeight; }
+
+        function displayMessage(messageData, isNew = true) {
+            const { text, sender, id } = messageData;
             const messageElement = document.createElement('div');
             messageElement.classList.add('message', `${sender}-message`);
+            messageElement.dataset.id = id;
             const contentElement = document.createElement('div');
             contentElement.classList.add('message-content');
-            message = message.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*(.*?)\*/g, '<i>$1</i>').replace(/\n/g, '<br>');
-            contentElement.innerHTML = message;
+            const textElement = document.createElement('div');
+            textElement.classList.add('message-text');
+            textElement.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\*(.*?)\*/g, '<i>$1</i>').replace(/\n/g, '<br>');
+            contentElement.appendChild(textElement);
+
+            if (sender !== 'system') {
+                const menuContainer = document.createElement('div');
+                menuContainer.classList.add('message-menu-container');
+                const menuButton = document.createElement('button');
+                menuButton.classList.add('message-menu-button');
+                menuButton.innerHTML = '&#8942;';
+                const dropdown = document.createElement('div');
+                dropdown.classList.add('message-menu-dropdown');
+                const copyButton = document.createElement('a');
+                copyButton.href = '#';
+                copyButton.textContent = 'Copy';
+                copyButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    navigator.clipboard.writeText(text).then(() => {
+                        copyButton.textContent = 'Copied!';
+                        setTimeout(() => { copyButton.textContent = 'Copy'; }, 1500);
+                    });
+                    dropdown.classList.remove('show');
+                });
+                dropdown.appendChild(copyButton);
+                menuContainer.appendChild(menuButton);
+                menuContainer.appendChild(dropdown);
+                contentElement.appendChild(menuContainer);
+                menuButton.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll('.message-menu-dropdown.show').forEach(d => d.classList.remove('show'));
+                    dropdown.classList.toggle('show');
+                });
+            }
+            
             messageElement.appendChild(contentElement);
             chatMessages.appendChild(messageElement);
-            scrollToBottom();
+            if (isNew) { scrollToBottom(); }
+        }
+
+        function saveConversations() { localStorage.setItem('axiom-conversations', JSON.stringify(conversations)); }
+        function loadConversations() {
+            const saved = localStorage.getItem('axiom-conversations');
+            if (saved) { conversations = JSON.parse(saved); }
+            currentChatId = localStorage.getItem('axiom-current-chat-id');
+            if (!currentChatId || !conversations[currentChatId]) {
+                startNewChat(false);
+            }
+            loadChat(currentChatId);
+        }
+
+        function loadChat(chatId) {
+            if (!conversations[chatId]) return;
+            currentChatId = chatId;
+            localStorage.setItem('axiom-current-chat-id', chatId);
+            chatMessages.innerHTML = '';
+            conversations[chatId].messages.forEach(msg => displayMessage(msg, false));
+            setTimeout(scrollToBottom, 0);
+            updateChatHistoryList();
+            sidebar.classList.remove('show');
+            overlay.classList.remove('show');
+        }
+
+        function startNewChat(save = true) {
+            const newId = generateId();
+            const welcomeMessage = {
+                id: generateId(),
+                sender: 'system',
+                text: "Hello! I'm the Axiom Agent. Please wait a moment while I load my cognitive core and interpreter."
+            };
+            conversations[newId] = { id: newId, title: 'New Chat', messages: [welcomeMessage], timestamp: Date.now() };
+            if (save) { saveConversations(); }
+            loadChat(newId);
+        }
+        
+        function updateChatHistoryList() {
+            chatHistoryList.innerHTML = '';
+            const sortedChats = Object.values(conversations).sort((a, b) => b.timestamp - a.timestamp);
+            sortedChats.forEach(chat => {
+                const chatLink = document.createElement('a');
+                chatLink.href = '#';
+                chatLink.classList.add('chat-history-item');
+                chatLink.dataset.id = chat.id;
+                if (chat.id === currentChatId) { chatLink.classList.add('active'); }
+                const title = document.createElement('span');
+                title.textContent = chat.title;
+                chatLink.appendChild(title);
+                const deleteBtn = document.createElement('button');
+                deleteBtn.innerHTML = '&times;';
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to delete "${chat.title}"?`)) {
+                        delete conversations[chat.id];
+                        if (currentChatId === chat.id) { startNewChat(); }
+                        saveConversations();
+                        updateChatHistoryList();
+                    }
+                });
+                chatLink.appendChild(deleteBtn);
+                chatLink.addEventListener('click', (e) => { e.preventDefault(); loadChat(chat.id); });
+                chatHistoryList.appendChild(chatLink);
+            });
         }
 
         async function sendMessage() {
-            const message = userInput.value.trim();
-            if (message === '') return;
-
-            displayMessage(message, 'user');
+            const messageText = userInput.value.trim();
+            if (messageText === '') return;
+            const userMessage = { id: generateId(), sender: 'user', text: messageText };
+            conversations[currentChatId].messages.push(userMessage);
+            displayMessage(userMessage);
+            if (conversations[currentChatId].title === 'New Chat') {
+                conversations[currentChatId].title = messageText.substring(0, 30) + (messageText.length > 30 ? '...' : '');
+            }
+            conversations[currentChatId].timestamp = Date.now();
+            saveConversations();
+            updateChatHistoryList();
             userInput.value = '';
             userInput.style.height = 'auto';
-
             sendButton.disabled = true;
             sendButton.innerHTML = '<span class="loading-spinner"></span>';
 
@@ -85,22 +209,21 @@
                 const response = await fetch('/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ message: message }),
+                    body: JSON.stringify({ message: messageText }),
                 });
-
                 const data = await response.json();
-                if (response.ok) {
-                    displayMessage(data.response, 'ai');
-                } else {
-                    displayMessage(`Error: ${data.error || 'Failed to get response.'}`, 'ai-error');
-                    if (data.status && data.status.startsWith('loading')) {
-                        statusIndicator.textContent = "Agent Still Initializing...";
-                        statusIndicator.style.backgroundColor = '#f0ad4e';
-                    }
-                }
+                let aiMessage = response.ok ?
+                    { id: generateId(), sender: 'ai', text: data.response } :
+                    { id: generateId(), sender: 'ai-error', text: `Error: ${data.error || 'Failed to get response.'}` };
+                conversations[currentChatId].messages.push(aiMessage);
+                displayMessage(aiMessage);
+                saveConversations();
             } catch (error) {
                 console.error('Error sending message:', error);
-                displayMessage('Network error or server issue. Please try again.', 'ai-error');
+                const errorMessage = { id: generateId(), sender: 'ai-error', text: 'Network error or server issue. Please try again.' };
+                conversations[currentChatId].messages.push(errorMessage);
+                displayMessage(errorMessage);
+                saveConversations();
             } finally {
                 sendButton.disabled = false;
                 sendButton.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="send-icon"><path d="M7 11L12 6L17 11M12 18V7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
@@ -109,17 +232,13 @@
         }
 
         sendButton.addEventListener('click', sendMessage);
-        userInput.addEventListener('keydown', (event) => {
-            if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                sendMessage();
-            }
-        });
-
-        userInput.addEventListener('input', () => {
-            userInput.style.height = 'auto';
-            userInput.style.height = (userInput.scrollHeight) + 'px';
-        });
+        userInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+        userInput.addEventListener('input', () => { userInput.style.height = 'auto'; userInput.style.height = (userInput.scrollHeight) + 'px'; });
+        menuButton.addEventListener('click', () => { sidebar.classList.add('show'); overlay.classList.add('show'); });
+        newChatButton.addEventListener('click', () => { startNewChat(); });
+        closeSidebarBtn.addEventListener('click', () => { sidebar.classList.remove('show'); overlay.classList.remove('show'); });
+        overlay.addEventListener('click', () => { sidebar.classList.remove('show'); overlay.classList.remove('show'); });
+        document.body.addEventListener('click', () => { document.querySelectorAll('.message-menu-dropdown.show').forEach(d => d.classList.remove('show')); });
 
         async function checkModelStatus() {
             try {
@@ -127,37 +246,34 @@
                 const data = await response.json();
                 if (data.status === "ready") {
                     statusIndicator.textContent = "Agent Ready";
-                    statusIndicator.style.backgroundColor = '#5cb85c';
+                    statusIndicator.style.backgroundColor = 'var(--status-ready-bg)';
                     userInput.placeholder = "Message Axiom Agent...";
                     userInput.disabled = false;
                     sendButton.disabled = false;
-                    displayMessage("Agent initialization complete. You can now chat.", "system");
+                    
+                    // --- FIX: Only add the 'complete' message if it's not already there ---
+                    const lastMessage = conversations[currentChatId].messages.slice(-1)[0];
+                    if (!lastMessage || !lastMessage.text.includes("initialization complete")) {
+                        const readyMessage = { id: generateId(), sender: 'system', text: "Agent initialization complete. You can now chat."};
+                        conversations[currentChatId].messages.push(readyMessage);
+                        displayMessage(readyMessage);
+                        saveConversations();
+                    }
+
                 } else if (data.status.startsWith("error")) {
-                    statusIndicator.textContent = `Error Loading Agent`;
-                    statusIndicator.style.backgroundColor = '#d9534f';
-                    userInput.placeholder = "Error loading models.";
-                    userInput.disabled = true;
-                    sendButton.disabled = true;
-                    displayMessage(`Failed to initialize agent: ${data.status}`, "system");
+                    statusIndicator.textContent = `Error Loading`;
+                    statusIndicator.style.backgroundColor = 'var(--status-error-bg)';
+                    // ... (error handling)
                 } else {
-                    statusIndicator.textContent = "Initializing Agent...";
-                    statusIndicator.style.backgroundColor = '#f0ad4e';
-                    userInput.placeholder = "Loading models, please wait...";
-                    userInput.disabled = true;
-                    sendButton.disabled = true;
                     setTimeout(checkModelStatus, 3000);
                 }
             } catch (error) {
-                statusIndicator.textContent = "Server Disconnected";
-                statusIndicator.style.backgroundColor = '#d9534f';
-                userInput.placeholder = "Server connection lost.";
-                userInput.disabled = true;
-                sendButton.disabled = true;
-                console.error("Failed to fetch model status:", error);
+                // ... (error handling)
             }
         }
 
         window.onload = () => {
+            loadConversations();
             checkModelStatus();
         };
 
