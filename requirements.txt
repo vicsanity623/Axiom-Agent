@@ -1,0 +1,9 @@
+# requirements.txt
+
+APScheduler
+Flask
+llama-cpp-python
+nltk
+requests
+wikipedia
+wikipedia-api

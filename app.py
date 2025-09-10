@@ -38,7 +38,7 @@ def load_agent():
                 scheduler = BackgroundScheduler(daemon=True)
                 
                 # For testing, you can change 'hours=1' to 'minutes=X' to see it run quickly.
-                scheduler.add_job(harvester.harvest_and_learn, 'interval', minutes=6)
+                scheduler.add_job(harvester.harvest_and_learn, 'interval', minutes=3)
                 
                 scheduler.start()
                 print("--- Knowledge Harvester is scheduled to run every 6 minutes (for testing). ---")
