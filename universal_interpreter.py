@@ -43,7 +43,7 @@ class UniversalInterpreter:
             with open(self.cache_file, 'w') as f:
                 cache_data = {
                     "interpretations": list(self.interpretation_cache.items()),
-                    "synthesis": list(self.synthesis_cache.items())
+                    "synthesis": list(list(self.interpretation_cache.items())),
                 }
                 json.dump(cache_data, f, indent=4)
         except Exception as e:
@@ -74,17 +74,14 @@ class UniversalInterpreter:
             "and convert it into a structured JSON object. Extract factual relationships or commands. "
             "Your output must be a single, valid JSON object and NOTHING else."
         )
-        # --- UPDATED: Added 'properties' to the relation object description ---
         json_structure_prompt = (
             "The JSON object must have the following fields:\n"
             "- 'intent': Classify the user's primary intent...\n"
-            "- 'entities': A list of named entities...\n"
             "- 'relation': If 'statement_of_fact', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. "
             "If the sentence contains temporal information (like a date or year), extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.\n"
             "- 'key_topics': A list of the main subjects or topics...\n"
             "- 'full_text_rephrased': A neutral, one-sentence rephrasing..."
         )
-        # --- UPDATED: Added a new example for temporal facts ---
         examples_prompt = (
             "Here are some examples:\n"
             "Input: 'show all facts'\n"
@@ -130,18 +127,26 @@ class UniversalInterpreter:
         
         if mode == "clarification_question":
             system_prompt = (
-                "You are an inquisitive AI agent. Your task is to ask a clarifying question to a human user. "
-                "You have been given two conflicting facts. Formulate a single, polite, and simple question that will help you "
-                "determine the correct information. Do not state the facts directly. Your output must be ONLY the question."
+                "You are an inquisitive AI agent. Your task is to ask a clarifying question. "
+                "You have been given two conflicting facts. Formulate a single, polite, and simple question. "
+                "Do not state the facts directly. Your output must be ONLY the question."
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
         else: # Default "statement" mode
+            # --- NEW: The final, maximally strict prompt ---
             system_prompt = (
-                "You are a STICKT language rephrasing engine. Your task is to convert the given 'Facts' into a single, grammatically correct, natural English sentence. "
-                "You are a fluent parrot. You MUST NOT add any extra information, commentary, or meta-analysis. "
-                "You MUST NOT apologize or mention limitations. "
-                "You MUST ONLY use the information given in the 'Facts' string. "
-                "Your output must be ONLY the rephrased sentence and nothing else."
+                "You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. "
+                "You are a fluent parrot. You must follow these rules strictly:\n"
+                "1.  **ONLY use the information given in the 'Facts' string.**\n"
+                "2.  **DO NOT add any extra information, commentary, or meta-analysis.**\n"
+                "3.  **DO NOT apologize or mention your own limitations.**\n"
+                "4.  **Your output must be ONLY the rephrased sentence and nothing else.**\n\n"
+                "Example of a BAD response:\n"
+                "Facts: 'I'm not sure how to process that.'\n"
+                "BAD Output: 'I need you to clarify what you mean. Please rephrase the question.'\n\n"
+                "Example of a GOOD response:\n"
+                "Facts: 'I'm not sure how to process that.'\n"
+                "GOOD Output: 'I am not sure how to process that.'"
             )
             task_prompt = f"Facts to rephrase: '{structured_facts}'"
             if original_question:
@@ -157,7 +162,7 @@ class UniversalInterpreter:
             )
             synthesized_text = output["choices"][0]["text"].strip().replace('"', '')
 
-            phrases_to_remove = ["rephrased sentence:", "based on the provided facts,", "the rephrased sentence is:"]
+            phrases_to_remove = ["rephrased sentence:", "based on the provided facts,", "the rephrased sentence is:", "good output:"]
             for phrase in phrases_to_remove:
                 if synthesized_text.lower().startswith(phrase):
                     synthesized_text = synthesized_text[len(phrase):].strip()

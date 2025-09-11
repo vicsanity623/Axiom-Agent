@@ -118,10 +118,13 @@ class CognitiveAgent:
 
         if intent == 'greeting': structured_response = "Hello User."
         elif intent == 'farewell': structured_response = "Goodbye User."
-        elif intent == 'gratitude': structured_response = "You're welcome!"
+        # --- THE ONLY CHANGE IS IN THIS LINE ---
+        elif intent in ['gratitude', 'acknowledgment']: structured_response = "You're welcome!"
         elif intent == 'positive_affirmation': structured_response = "I'm glad you think so!"
         elif intent == 'statement_of_fact' and relation:
             was_learned, response_message = self._process_statement_for_learning(relation)
+            if not was_learned and self.is_awaiting_clarification:
+                return response_message
             structured_response = response_message
         
         elif intent == 'command' and 'show all facts' in user_input.lower():
@@ -130,7 +133,7 @@ class CognitiveAgent:
                 structured_response = "My knowledge base is currently empty."
             else:
                 for edge in self.graph.edges.values():
-                    if edge.type == "might_relate": continue
+                    if edge.type == "might_rate": continue
                     source_node = self.graph.nodes.get(edge.source)
                     target_node = self.graph.nodes.get(edge.target)
                     if source_node and target_node:
@@ -143,7 +146,7 @@ class CognitiveAgent:
                 else:
                     structured_response = "My knowledge base has concepts but no learned high-confidence facts."
         
-        elif intent == 'question_about_entity' and entities:
+        elif intent in ['question_about_entity', 'question_about_concept'] and entities:
             entity_name = entities[0]['name']
             if "agent" in entity_name.lower():
                 agent_node = self.graph.get_node_by_name("agent")
@@ -155,20 +158,13 @@ class CognitiveAgent:
                     else:
                         structured_response = "I don't have a name yet."
                 else:
-                    facts_to_synthesize = []
-                    all_relations = self.graph.get_edges_from_node(agent_node.id) if agent_node else []
-                    for edge in all_relations:
-                        if edge.type == "is_a": facts_to_synthesize.append(f"I am a {self.graph.nodes[edge.target].name}.")
-                    for edge in all_relations:
-                        if edge.type == "has_name": facts_to_synthesize.append(f"My name is {self.graph.nodes[edge.target].name.capitalize()}.")
-                    for edge in all_relations:
-                        if edge.type == "can_do": facts_to_synthesize.append(f"I can {self.graph.nodes[edge.target].name}.")
+                    facts_with_props = self._gather_facts_multihop(agent_node, max_hops=4)
+                    facts_to_synthesize = {fact_str for fact_str, props in facts_with_props}
                     if facts_to_synthesize:
-                        structured_response = " ".join(facts_to_synthesize)
+                        structured_response = ". ".join(sorted(list(facts_to_synthesize))) + "."
                     else:
                         structured_response = "I am an AI assistant designed to learn."
             else:
-                # --- NEW: Temporal Reasoning Logic ---
                 temporal_keywords = ['now', 'currently', 'today', 'this year']
                 is_temporal_query = any(keyword in user_input.lower() for keyword in temporal_keywords)
                 
@@ -180,7 +176,7 @@ class CognitiveAgent:
                 if not subject_node:
                     structured_response = f"I don't have any information about {entity_name}."
                 else:
-                    facts_with_props = self._gather_facts_multihop(subject_node, max_hops=3)
+                    facts_with_props = self._gather_facts_multihop(subject_node, max_hops=4)
                     
                     if is_temporal_query:
                         print("  [TemporalReasoning]: Filtering facts by date...")
@@ -198,33 +194,22 @@ class CognitiveAgent:
                                             best_date = fact_date
                                             best_fact = fact_str
                                 except (ValueError, TypeError):
-                                    continue # Ignore invalid date formats or properties
+                                    continue
                         
                         if best_fact:
                             facts = {best_fact}
                         else:
-                            # Fallback to general, non-dated facts if no valid temporal fact is found
                             facts = {fact_str for fact_str, props in facts_with_props if not props.get('effective_date')}
                     else:
-                        # For non-temporal queries, just use the fact strings
                         facts = {fact_str for fact_str, props in facts_with_props}
 
                     if not facts:
-                        structured_response = f"I know the concept of {subject_node.name.capitalize()}, but I don't have specific details for that query."
+                        structured_response = f"I know the concept of {subject_node.name.capitalize()}, but I don't have any specific details for that query."
                     else:
                         structured_response = ". ".join(sorted(list(facts))) + "."
-                # --- END OF NEW BLOCK ---
         else: structured_response = "I'm not sure how to process that. Could you rephrase?"
         
-        non_synthesize_triggers = [
-            "Hello User", "Goodbye User", "I understand. I have noted that.",
-            "I don't have any information about", "My name is", "I know about",
-            "That's an interesting topic about", "I'm not sure I fully understood that",
-            "You're welcome!", "I'm glad you think so!",
-            "Here are all the high-confidence facts I have learned",
-            "Thank you for the clarification. I have updated my knowledge.",
-            "I am currently in a read-only mode" # NEW: Prevents synthesis of the inference mode message
-        ]
+        non_synthesize_triggers = ["Hello User", "Goodbye User", "I understand. I have noted that.", "I don't have any information about", "My name is", "I know about", "That's an interesting topic about", "I'm not sure I fully understood that", "You're welcome!", "I'm glad you think so!", "Here are all the high-confidence facts I have learned", "Thank you for the clarification. I have updated my knowledge.", "I am currently in a read-only mode"]
         if any(trigger in structured_response for trigger in non_synthesize_triggers):
             final_response = structured_response
         else:

@@ -25,3 +25,4 @@ models/
 *.gguf2_base_q4_K_M.gguf2_base
 render_model.py
 notes.txt
+AgentCurriculum.txt
