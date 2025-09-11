@@ -8,6 +8,7 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
 
 - **✅ Hybrid Cognitive Architecture:** The agent's mind is a hybrid of a symbolic **Knowledge Graph** (for verifiable, persistent memory) and a neural **Universal Interpreter** (for flexible language understanding), giving it the strengths of both paradigms.
 - **✅ Multi-Hop Logical Reasoning:** The agent can answer complex questions by traversing its knowledge graph and connecting multiple facts to infer new conclusions.
+- **✅ Temporal Reasoning:** The agent can perceive, learn, and reason with time-based facts. It understands the context of words like "now" or "currently" and can determine the most relevant fact from a series of historical events.
 - **✅ The Curiosity Engine (Active Learning Loop):**
     - **Contradiction Detection:** Actively identifies when new information conflicts with its existing world model.
     - **Active Inquiry:** Autonomously formulates and asks clarifying questions to resolve its own confusion.
@@ -30,22 +31,11 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
 
 ---
 
-## Phase 1: Deepening Nuance & Context
+## Phase 1: Deepening Interaction & Scalability
 
-*Focus: Enhance the agent's ability to understand more complex, real-world contexts like time and conversational flow.*
+*Focus: Enhance the agent's conversational abilities and ensure its knowledge base can scale gracefully.*
 
-### 1. Relationship Properties & Nuance (`#1 Priority`)
-- **Status:** **`Partially Implemented`**. The agent's brain and learning logic can store facts with properties. The next step is to implement the reasoning logic to use them.
-- **Goal:** Allow facts to have context, such as time, to enable more precise answers.
-- **Example:**
-  - **Teach:** `As of September 9, 2025, Donald Trump is the President.`
-  - **Ask:** `who is the president now`
-- **Implementation Plan:**
-  1.  Enhance the `UniversalInterpreter` prompt to reliably extract temporal properties (like dates) from statements.
-  2.  Add specific logic to the `chat` method to handle questions containing temporal words (e.g., "now", "currently", "in 2020").
-  3.  This logic will retrieve relevant facts and use Python's `datetime` library to compare the `effective_date` property on each fact to the current date to determine the correct answer.
-
-### 2. Conversational Context (Short-Term Memory)
+### 1. Conversational Context (Short-Term Memory) (`#1 Priority`)
 - **Status:** **`On Hold`**. Initial implementation proved unstable. This feature needs to be re-architected.
 - **Goal:** Enable the agent to understand and answer follow-up questions with pronouns.
 - **Example:**
@@ -57,13 +47,7 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
   3.  This function will take the history and the new input and return the resolved entity (e.g., "apple").
   4.  The main `interpret` call will then use this resolved entity, keeping its primary prompt simple and reliable.
 
----
-
-## Phase 2: User-Driven Growth & Scalability
-
-*Focus: Make learning more direct and ensure the knowledge base can scale gracefully.*
-
-### 3. User-Driven Correction Mechanism
+### 2. User-Driven Correction Mechanism
 - **Status:** Partially addressed by the Curiosity Engine, but a direct correction command is still needed.
 - **Goal:** Allow users to directly correct the agent's mistakes without needing to trigger a contradiction.
 - **Example:**
@@ -73,7 +57,7 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
   1.  Upgrade the `UniversalInterpreter` prompt to recognize a new intent: `statement_of_correction`.
   2.  In `CognitiveAgent`, add logic to handle this intent. It should find and remove/punish the old fact and learn the new one.
 
-### 4. Long-Term Memory & Fact Salience
+### 3. Long-Term Memory & Fact Salience
 - **Goal:** Make the agent's recall more relevant over time by "remembering" frequently accessed facts more strongly.
 - **Concept:** Track the usage of nodes and edges to determine their importance.
 - **Implementation Plan:**

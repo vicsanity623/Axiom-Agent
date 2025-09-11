@@ -110,13 +110,15 @@ python3 app.py
 The agent will be accessible on your local network. Open a web browser and navigate to [localhost](http://127.0.0.1:7500) or the network IP address shown in the terminal.
 
 ## 🚀 The Vision
-**This project is the shell of a new kind of mind. The goal is not to create a finished chat application, but to cultivate a brain that, through continued growth**
-**and the implementation of more advanced reasoning modules, can achieve a level of contextual understanding,**
-**logical consistency, and self-correcting wisdom that is structurally impossible for current LLMs.**
 
-## This is a training in progress. This is the path to a truly intelligent, **non-parrot AI.**
+This project is the shell of a new kind of mind. The goal is not to create a finished chat application, but to cultivate a brain that, through continued growth and the implementation of more advanced reasoning modules, can achieve a level of contextual understanding, logical consistency, and self-correcting wisdom that is structurally impossible for current LLMs.
+
+This is a training in progress. This is the path to a truly intelligent, **non-parrot AI.**
+
+---
 
 ## 🗺️ Project Roadmap
 For a detailed list of planned features and future development goals, please see the **[ROADMAP.md](ROADMAP.md)** file.
 
-### This is ADMIN control not the PUBLIC General chat version, coming soon...
+> **Note:** This is the administrative training interface. A public, general-use chat version is planned for the future.
+```

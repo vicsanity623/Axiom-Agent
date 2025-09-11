@@ -74,20 +74,23 @@ class UniversalInterpreter:
             "and convert it into a structured JSON object. Extract factual relationships or commands. "
             "Your output must be a single, valid JSON object and NOTHING else."
         )
+        # --- UPDATED: Added 'properties' to the relation object description ---
         json_structure_prompt = (
             "The JSON object must have the following fields:\n"
-            "- 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'statement_of_fact', 'gratitude', 'positive_affirmation', 'command', 'unknown'.\n"
+            "- 'intent': Classify the user's primary intent...\n"
             "- 'entities': A list of named entities...\n"
-            "- 'relation': If the intent is 'statement_of_fact', extract the core factual relationship as an object with three fields: 'subject', 'verb', and 'object'. "
-            "IMPORTANT: For definitional sentences like 'X is a Y that does Z', the 'object' should be the simplest possible noun phrase (e.g., 'Y'), not the entire descriptive clause.\n"
+            "- 'relation': If 'statement_of_fact', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. "
+            "If the sentence contains temporal information (like a date or year), extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.\n"
             "- 'key_topics': A list of the main subjects or topics...\n"
             "- 'full_text_rephrased': A neutral, one-sentence rephrasing..."
         )
-        # --- NEW: Added an example for abstract definitions ---
+        # --- UPDATED: Added a new example for temporal facts ---
         examples_prompt = (
             "Here are some examples:\n"
             "Input: 'show all facts'\n"
             'Output: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}\n\n'
+            "Input: 'In 2023, Tim Cook was the CEO of Apple.'\n"
+            'Output: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "CEO of Apple", "type": "ROLE"}], "relation": {"subject": "Tim Cook", "verb": "was", "object": "the CEO of Apple", "properties": {"effective_date": "2023-01-01"}}, "key_topics": ["Tim Cook", "Apple", "CEO"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple in 2023."}\n\n'
             "Input: 'a fact is a piece of information'\n"
             'Output: {"intent": "statement_of_fact", "entities": [{"name": "fact", "type": "CONCEPT"}, {"name": "piece of information", "type": "CONCEPT"}], "relation": {"subject": "a fact", "verb": "is", "object": "a piece of information"}, "key_topics": ["fact", "information"], "full_text_rephrased": "User is stating that a fact is a piece of information."}\n\n'
             "Input: 'who is Donald Trump?'\n"
@@ -133,7 +136,6 @@ class UniversalInterpreter:
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
         else: # Default "statement" mode
-            # --- NEW: A much stricter prompt to prevent "leakage" ---
             system_prompt = (
                 "You are a STICKT language rephrasing engine. Your task is to convert the given 'Facts' into a single, grammatically correct, natural English sentence. "
                 "You are a fluent parrot. You MUST NOT add any extra information, commentary, or meta-analysis. "
@@ -155,7 +157,6 @@ class UniversalInterpreter:
             )
             synthesized_text = output["choices"][0]["text"].strip().replace('"', '')
 
-            # Remove common LLM introductory phrases
             phrases_to_remove = ["rephrased sentence:", "based on the provided facts,", "the rephrased sentence is:"]
             for phrase in phrases_to_remove:
                 if synthesized_text.lower().startswith(phrase):

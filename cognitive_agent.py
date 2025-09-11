@@ -5,6 +5,7 @@ import random
 import json
 import os
 import re
+from datetime import datetime # NEW: Import for handling dates
 from graph_core import ConceptNode, RelationshipEdge, ConceptGraph
 from knowledge_base import seed_domain_knowledge
 from universal_interpreter import UniversalInterpreter
@@ -55,42 +56,32 @@ class CognitiveAgent:
         print(f"\nUser: {user_input}")
         self.graph.decay_activations()
 
-        # --- NEW: Phase 3 - Learning from Clarification ---
         if self.is_awaiting_clarification:
             print("  [Curiosity]: Processing user's clarification...")
-            # Use the interpreter to find the key entity in the user's answer
             interpretation = self.interpreter.interpret(user_input)
             entities = interpretation.get('entities', [])
             
             if entities:
-                # Assume the first entity in the clarification is the correct answer
                 correct_answer_name = self._clean_phrase(entities[0]['name'])
                 subject_name = self.clarification_context.get("subject")
                 relation_type = self.clarification_context.get("conflicting_relation")
-                
                 subject_node = self.graph.get_node_by_name(subject_name)
                 
                 if subject_node and relation_type:
-                    # Find all conflicting facts
                     for edge in self.graph.get_edges_from_node(subject_node.id):
                         if edge.type == relation_type:
                             target_node = self.graph.nodes[edge.target]
                             if target_node.name == correct_answer_name:
-                                # This is the correct fact, reinforce it
                                 edge.weight = 1.0
                                 print(f"    - REINFORCED: {subject_name} --[{relation_type}]--> {correct_answer_name}")
                             else:
-                                # This is an incorrect fact, punish it
                                 edge.weight = 0.1
                                 print(f"    - PUNISHED: {subject_name} --[{relation_type}]--> {target_node.name}")
-                    
-                    self.save_brain() # Save the updated knowledge
+                    self.save_brain()
                 
-            # Reset the clarification state
             self.is_awaiting_clarification = False
             self.clarification_context = {}
             return "Thank you for the clarification. I have updated my knowledge."
-        # --- END OF NEW BLOCK ---
 
         normalized_input = self._preprocess_self_reference(user_input)
         interpretation = self.interpreter.interpret(normalized_input)
@@ -158,17 +149,52 @@ class CognitiveAgent:
                     else:
                         structured_response = "I am an AI assistant designed to learn."
             else:
-                print(f"  [CognitiveAgent]: Starting multi-hop reasoning for '{entity_name}'...")
+                # --- NEW: Temporal Reasoning Logic ---
+                temporal_keywords = ['now', 'currently', 'today', 'this year']
+                is_temporal_query = any(keyword in user_input.lower() for keyword in temporal_keywords)
+                
+                print(f"  [CognitiveAgent]: Starting reasoning for '{entity_name}'. Temporal query: {is_temporal_query}")
+                
                 clean_entity_name = self._clean_phrase(entity_name)
                 subject_node = self.graph.get_node_by_name(clean_entity_name)
+                
                 if not subject_node:
                     structured_response = f"I don't have any information about {entity_name}."
                 else:
-                    facts = self._gather_facts_multihop(subject_node, max_hops=2)
+                    facts_with_props = self._gather_facts_multihop(subject_node, max_hops=2)
+                    
+                    if is_temporal_query:
+                        print("  [TemporalReasoning]: Filtering facts by date...")
+                        today = datetime.utcnow().date()
+                        best_fact = None
+                        best_date = None
+
+                        for fact_str, props in facts_with_props:
+                            date_str = props.get('effective_date')
+                            if date_str:
+                                try:
+                                    fact_date = datetime.fromisoformat(date_str).date()
+                                    if fact_date <= today:
+                                        if best_date is None or fact_date > best_date:
+                                            best_date = fact_date
+                                            best_fact = fact_str
+                                except (ValueError, TypeError):
+                                    continue # Ignore invalid date formats or properties
+                        
+                        if best_fact:
+                            facts = {best_fact}
+                        else:
+                            # Fallback to general, non-dated facts if no valid temporal fact is found
+                            facts = {fact_str for fact_str, props in facts_with_props if not props.get('effective_date')}
+                    else:
+                        # For non-temporal queries, just use the fact strings
+                        facts = {fact_str for fact_str, props in facts_with_props}
+
                     if not facts:
-                        structured_response = f"I know the concept of {subject_node.name.capitalize()}, but I don't have any specific details."
+                        structured_response = f"I know the concept of {subject_node.name.capitalize()}, but I don't have specific details for that query."
                     else:
                         structured_response = ". ".join(sorted(list(facts))) + "."
+                # --- END OF NEW BLOCK ---
         else: structured_response = "I'm not sure how to process that. Could you rephrase?"
         
         non_synthesize_triggers = [
@@ -177,7 +203,7 @@ class CognitiveAgent:
             "That's an interesting topic about", "I'm not sure I fully understood that",
             "You're welcome!", "I'm glad you think so!",
             "Here are all the high-confidence facts I have learned",
-            "I have conflicting information"
+            "Thank you for the clarification. I have updated my knowledge."
         ]
         if any(trigger in structured_response for trigger in non_synthesize_triggers):
             final_response = structured_response
@@ -202,7 +228,8 @@ class CognitiveAgent:
                 if edge.type == "might_relate": continue
                 target_node = self.graph.nodes.get(edge.target)
                 if target_node:
-                    facts.add(f"{current_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name.capitalize()}")
+                    fact_str = f"{current_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name.capitalize()}"
+                    facts.add((fact_str, edge.properties))
                     if edge.target not in visited:
                         visited.add(edge.target)
                         queue.append((edge.target, current_hop + 1))
@@ -213,7 +240,7 @@ class CognitiveAgent:
                     fact_str = f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {current_node.name.capitalize()}"
                     if edge.type == "is_a" and edge.weight > 0.8:
                         fact_str = f"{source_node.name.capitalize()} is also known as {current_node.name.capitalize()}"
-                    facts.add(fact_str)
+                    facts.add((fact_str, edge.properties))
                     if edge.source not in visited:
                         visited.add(edge.source)
                         queue.append((edge.source, current_hop + 1))
@@ -233,41 +260,55 @@ class CognitiveAgent:
         if not all([subject, verb, object_]): return (False, "I couldn't understand the structure of that fact.")
 
         subject_name = subject if isinstance(subject, str) else subject.get('name')
-        object_name = object_ if isinstance(object_, str) else object_.get('name')
-        
-        if not all([subject_name, verb, object_name]): return (False, "I couldn't understand the structure of that fact.")
+        if not subject_name: return (False, "Could not determine the subject of the fact.")
 
-        print(f"  [AGENT LEARNING: Processing interpreted statement: {subject_name} -> {verb} -> {object_name}]")
+        objects_to_process = []
+        if isinstance(object_, list):
+            for item in object_:
+                name = item.get('entity') or item.get('name')
+                if name: objects_to_process.append(name)
+        elif isinstance(object_, dict):
+            name = object_.get('name')
+            if name: objects_to_process.append(name)
+        elif isinstance(object_, str):
+            objects_to_process.append(object_)
+        
+        if not objects_to_process:
+            return (False, "Could not determine the object(s) of the fact.")
+
+        print(f"  [AGENT LEARNING: Processing interpreted statement: {subject_name} -> {verb} -> {objects_to_process}]")
         self.learning_iterations += 1
-        verb_cleaned = verb.lower().strip()
+        
+        learned_at_least_one = False
+        
+        for object_name in objects_to_process:
+            verb_cleaned = verb.lower().strip()
+            sub_node = self._add_or_update_concept(subject_name)
+            relation_type = self._get_relation_type(verb_cleaned, subject_name, object_name)
+            
+            definitional_verbs = ["is_a", "has_property", "is_located_in", "has_name"]
+            if relation_type in definitional_verbs:
+                is_contradiction = False
+                for edge in self.graph.get_edges_from_node(sub_node.id):
+                    if edge.type == relation_type and self.graph.nodes[edge.target].name != self._clean_phrase(object_name):
+                        existing_target_node = self.graph.nodes[edge.target]
+                        print(f"  [Curiosity]: CONTRADICTION DETECTED!")
+                        conflicting_facts_str = (
+                            f"Fact 1: {sub_node.name} {edge.type.replace('_',' ')} {existing_target_node.name}. "
+                            f"Fact 2: {sub_node.name} {relation_type.replace('_',' ')} {object_name}."
+                        )
+                        question = self.interpreter.synthesize(conflicting_facts_str, mode="clarification_question")
+                        self.is_awaiting_clarification = True
+                        self.clarification_context = {"subject": sub_node.name, "conflicting_relation": relation_type}
+                        return (False, question)
+            
+            obj_node = self._add_or_update_concept(object_name)
+            if sub_node and obj_node:
+                self.graph.add_edge(sub_node, obj_node, relation_type, 0.9, properties=properties)
+                print(f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}")
+                learned_at_least_one = True
 
-        sub_node = self._add_or_update_concept(subject_name)
-        relation_type = self._get_relation_type(verb_cleaned, subject_name, object_name)
-        
-        definitional_verbs = ["is_a", "has_property", "is_located_in", "has_name"]
-        if relation_type in definitional_verbs:
-            for edge in self.graph.get_edges_from_node(sub_node.id):
-                if edge.type == relation_type and self.graph.nodes[edge.target].name != self._clean_phrase(object_name):
-                    existing_target_node = self.graph.nodes[edge.target]
-                    print(f"  [Curiosity]: CONTRADICTION DETECTED!")
-                    print(f"    - Existing Fact: {sub_node.name} --[{edge.type}]--> {existing_target_node.name}")
-                    print(f"    - New Fact:      {sub_node.name} --[{relation_type}]--> {object_name}")
-                    
-                    conflicting_facts_str = (
-                        f"Fact 1: {sub_node.name} {edge.type.replace('_',' ')} {existing_target_node.name}. "
-                        f"Fact 2: {sub_node.name} {relation_type.replace('_',' ')} {object_name}."
-                    )
-                    question = self.interpreter.synthesize(conflicting_facts_str, mode="clarification_question")
-                    
-                    self.is_awaiting_clarification = True
-                    self.clarification_context = {"subject": sub_node.name, "conflicting_relation": relation_type}
-                    
-                    return (False, question)
-        
-        obj_node = self._add_or_update_concept(object_name)
-        if sub_node and obj_node:
-            self.graph.add_edge(sub_node, obj_node, relation_type, 0.9, properties=properties)
-            print(f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}")
+        if learned_at_least_one:
             self.save_brain(); self.save_state()
             return (True, "I understand. I have noted that.")
         
