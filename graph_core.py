@@ -9,7 +9,7 @@ class ConceptNode:
     def __init__(self, name, node_type="concept", properties=None, value=0.5, activation=0.0, id=None):
         self.id = id or str(uuid.uuid4())
         self.name = name.lower()
-        self.type = node_type # Using 'type' consistently
+        self.type = node_type
         self.properties = properties or {}
         self.value = value
         self.activation = activation
@@ -24,7 +24,7 @@ class ConceptNode:
     @staticmethod
     def from_dict(data):
         return ConceptNode(
-            id=data.get("id"), name=data.get("name"), node_type=data.get("type"), # Map 'type' from dict to 'node_type'
+            id=data.get("id"), name=data.get("name"), node_type=data.get("type"),
             properties=data.get("properties", {}), value=data.get("value", 0.5),
             activation=data.get("activation", 0.0)
         )
@@ -61,7 +61,7 @@ class ConceptGraph:
         self.nodes = {}
         self.edges = {}
         self.node_by_name = {}
-        self.lexical_dictionary = {} # Deprecated, but kept for compatibility
+        self.lexical_dictionary = {}
 
     def add_node(self, node: ConceptNode):
         if node.id not in self.nodes:
@@ -116,16 +116,7 @@ class ConceptGraph:
             try:
                 with open(filename, 'r') as f:
                     graph_data = json.load(f)
-                for node_data in graph_data.get("nodes", []):
-                    # Here we map the 'type' field from the JSON to the 'node_type' argument
-                    node_data_mapped = node_data.copy()
-                    if 'type' in node_data_mapped:
-                        node_data_mapped['node_type'] = node_data_mapped.pop('type')
-                    graph.add_node(ConceptNode.from_dict(node_data_mapped))
-                
-                for edge_data in graph_data.get("edges", []):
-                    edge = RelationshipEdge.from_dict(edge_data)
-                    graph.edges[edge.id] = edge
+                graph.load_from_dict_data(graph_data) # Use the new helper method
                 print(f"Agent brain loaded from {filename}")
             except Exception as e:
                 print(f"Error loading brain from {filename}: {e}. Creating a fresh brain.")
@@ -134,6 +125,25 @@ class ConceptGraph:
         
         graph._seed_universal_concepts_internal()
         return graph
+
+    # --- NEW: The missing `load_from_dict` method ---
+    @classmethod
+    def load_from_dict(cls, graph_data: dict):
+        """Creates a ConceptGraph instance from a dictionary."""
+        graph = cls()
+        graph.load_from_dict_data(graph_data)
+        graph._seed_universal_concepts_internal()
+        return graph
+
+    # --- NEW: A helper method to populate the graph from data ---
+    def load_from_dict_data(self, graph_data: dict):
+        """Populates the current graph instance from a dictionary."""
+        for node_data in graph_data.get("nodes", []):
+            self.add_node(ConceptNode.from_dict(node_data))
+        
+        for edge_data in graph_data.get("edges", []):
+            edge = RelationshipEdge.from_dict(edge_data)
+            self.edges[edge.id] = edge
 
     def _seed_universal_concepts_internal(self):
         """Seeds essential structural nodes that should always exist."""
