@@ -26,14 +26,29 @@ This architecture provides a clear path for Axiom to become vastly more capable 
 
 ### ✅ Key Capabilities Demonstrating this New Paradigm:
 
+#### Cognitive & Reasoning Abilities
 *   **Persistent, Lifelong Learning:** Every fact the agent learns is permanently integrated into its brain. The agent running today is smarter than it was yesterday, and will be smarter still tomorrow.
-*   **Autonomous Knowledge Seeking:** The agent possesses a 24/7 `KnowledgeHarvester` that actively seeks out new information from the world (via the NYT API, Wikipedia, and DuckDuckGo) to expand its understanding.
-*   **Self-Awareness of its Own Knowledge:** The harvester is intelligent enough to check the agent's brain for existing concepts, forcing it to seek out novel information and broaden its horizons rather than getting stuck in an echo chamber.
 *   **Multi-Hop Logical Reasoning:** Axiom can answer questions it has never seen before by connecting multiple known facts. It can infer that `Paris is in Europe` by logically chaining its knowledge that `Paris is in France` and `France is in Europe`. This is a true act of reasoning, not pattern matching.
 *   **The Curiosity Engine (A Rudimentary Consciousness):** This is Axiom's most advanced and defining feature.
     -   **Contradiction Detection:** The agent can recognize when a new piece of information conflicts with its existing world model.
     -   **Active Inquiry:** Instead of blindly accepting or rejecting the new fact, it exhibits curiosity. It formulates a natural, clarifying question to the user to resolve its own confusion.
     -   **Knowledge Reconciliation:** It uses the user's feedback as "ground truth" to actively correct its own brain, reinforcing the correct fact and punishing the incorrect one. This is a closed loop of self-directed learning and improvement.
+
+#### Autonomous Systems
+*   **Autonomous Knowledge Seeking:** The agent possesses a 24/7 `KnowledgeHarvester` that actively seeks out new information from the world (via the NYT API, Wikipedia, etc.) to expand its understanding.
+*   **Self-Aware Learning:** The harvester is intelligent enough to check the agent's brain for existing concepts, forcing it to seek out novel information and broaden its horizons.
+
+#### User Interface & Experience
+*   **Multi-Conversation Management:** The UI supports multiple, persistent chat sessions which are saved to the browser's local storage, allowing users to maintain different contexts.
+*   **Interactive Chat History:** A slide-out sidebar allows for easy navigation, review, and deletion of past conversations.
+*   **Rich Message Interaction:** Individual chat bubbles feature a menu with a cross-browser compatible "Copy to Clipboard" function for both user and agent messages.
+*   **Polished Aesthetic:** A custom, high-contrast dark mode theme and a unique "Old English" style font give the agent a distinct and professional personality.
+*   **Progressive Web App (PWA):** The agent is fully configured to be an installable, native-like application on both desktop and mobile devices.
+
+#### Performance & Stability
+*   **Persistent Caching:** Caches the results of slow LLM interpretations to disk, providing instantaneous responses to repeated queries, even across server restarts.
+*   **Anticipatory Caching:** After autonomously learning a new fact, the agent proactively "thinks" about the most likely follow-up question and pre-warms the cache, making the first user interaction with new knowledge feel instant.
+*   **Thread-Safe Operation:** A global lock protects the agent from memory corruption and crashes when user interactions and the autonomous learning cycle run simultaneously.
 
 ---
 

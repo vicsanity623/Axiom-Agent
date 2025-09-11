@@ -2,30 +2,35 @@
 
 This document outlines the current status, planned features, and architectural improvements for the Axiom Agent project.
 
-## ✅ Core Architecture (Complete & Stable)
+## ✅ Core Architecture & Capabilities (Complete & Stable)
 
-This foundational phase is complete. The agent is a fully autonomous, reasoning, and self-correcting learning entity.
+This foundational phase is complete. The agent is a fully autonomous, reasoning, and self-correcting learning entity with a robust user interface.
 
-- **✅ Universal Interpreter & Synthesizer:** Uses a local LLM (`Mistral-7B`) to reliably translate natural language into structured data and back into fluent responses.
-- **✅ Verifiable Knowledge Graph:** The agent's long-term memory is a persistent `ConceptGraph`, preventing hallucinations and ensuring logical consistency.
+- **✅ Hybrid Cognitive Architecture:** The agent's mind is a hybrid of a symbolic **Knowledge Graph** (for verifiable, persistent memory) and a neural **Universal Interpreter** (for flexible language understanding), giving it the strengths of both paradigms.
 - **✅ Multi-Hop Logical Reasoning:** The agent can answer complex questions by traversing its knowledge graph and connecting multiple facts to infer new conclusions.
 - **✅ The Curiosity Engine (Active Learning Loop):**
     - **Contradiction Detection:** Actively identifies when new information conflicts with its existing world model.
     - **Active Inquiry:** Autonomously formulates and asks clarifying questions to resolve its own confusion.
     - **Knowledge Reconciliation:** Uses user feedback to correct its own brain, reinforcing correct facts and punishing incorrect ones.
 - **✅ Autonomous Knowledge Harvester:**
-    - **Multi-Source Topic Finding:** Uses a robust, multi-stage fallback system (NYT API -> Wikipedia) to find relevant and varied topics.
     - **Self-Aware Learning:** Intelligently checks its own memory to avoid re-learning topics, forcing it to broaden its knowledge base.
-    - **Intelligent Fact Sourcing:** After finding a topic, it uses a multi-stage fallback (Wikipedia -> DuckDuckGo) to find a high-quality, simple, and learnable fact.
+    - **Intelligent Fact Sourcing:** Uses a multi-stage fallback (NYT API -> Wikipedia -> DuckDuckGo) to find high-quality, simple, and learnable facts from the real world.
+- **✅ Vast Knowledge Base Seeding:** The agent begins its life with a large, pre-seeded set of foundational knowledge about itself, the world, and abstract concepts.
+
+## ✅ User Interface & Experience (Complete & Stable)
+
+- **✅ Multi-Conversation Management:** The UI supports multiple, persistent chat sessions, which are saved to the browser's local storage.
+- **✅ Chat History Sidebar:** Users can easily navigate, review, and delete previous conversations.
+- **✅ Rich Message Interaction:** Individual chat bubbles feature a menu with a cross-browser compatible "Copy to Clipboard" function.
+- **✅ PWA (Progressive Web App):** The agent is fully configured as an installable web application with a service worker and custom icons, allowing for a native-like experience on both desktop and mobile.
 - **✅ Performance & Stability:**
     - **Persistent Caching:** Caches interpretations to disk for instantaneous responses to repeated queries.
-    - **Anticipatory Caching:** Proactively pre-warms the cache for newly learned topics during idle time.
+    - **Anticipatory Caching:** Proactively pre-warms the cache for newly learned topics during the agent's idle time.
     - **Thread-Safe Operation:** A global lock protects the agent from memory corruption during simultaneous user interaction and autonomous learning.
-- **✅ Vast Knowledge Base Seeding:** The agent begins its life with a large, pre-seeded set of foundational knowledge about itself, the world, and abstract concepts.
 
 ---
 
-## Phase 1: Deepening Nuance & Interaction
+## Phase 1: Deepening Nuance & Context
 
 *Focus: Enhance the agent's ability to understand more complex, real-world contexts like time and conversational flow.*
 

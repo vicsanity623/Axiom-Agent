@@ -19,9 +19,9 @@
     --send-button-icon: #FFFFFF;
     --loading-spinner-color: #FFFFFF;
     --ai-error-bubble-bg: #6b2f2f;
-    --status-loading-bg: #DAA520;
-    --status-ready-bg: #2E8B57;
-    --status-error-bg: #B22222;
+    --status-loading-bg: #DAA520; /* Orange/Gold for Initializing */
+    --status-ready-bg: #2E8B57;   /* Sea Green for Ready */
+    --status-error-bg: #B22222;   /* Firebrick Red for Error */
     --sidebar-bg: #252526;
     --sidebar-text: #CCCCCC;
     --sidebar-hover-bg: #3E3E3E;
@@ -74,15 +74,23 @@ body {
     flex-grow: 1;
 }
 
+/* --- UPDATED: Status Indicator is now a dot --- */
 .status-indicator {
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-size: 0.8em;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%; /* Makes it a perfect circle */
     background-color: var(--status-loading-bg);
-    color: var(--text-color);
     transition: background-color 0.3s ease;
+    flex-shrink: 0; /* Prevents it from shrinking */
+    
+    /* Remove old text properties */
+    padding: 0;
+    font-size: 0;
+    color: transparent;
     white-space: nowrap;
 }
+/* --- END UPDATE --- */
+
 
 .chat-messages {
     flex-grow: 1;
@@ -114,7 +122,6 @@ body {
     padding-right: 25px; /* Space for the menu button */
 }
 
-/* --- Styles for Chat Bubble Copy Menu --- */
 .message-menu-container {
     position: absolute;
     top: 5px;
@@ -158,8 +165,6 @@ body {
     background-color: var(--send-button-hover-bg);
 }
 
-
-/* --- Styles for Header & Sidebar --- */
 .icon-button {
     background: none;
     border: none;
@@ -260,9 +265,6 @@ body {
     visibility: visible;
 }
 
-
-/* --- Other Unchanged Styles --- */
-/* ... (user/ai message bubbles, input area, etc are mostly the same) ... */
 .user-message { align-self: flex-end; justify-content: flex-end; }
 .ai-message { align-self: flex-start; justify-content: flex-start; }
 .system-message { align-self: center; text-align: center; font-style: italic; font-size: 0.9em; color: #999; max-width: 100%;}

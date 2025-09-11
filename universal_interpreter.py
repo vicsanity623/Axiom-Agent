@@ -70,9 +70,9 @@ class UniversalInterpreter:
         print("  [Interpreter Cache]: Miss. Running LLM for interpretation.")
         
         system_prompt = (
-            "You are a highly intelligent text analysis and relation extraction engine. Your task is to analyze the user's input "
-            "and convert it into a structured JSON object. Your primary goal is to extract factual relationships or commands. "
-            "Your only output should be a single, valid JSON object with no other text before or after it."
+            "You are a strict, precise text analysis engine. Your only task is to analyze user input "
+            "and convert it into a structured JSON object. Extract factual relationships or commands. "
+            "Your output must be a single, valid JSON object and NOTHING else."
         )
         json_structure_prompt = (
             "The JSON object must have the following fields:\n"
@@ -83,12 +83,13 @@ class UniversalInterpreter:
             "- 'key_topics': A list of the main subjects or topics...\n"
             "- 'full_text_rephrased': A neutral, one-sentence rephrasing..."
         )
+        # --- NEW: Added an example for abstract definitions ---
         examples_prompt = (
             "Here are some examples:\n"
             "Input: 'show all facts'\n"
             'Output: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}\n\n'
-            "Input: 'A restaurant is an establishment that prepares and serves food.'\n"
-            'Output: {"intent": "statement_of_fact", "entities": [{"name": "restaurant", "type": "LOCATION"}, {"name": "establishment", "type": "MISC"}], "relation": {"subject": "A restaurant", "verb": "is", "object": "an establishment"}, "key_topics": ["restaurant", "establishment", "food"], "full_text_rephrased": "User is defining what a restaurant is."}\n\n'
+            "Input: 'a fact is a piece of information'\n"
+            'Output: {"intent": "statement_of_fact", "entities": [{"name": "fact", "type": "CONCEPT"}, {"name": "piece of information", "type": "CONCEPT"}], "relation": {"subject": "a fact", "verb": "is", "object": "a piece of information"}, "key_topics": ["fact", "information"], "full_text_rephrased": "User is stating that a fact is a piece of information."}\n\n'
             "Input: 'who is Donald Trump?'\n"
             'Output: {"intent": "question_about_entity", "entities": [{"name": "Donald Trump", "type": "PERSON"}], "relation": null, "key_topics": ["Donald Trump"], "full_text_rephrased": "User is asking for information about Donald Trump."}\n'
         )
@@ -111,13 +112,11 @@ class UniversalInterpreter:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
             return {"intent": "unknown", "entities": [], "relation": None, "key_topics": user_input.split(), "full_text_rephrased": f"Could not fully interpret: '{user_input}'"}
 
-    # --- UPDATED: This method is now multi-modal ---
     def synthesize(self, structured_facts: str, original_question: str = None, mode: str = "statement") -> str:
         """
         Uses the Mini LLM to convert structured facts into natural language.
         Can operate in different modes: 'statement' (default) or 'clarification_question'.
         """
-        # Caching is only effective for the default statement mode
         if mode == "statement" and structured_facts in self.synthesis_cache and not original_question:
             print("  [Synthesizer Cache]: Hit!")
             return self.synthesis_cache[structured_facts]
@@ -134,14 +133,17 @@ class UniversalInterpreter:
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
         else: # Default "statement" mode
+            # --- NEW: A much stricter prompt to prevent "leakage" ---
             system_prompt = (
-                "You are a language rephrasing engine. Your task is to rephrase the provided 'Facts' into a single, natural English sentence. "
-                "You MUST NOT add, infer, or use any external knowledge. You MUST only use the information given in the 'Facts' string. "
+                "You are a STICKT language rephrasing engine. Your task is to convert the given 'Facts' into a single, grammatically correct, natural English sentence. "
+                "You are a fluent parrot. You MUST NOT add any extra information, commentary, or meta-analysis. "
+                "You MUST NOT apologize or mention limitations. "
+                "You MUST ONLY use the information given in the 'Facts' string. "
                 "Your output must be ONLY the rephrased sentence and nothing else."
             )
-            task_prompt = f"Facts: '{structured_facts}'"
+            task_prompt = f"Facts to rephrase: '{structured_facts}'"
             if original_question:
-                task_prompt = f"Using ONLY the facts provided, answer the following question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
+                task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
         
         full_prompt = (
             f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
@@ -149,14 +151,19 @@ class UniversalInterpreter:
         try:
             output = self.llm(
                 full_prompt, max_tokens=256, stop=["</s>", "\n"], echo=False, 
-                temperature=0.7 if mode == "clarification_question" else 0.1 # More creative for questions
+                temperature=0.7 if mode == "clarification_question" else 0.1
             )
             synthesized_text = output["choices"][0]["text"].strip().replace('"', '')
+
+            # Remove common LLM introductory phrases
+            phrases_to_remove = ["rephrased sentence:", "based on the provided facts,", "the rephrased sentence is:"]
+            for phrase in phrases_to_remove:
+                if synthesized_text.lower().startswith(phrase):
+                    synthesized_text = synthesized_text[len(phrase):].strip()
 
             if "(" in synthesized_text:
                 synthesized_text = synthesized_text.split("(")[0].strip()
             
-            # Only cache default statements, not questions or answers to questions
             if mode == "statement" and not original_question:
                 self.synthesis_cache[structured_facts] = synthesized_text
                 self._save_cache()

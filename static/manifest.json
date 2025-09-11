@@ -1,21 +1,21 @@
 {
-    "name": "Axiom Agent",
-    "short_name": "Axiom",
-    "start_url": ".",
-    "display": "standalone",
-    "background_color": "#1a1a1a",
-    "theme_color": "#6200ea",
-    "description": "A personal, self-learning AI assistant.",
-    "icons": [
-      {
-        "src": "static/icon-192.png",
-        "sizes": "192x192",
-        "type": "image/png"
-      },
-      {
-        "src": "static/icon-512.png",
-        "sizes": "512x512",
-        "type": "image/png"
-      }
-    ]
-  }
+  "name": "Axiom Agent",
+  "short_name": "Axiom",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#8A2BE2",
+  "description": "An autonomous, learning cognitive agent.",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
