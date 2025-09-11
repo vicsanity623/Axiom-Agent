@@ -26,3 +26,7 @@ models/
 render_model.py
 notes.txt
 AgentCurriculum.txt
+Axiom_Voice_Dataset/
+Voicetrain.txt
+*.wav
+*.csv

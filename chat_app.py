@@ -59,8 +59,11 @@ def status():
     return jsonify({"status": "ready" if axiom_agent else "loading_model"})
 
 if __name__ == '__main__':
+    from pyngrok import ngrok
+    
     parser = argparse.ArgumentParser(description="Run the Axiom Agent Chat App.")
     parser.add_argument('model_path', type=str, help="Path to the .axm model file to load.")
+    parser.add_argument('--ngrok', action='store_true', help="Expose the server to the internet using ngrok.")
     args = parser.parse_args()
 
     model_data = load_axiom_model(args.model_path)
@@ -74,6 +77,18 @@ if __name__ == '__main__':
             cache_data=cache,
             inference_mode=True
         )
+
+        # Configure and start ngrok if the flag is provided
+        if args.ngrok:
+            authtoken = os.environ.get("NGROK_AUTHTOKEN")
+            if authtoken:
+                ngrok.set_auth_token(authtoken)
+            else:
+                print("[ngrok Warning]: NGROK_AUTHTOKEN environment variable not set. Using anonymous tunnel.")
+
+            public_url = ngrok.connect(7501) # Connect to the correct port for this app
+            print(f" * ngrok tunnel is active at: {public_url}")
+
         app.run(host='0.0.0.0', port=7501, debug=False)
     else:
         sys.exit(1)
