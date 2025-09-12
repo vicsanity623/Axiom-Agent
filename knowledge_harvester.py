@@ -15,8 +15,10 @@ class KnowledgeHarvester:
         if not self.nyt_api_key:
             print("[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. Trending topic source will be disabled.")
         
-        # --- NEW: Add a "rejection memory" to avoid retrying failed topics ---
         self.rejected_topics = set()
+        
+        # --- NEW: The "kill switch" for the anticipatory cache feature ---
+        self.enable_anticipatory_cache = False
         
         wikipedia.set_user_agent('AxiomAgent/1.0 (AxiomAgent@example.com)')
         print("[Knowledge Harvester]: Initialized.")
@@ -55,7 +57,7 @@ class KnowledgeHarvester:
         for i in range(max_attempts):
             print(f"\n[Harvester]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...")
             topic = None
-            source_choice = random.choice(['nyt', 'wiki', 'wiki']) # Give wiki higher probability
+            source_choice = random.choice(['nyt', 'wiki', 'wiki'])
             
             if source_choice == 'nyt' and self.nyt_api_key:
                 topic = self.get_trending_topic()
@@ -64,7 +66,6 @@ class KnowledgeHarvester:
             
             if topic:
                 clean_topic = self.agent._clean_phrase(topic)
-                # --- UPDATED: Check both the brain and the rejection memory ---
                 if self.agent.graph.get_node_by_name(clean_topic):
                     print(f"  [Harvester Info]: Agent already knows about '{topic}'. Finding a new topic...")
                     continue
@@ -215,7 +216,6 @@ class KnowledgeHarvester:
 
             learned_topic = None
             
-            # Try Wikipedia first
             wiki_result = self.get_fact_from_wikipedia(initial_topic)
             if wiki_result:
                 final_topic, fact_sentence = wiki_result
@@ -223,9 +223,8 @@ class KnowledgeHarvester:
                     learned_this_interval = True
                     learned_topic = final_topic
             
-            # If Wikipedia failed, try DuckDuckGo
             if not learned_this_interval:
-                time.sleep(1) # Small delay between API calls
+                time.sleep(1)
                 ddg_result = self.get_fact_from_duckduckgo(initial_topic)
                 if ddg_result:
                     final_topic, fact_sentence = ddg_result
@@ -233,16 +232,13 @@ class KnowledgeHarvester:
                         learned_this_interval = True
                         learned_topic = final_topic
 
-            # --- UPDATED: Centralized failure logic ---
-            # If after all attempts, we still haven't learned, reject the topic.
             if not learned_this_interval:
                 print(f"[Knowledge Harvester]: Could not learn a fact for topic '{initial_topic}'. Rejecting for this session.")
                 self.rejected_topics.add(self.agent._clean_phrase(initial_topic))
             else:
-                # If we did learn, pre-warm the cache and exit the loop.
-                if learned_topic:
+                if learned_topic and self.enable_anticipatory_cache: # <-- UPDATED LINE
                     self._anticipate_and_cache(learned_topic)
-                break # Exit the loop since we succeeded
+                break
 
         if not learned_this_interval:
             print("[Knowledge Harvester]: All learning attempts failed for this interval.")

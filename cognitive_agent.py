@@ -45,6 +45,9 @@ class CognitiveAgent:
         self.is_awaiting_clarification = False
         self.clarification_context = {}
         self.conversation_history = []
+        
+        # --- NEW: The "kill switch" for the conversational context feature ---
+        self.enable_contextual_memory = False
 
     def _load_agent_state(self):
         if os.path.exists(self.state_file):
@@ -64,6 +67,8 @@ class CognitiveAgent:
             json.dump(state_data, f, indent=4)
 
     def _preprocess_self_reference(self, text: str) -> str:
+        # This function is now deprecated as this logic should be handled by the interpreter,
+        # but it is kept for potential future use or debugging.
         processed_text = re.sub(r'\byour name\b', "the agent's name", text, flags=re.IGNORECASE)
         processed_text = re.sub(r'\bwho are you\b', "what is the agent", processed_text, flags=re.IGNORECASE)
         processed_text = re.sub(r'\byou are\b', "the agent is", processed_text, flags=re.IGNORECASE)
@@ -75,12 +80,6 @@ class CognitiveAgent:
     def chat(self, user_input: str) -> str:
         print(f"\nUser: {user_input}")
         self.graph.decay_activations()
-
-        contextual_input = user_input
-        pronouns = ['it', 'its', 'they', 'them', 'their']
-        if any(f' {pronoun} ' in f' {user_input.lower()} ' for pronoun in pronouns):
-            if self.conversation_history:
-                contextual_input = self.interpreter.resolve_context(self.conversation_history, user_input)
 
         if self.is_awaiting_clarification:
             print("  [Curiosity]: Processing user's clarification...")
@@ -112,9 +111,13 @@ class CognitiveAgent:
             self.conversation_history.append(f"Agent: {final_response}")
             return final_response
 
-        # Use the potentially rephrased input for interpretation
-        normalized_input = self._preprocess_self_reference(contextual_input)
-        interpretation = self.interpreter.interpret(normalized_input)
+        # --- UPDATED: Use the "kill switch" to toggle conversational context ---
+        if self.enable_contextual_memory:
+            # If enabled, use the advanced, context-aware interpreter
+            interpretation = self.interpreter.interpret_with_context(user_input, self.conversation_history)
+        else:
+            # If disabled, fall back to the simple, reliable interpreter
+            interpretation = self.interpreter.interpret(user_input)
         
         print(f"  [Interpreter Output]: Intent='{interpretation.get('intent', 'N/A')}', "
               f"Entities={[e.get('name') for e in interpretation.get('entities', [])]}, "
@@ -167,17 +170,19 @@ class CognitiveAgent:
             if not self.graph.edges:
                 structured_response = "My knowledge base is currently empty."
             else:
-                for edge in self.graph.edges.values():
-                    if edge.type == "might_rate": continue
+                # Sort edges by access_count to show most salient facts first
+                sorted_edges = sorted(self.graph.edges.values(), key=lambda e: e.access_count, reverse=True)
+                for edge in sorted_edges:
+                    if edge.type == "might_relate": continue
                     source_node = self.graph.nodes.get(edge.source)
                     target_node = self.graph.nodes.get(edge.target)
                     if source_node and target_node:
-                        fact_string = f"- {source_node.name.capitalize()} --[{edge.type}]--> {target_node.name.capitalize()}"
+                        fact_string = f"- {source_node.name.capitalize()} --[{edge.type}]--> {target_node.name.capitalize()} (Salience: {edge.access_count})"
                         if edge.properties:
                             fact_string += f" (Properties: {json.dumps(edge.properties)})"
                         all_facts.append(fact_string)
                 if all_facts:
-                    structured_response = "Here are all the high-confidence facts I have learned:\n\n" + "\n".join(sorted(all_facts))
+                    structured_response = "Here are all the high-confidence facts I have learned (most salient first):\n\n" + "\n".join(all_facts)
                 else:
                     structured_response = "My knowledge base has concepts but no learned high-confidence facts."
         
@@ -191,7 +196,7 @@ class CognitiveAgent:
 
             if is_about_agent:
                 agent_node = self.graph.get_node_by_name("agent")
-                if "name" in normalized_input:
+                if "name" in user_input.lower(): # Use original input for this check
                     name_edge = next((edge for edge in self.graph.get_edges_from_node(agent_node.id) if edge.type == "has_name"), None) if agent_node else None
                     if name_edge:
                         name_node = self.graph.nodes[name_edge.target]
@@ -267,10 +272,6 @@ class CognitiveAgent:
         return final_response
 
     def _gather_facts_multihop(self, start_node: ConceptNode, max_hops: int) -> list:
-        """
-        Gathers facts as tuples (fact_string, properties) up to a max number of hops.
-        Increments the access_count for each used fact and prioritizes returning the most salient (most accessed) facts.
-        """
         found_edges = {}
         queue = [(start_node.id, 0)]
         visited = {start_node.id}

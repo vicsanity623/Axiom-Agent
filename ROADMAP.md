@@ -33,37 +33,31 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
 - **✅ PWA (Progressive Web App):** The agent is fully configured as an installable web application with a service worker and custom icons, allowing for a native-like experience on both desktop and mobile.
 - **✅ Performance & Stability:**
     - **Persistent Caching:** Caches interpretations to disk for instantaneous responses to repeated queries.
-    - **Anticipatory Caching:** Proactively pre-warms the cache for newly learned topics, with safety checks to prevent caching failed responses.
+    - **Anticipatory Caching:** The code is in place to proactively pre-warm the cache after autonomous learning, but is **disabled by default** due to persistent stability issues.
     - **Thread-Safe Operation:** A global lock protects the agent from memory corruption during simultaneous user interaction and autonomous learning.
 
 ---
 
-## Phase 2: Advanced Interaction
+## 🛑 On Hold / Deprecated Features
 
-*Focus: Stabilize and deepen the agent's conversational abilities.*
+*Features that have been implemented but are currently too unstable for active use. The code remains in the project but is disabled by a "kill switch."*
 
-### 1. Stabilize Conversational Context (`#1 Priority`)
-- **Status:** **`In Progress / Buggy`**. The core code is implemented but failed verification. The agent is not correctly resolving pronouns in follow-up questions.
-- **Goal:** Enable the agent to reliably understand and answer follow-up questions.
-- **Example:**
-  - `what is an apple` -> Agent answers.
-  - `what color is it` -> Agent should know "it" refers to the apple.
-- **Next Steps:**
-  1.  Re-run the test scenario to replicate the failure.
-  2.  Analyze the terminal logs to pinpoint the exact point of failure in the new `resolve_context` logic.
-  3.  Refine the `resolve_context` prompt or the `CognitiveAgent`'s logic to ensure robust performance.
+### 1. Conversational Context (Short-Term Memory)
+- **Status:** **`On Hold / Disabled`**. The architectural approach of using a separate LLM call to resolve context has proven to be unreliable and is a frequent source of bugs. The feature has been disabled to ensure core system stability.
+- **Goal:** Enable the agent to reliably understand and answer follow-up questions with pronouns.
+- **Path Forward:** This feature requires a complete architectural rethink. A future solution might involve a more powerful base model or a different logical approach entirely.
 
 ---
 
-## Phase 3: Multimodal Interface (Voice)
+## Phase 2: Multimodal Interface (Voice)
 
-*Focus: Evolve the agent from a text-based entity to a voice-interactive companion.*
+*Focus: Evolve the agent from a text-based entity to a voice-interactive companion. This is the next major development priority.*
 
 ### 1. Custom Voice Cloning
 - **Goal:** Create a unique, high-quality voice for the agent using a custom audio dataset.
 - **Technology:** Utilize open-source tools like **Coqui TTS**.
 - **Implementation Plan:**
-  1.  **Data Preparation:** Meticulously prepare a dataset of high-quality audio clips (5-15 seconds, complete sentences) and their exact transcriptions.
+  1.  **Data Preparation:** Meticulously prepare a dataset of high-quality audio clips (5-15 seconds, complete thoughts) and their exact transcriptions.
   2.  **Training:** Use a cloud GPU service (like Google Colab) to fine-tune a TTS model on the custom dataset.
   3.  **Export:** The final output will be a unique voice model that defines the Axiom Agent's speech.
 
