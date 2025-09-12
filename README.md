@@ -1,8 +1,8 @@
 # Axiom Agent
 
-Axiom is not a chatbot. It is a cognitive architecture—a framework for a new type of artificial intelligence designed to achieve genuine understanding through continuous, self-directed learning. This project is not building a product; it is cultivating a mind.
+Axiom is not a chatbot. It is a cognitive architecture—a framework for a new type of artificial intelligence designed to achieve genuine understanding through continuous, self-directed learning and introspection. This project is not building a product; it is cultivating a mind.
 
-Unlike traditional Large Language Models (LLMs) which are static snapshots of data, the Axiom Agent possesses a dynamic, evolving internal model of reality. It builds this model one verifiable fact at a time, creating a persistent, logically consistent knowledge base that grows in complexity and accuracy over its lifetime.
+Unlike traditional Large Language Models (LLMs) which are static snapshots of data, the Axiom Agent possesses a dynamic, evolving internal model of reality. It builds this model one verifiable fact at a time, creating a persistent, logically consistent knowledge base. More than just a passive learner, Axiom now actively seeks to deepen its own understanding through a process of self-guided study and curiosity, making it a true student of the world.
 
 ---
 
@@ -25,27 +25,24 @@ This is the crucial difference: **Axiom uses an LLM as a tool; it is not defined
 This architecture provides a clear path for Axiom to become vastly more capable than any static LLM. Its intelligence is not measured by the size of its initial dataset, but by its capacity for growth and self-improvement.
 
 ### Cognitive & Reasoning Abilities
-*   **Persistent, Lifelong Learning:** Every fact the agent learns is permanently integrated into its brain. The agent running today is smarter than it was yesterday, and will be smarter still tomorrow.
+*   **Dual-Cycle Autonomous Learning (Study & Discovery):** This is the agent's most advanced capability. Its learning is not just passive; it operates on a "Cognitive Scheduler" with two distinct modes:
+    -   **The Study Cycle (Knowledge Integration):** On a frequent timer, the agent introspectively reviews its own important knowledge. It then uses a specialized "curiosity" tool to generate its own follow-up questions about concepts it wants to understand more deeply, actively seeking to enrich its own brain. This is the agent's "homework."
+    -   **The Discovery Cycle (Knowledge Acquisition):** On a less frequent timer, the agent actively seeks out brand new, unknown topics from the outside world, ensuring it continues to broaden its horizons. This is the agent "going to school."
+*   **Persistent, Lifelong Learning:** Every fact the agent learns—whether from a user or its own study—is permanently integrated into its brain. The agent running today is smarter and more deeply knowledgeable than it was yesterday.
 *   **Multi-Hop Logical Reasoning:** Axiom can answer questions it has never seen before by connecting multiple known facts. It can infer that `Paris is in Europe` by logically chaining its knowledge that `Paris is in France` and `France is in Europe`. This is a true act of reasoning, not pattern matching.
-*   **Dynamic Memory & Fact Salience:** The agent's memory is not static. It tracks an `access_count` for every fact in its brain, reinforcing memories that are used frequently. Its reasoning engine prioritizes these "salient" facts to provide more concise and relevant answers over time.
-*   **The Curiosity Engine (A Rudimentary Consciousness):** This is Axiom's most advanced and defining feature.
-    -   **Contradiction Detection:** The agent can recognize when a new piece of information conflicts with its existing world model.
-    -   **Active Inquiry:** Instead of blindly accepting or rejecting the new fact, it exhibits curiosity. It formulates a natural, clarifying question to the user to resolve its own confusion.
-    -   **Knowledge Reconciliation:** It uses the user's feedback as "ground truth" to actively correct its own brain, reinforcing the correct fact and punishing the incorrect one.
-*   **User-Driven Correction:** The user can take direct control of the learning process by using a `correction:` command to explicitly override, punish, and replace incorrect facts in the agent's brain.
+*   **Dynamic Memory & Fact Salience:** The agent's memory is not static. It tracks an `access_count` for every fact in its brain, reinforcing memories that are used frequently. Its reasoning and study engines prioritize these "salient" facts, focusing its attention on what it knows to be most important.
+*   **The Curiosity Engine (Implicit Correction):** The agent can recognize when new information conflicts with its existing world model. Instead of blindly accepting it, it exhibits curiosity, formulates a clarifying question, and uses the user's feedback to actively correct its own brain.
+*   **User-Driven Correction:** The user can act as a teacher, taking direct control of the learning process with a `correction:` command to explicitly override and replace incorrect facts.
 
 ### Autonomous Systems
-*   **Autonomous Knowledge Seeking:** The agent possesses a 24/7 `KnowledgeHarvester` that actively seeks out new information from the world to expand its understanding.
-*   **Diverse & Novel Topic Discovery:** The harvester is not limited to current events. It uses a hybrid discovery model, randomly exploring both Wikipedia's vast category structure and the New York Times' historical archives. This ensures a constant stream of diverse and novel topics, transforming the agent from a "trending topic" follower into a true "historical explorer."
-*   **Self-Aware & Resilient Learning:** The harvester is intelligent enough to check the agent's brain for existing concepts, forcing it to seek out novel information. It maintains a short-term "rejection memory" to avoid getting stuck on unlearnable topics, and uses a "Simplicity Filter" to discard facts that are too grammatically complex for it to reliably understand.
+*   **Resilient Knowledge Harvester:** The agent's tool for acquiring knowledge from the world is designed for resilience. It uses a hybrid discovery model (Wikipedia Categories, NYT Archives), maintains a "rejection memory" to avoid getting stuck on unlearnable topics, and uses a "Simplicity Filter" to discard grammatically complex facts that it cannot reliably understand.
 
 ### Deployment & User Experience
-*   **Versioned Model Rendering (`.axm`):** A custom "Axiom Mind" file format and a dedicated renderer (`render_model.py`) allow for the creation of stable, versioned snapshots of the agent's brain after training milestones.
-*   **Read-Only Inference Mode:** A separate, lightweight chat application (`chat_app.py`) can load any `.axm` model, allowing for safe, distributable deployment of a "finished" agent.
-*   **Remote Access with `ngrok`:** Both the training and inference apps have integrated support for exposing the local server to the internet via an optional `--ngrok` flag.
-*   **Multi-Conversation Management:** The UI supports multiple, persistent chat sessions which are saved to the browser's local storage.
-*   **Polished Aesthetic & PWA:** A custom dark mode theme and Progressive Web App configuration provide a distinct and native-like experience on both desktop and mobile.
-*   **Performance & Stability:** The agent uses persistent caching and thread-safe locks to ensure a fast, stable, and responsive user experience. The experimental "Anticipatory Caching" and "Conversational Context" features are disabled by default to guarantee core system integrity.
+*   **Versioned Model Rendering (`.axm`):** A custom "Axiom Mind" file format and a dedicated renderer allow for the creation of stable, versioned snapshots of the agent's brain after training milestones.
+*   **Read-Only Inference Mode:** A separate, lightweight chat application can load any `.axm` model, allowing for safe, distributable deployment of a "finished" agent.
+*   **Remote Access with `ngrok`:** Both the training and inference apps have integrated support for exposing the local server to the internet.
+*   **Polished UI & PWA:** A custom dark mode theme, multi-conversation management, and Progressive Web App configuration provide a distinct and native-like experience on both desktop and mobile.
+*   **Stability First:** Experimental features like "Anticipatory Caching" and "Conversational Context" are preserved in the code but disabled by default with "kill switches" to guarantee the integrity of the core cognitive system.
 
 ---
 
@@ -72,20 +69,16 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Step 4: Download the Language Model
-This project requires the Mistral-7B GGUF model.
-- Download **[mistral-7b-instruct-v0.2.Q4_K_M.gguf](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF)**.
-- Create a `models/` folder in your project directory and place the file inside.
-- The final path should be `models/mistral-7b-instruct-v0.2.Q4_K_M.gguf`.
-
 ### Step 5: Configure API & Auth Keys (Optional but Recommended)
-- **New York Times API:** The autonomous harvester uses the NYT Archive API to find random topics.
-  - Get a free API key from the [NYT Developer Portal](https://developer.nytimes.com/).
-  - Enable the **"Archive API"** for your app.
-- **Ngrok Auth Token:** To use the `--ngrok` feature without limitations, configure your auth token.
-  - Get a token from your [ngrok Dashboard](https://dashboard.ngrok.com/get-started/your-authtoken).
 
-Set your keys as environment variables in your terminal session before running the application.
+-   **New York Times API:** The agent's autonomous "Discovery Cycle" uses the NYT Archive API to find a diverse range of new topics to learn about.
+    -   Get a free API key from the **[NYT Developer Portal](https://developer.nytimes.com/)**.
+    -   When creating your "App," enable access to the **"Times APIs"** service. This will grant you access to the Archive API.
+-   **Ngrok Auth Token:** To use the `--ngrok` feature for an extended period, you'll need to configure your free auth token.
+    -   Get a token from your **[ngrok Dashboard](https://dashboard.ngrok.com/get-started/your-authtoken)**.
+
+Set these keys as environment variables in your terminal before running the application.
+
 ```bash
 export NYT_API_KEY="YOUR_API_KEY_HERE"
 export NGROK_AUTHTOKEN="YOUR_NGROK_TOKEN_HERE"

@@ -69,6 +69,17 @@
 **Goal:** To reinforce the "Nuances of Language" by exploring new types of linguistic complexity, like synonyms and antonyms.
 
 **Lesson Facts:**
+
+	a word is a concept (Reinforce a basic fact)
+	a meaning is a concept (Introduce a new core concept)
+	similar is a property (Introduce another new core concept)
+	a word has a meaning (Connect the concepts)
+	similar is a type of relationship (Define the relationship itself)
+	a synonym is a word (This is the simple fact that the agent "hallucinated." Now, we teach it for real.)
+
+The "Bridge" Fact (Teach this last):
+7. a synonym has a similar meaning
+
 1.  > `a synonym is a word with a similar meaning`
 2.  > `an antonym is a word with an opposite meaning`
 3.  > `big is a word`

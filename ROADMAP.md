@@ -9,13 +9,14 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
 - **✅ Hybrid Cognitive Architecture:** The agent's mind is a hybrid of a symbolic **Knowledge Graph** (for verifiable, persistent memory) and a neural **Universal Interpreter** (for flexible language understanding), giving it the strengths of both paradigms.
 - **✅ Multi-Hop Logical Reasoning:** The agent can answer complex questions by traversing its knowledge graph and connecting multiple facts to infer new conclusions.
 - **✅ Dynamic Memory & Fact Salience:** The agent's memory is not static. It tracks an `access_count` for every fact in its brain, reinforcing memories that are used frequently. Its reasoning engine prioritizes these "salient" facts to provide more concise and relevant answers.
+- **✅ Dual-Cycle Autonomous Learning (Study & Discovery):** The agent's learning is not just passive. It operates on a sophisticated "Cognitive Scheduler" with two distinct modes:
+    - **The Study Cycle (Knowledge Integration):** On a frequent timer, the agent introspectively reviews its own important knowledge. It then uses a specialized "curiosity" tool to generate its own follow-up questions about concepts it wants to understand more deeply, actively seeking to enrich its own brain.
+    - **The Discovery Cycle (Knowledge Acquisition):** On a less frequent timer, the agent actively seeks out brand new, unknown topics from the outside world, ensuring it continues to broaden its horizons.
 - **✅ Temporal Reasoning:** The agent can perceive, learn, and reason with time-based facts. It understands the context of words like "now" or "currently" and can determine the most relevant fact from a series of historical events.
 - **✅ Dual-Mode Learning System:** The agent possesses two distinct but complementary mechanisms for learning and self-correction.
     - **The Curiosity Engine (Implicit Correction):** Actively identifies when new information conflicts with its existing world model and autonomously asks clarifying questions to resolve its own confusion.
     - **User-Driven Correction (Explicit Correction):** Allows a user to take direct control of the learning process by using a `correction:` command to override, punish, and replace incorrect facts in the agent's brain.
-- **✅ Autonomous Knowledge Harvester:**
-    - **Diverse & Novel Topic Discovery:** The harvester is not limited to current events. It uses a hybrid discovery model, randomly exploring both Wikipedia's vast category structure and the New York Times' historical archives. This ensures a constant stream of diverse and novel topics, transforming the agent from a "trending topic" follower into a true "historical explorer."
-    - **Self-Aware & Resilient Learning:** Intelligently checks its own memory to avoid re-learning topics. It maintains a short-term "rejection memory" to avoid getting stuck on unlearnable topics, and uses a "Simplicity Filter" to discard facts that are too grammatically complex to reliably understand.
+- **✅ Resilient Knowledge Harvester:** The agent's tool for acquiring knowledge is designed for resilience. It uses a hybrid discovery model (Wikipedia Categories, NYT Archives), maintains a "rejection memory" to avoid getting stuck on unlearnable topics, and uses a "Simplicity Filter" to discard grammatically complex facts.
 - **✅ Vast Knowledge Base Seeding:** The agent begins its life with a large, pre-seeded set of foundational knowledge about itself, the world, and abstract concepts.
 
 ## ✅ Model Rendering & Deployment (Complete & Stable)
@@ -33,8 +34,8 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
 - **✅ PWA (Progressive Web App):** The agent is fully configured as an installable web application with a service worker and custom icons, allowing for a native-like experience on both desktop and mobile.
 - **✅ Performance & Stability:**
     - **Persistent Caching:** Caches interpretations to disk for instantaneous responses to repeated queries.
-    - **Anticipatory Caching:** The code is in place to proactively pre-warm the cache after autonomous learning, but is **disabled by default** due to persistent stability issues.
-    - **Thread-Safe Operation:** A global lock protects the agent from memory corruption during simultaneous user interaction and autonomous learning.
+    - **Feature Toggles:** Unstable experimental features like "Anticipatory Caching" and "Conversational Context" are preserved in the code but disabled by default with "kill switches" to ensure core system integrity.
+    - **Thread-Safe Operation:** A global lock protects the agent from memory corruption during simultaneous user interaction and autonomous learning cycles.
 
 ---
 
@@ -43,8 +44,7 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
 *Features that have been implemented but are currently too unstable for active use. The code remains in the project but is disabled by a "kill switch."*
 
 ### 1. Conversational Context (Short-Term Memory)
-- **Status:** **`On Hold / Disabled`**. The architectural approach of using a separate LLM call to resolve context has proven to be unreliable and is a frequent source of bugs. The feature has been disabled to ensure core system stability.
-- **Goal:** Enable the agent to reliably understand and answer follow-up questions with pronouns.
+- **Status:** **`On Hold / Disabled`**. The architectural approach of using a separate LLM call to resolve context has proven to be unreliable. The feature has been disabled to ensure core system stability.
 - **Path Forward:** This feature requires a complete architectural rethink. A future solution might involve a more powerful base model or a different logical approach entirely.
 
 ---

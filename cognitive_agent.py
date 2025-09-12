@@ -68,7 +68,9 @@ class CognitiveAgent:
         processed_text = re.sub(r'\byour name\b', "the agent's name", text, flags=re.IGNORECASE)
         processed_text = re.sub(r'\bwho are you\b', "what is the agent", processed_text, flags=re.IGNORECASE)
         processed_text = re.sub(r'\byou are\b', "the agent is", processed_text, flags=re.IGNORECASE)
+        processed_text = re.sub(r'\byour\b', "the agent's", processed_text, flags=re.IGNORECASE)
         processed_text = re.sub(r'(?<!thank )\byou\b', "the agent", processed_text, flags=re.IGNORECASE)
+        
         if processed_text != text:
             print(f"  [Pre-processor]: Normalized input to '{processed_text}'")
         return processed_text

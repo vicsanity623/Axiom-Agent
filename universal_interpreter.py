@@ -113,10 +113,6 @@ class UniversalInterpreter:
             return {"intent": "unknown", "entities": [], "relation": None, "key_topics": user_input.split(), "full_text_rephrased": f"Could not fully interpret: '{user_input}'"}
 
     def resolve_context(self, history: list[str], new_input: str) -> str:
-        """
-        Uses the Mini LLM to resolve pronouns in a new input based on conversation history.
-        Returns a rephrased version of the new_input with the pronoun replaced.
-        """
         print("  [Context Resolver]: Attempting to resolve pronouns...")
         formatted_history = "\n".join(history)
         system_prompt = (
@@ -130,26 +126,19 @@ class UniversalInterpreter:
         examples_prompt = (
             "Here are some examples:\n"
             "Conversation History:\n"
-            "User: what is an apple?\n"
-            "Agent: An apple is a fruit.\n"
-            "New Input: what color is it?\n"
-            "Output: what color is an apple?\n\n"
+            "User: what is an apple?\nAgent: An apple is a fruit.\n"
+            "New Input: what color is it?\nOutput: what color is an apple?\n\n"
             "Conversation History:\n"
-            "User: tell me about dogs\n"
-            "Agent: Dogs are mammals.\n"
-            "New Input: what do they eat?\n"
-            "Output: what do dogs eat?\n\n"
+            "User: tell me about dogs\nAgent: Dogs are mammals.\n"
+            "New Input: what do they eat?\nOutput: what do dogs eat?\n\n"
             "Conversation History:\n"
-            "User: tell me about the solar system\n"
-            "Agent: The solar system has eight planets.\n"
-            "New Input: what is the largest planet?\n"
-            "Output: what is the largest planet?"
+            "User: tell me about the solar system\nAgent: The solar system has eight planets.\n"
+            "New Input: what is the largest planet?\nOutput: what is the largest planet?"
         )
         full_prompt = (
             f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Conversation History:\n{formatted_history}\n"
-            f"New Input: {new_input}\n"
-            f"Output:[/INST]"
+            f"New Input: {new_input}\nOutput:[/INST]"
         )
         try:
             output = self.llm(full_prompt, max_tokens=128, stop=["</s>", "\n"], echo=False, temperature=0.0)
@@ -164,25 +153,58 @@ class UniversalInterpreter:
             print(f"  [Context Resolver Error]: Could not resolve context. Error: {e}")
             return new_input
             
-    # --- NEW: The main entry point for user chat, which handles context ---
     def interpret_with_context(self, user_input: str, history: list[str]) -> dict:
-        """
-        A wrapper around the interpret method that first attempts to resolve context.
-        """
         contextual_input = user_input
         pronouns = ['it', 'its', 'they', 'them', 'their', 'he', 'she', 'his', 'her']
-        
-        # Check if a pronoun is likely present and if there's history to check against
         if history and any(f' {pronoun} ' in f' {user_input.lower()} ' for pronoun in pronouns):
             contextual_input = self.resolve_context(history, user_input)
-        
-        # Call the original, core interpret method with the (potentially) rephrased input
         return self.interpret(contextual_input)
+
+    # --- NEW: The "Curiosity" tool for the Study Engine ---
+    def generate_curious_questions(self, topic: str, known_fact: str) -> list[str]:
+        """
+        Uses the Mini LLM in a creative mode to generate follow-up questions.
+        """
+        system_prompt = (
+            "You are a creative, inquisitive assistant that thinks like a curious child. "
+            "Your task is to generate exactly two, simple, fundamental follow-up questions about a topic, "
+            "based on a fact that is already known. The questions should be things a child would ask to learn more.\n"
+            "RULES:\n"
+            "1. Generate exactly TWO questions.\n"
+            "2. The questions must be simple and fundamental.\n"
+            "3. Format your output as a simple list, with each question on a new line, prefixed with a hyphen.\n"
+            "4. DO NOT add any other text, explanation, or commentary."
+        )
+        examples_prompt = (
+            "Here are some examples:\n"
+            "Topic: Apple\nKnown Fact: An apple is a fruit.\n"
+            "Output:\n- Where do apples grow?\n- What is inside an apple?\n\n"
+            "Topic: Sun\nKnown Fact: The sun is a star.\n"
+            "Output:\n- Why is the sun hot?\n- How big is the sun?"
+        )
+        full_prompt = (
+            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"Topic: {topic}\nKnown Fact: {known_fact}\n"
+            f"Output:[/INST]"
+        )
+        try:
+            output = self.llm(full_prompt, max_tokens=128, stop=["</s>"], echo=False, temperature=0.8)
+            response_text = output["choices"][0]["text"].strip()
+            
+            # Parse the bulleted list of questions
+            questions = [q.strip() for q in response_text.replace('-', '').split('\n') if q.strip()]
+            
+            if questions:
+                print(f"    - Generated {len(questions)} curious questions.")
+                return questions
+            return []
+        except Exception as e:
+            print(f"  [Question Generation Error]: Could not generate questions. Error: {e}")
+            return []
 
     def synthesize(self, structured_facts: str, original_question: str = None, mode: str = "statement") -> str:
         """
         Uses the Mini LLM to convert structured facts into natural language.
-        Can operate in different modes: 'statement' (default) or 'clarification_question'.
         """
         if mode == "statement" and structured_facts in self.synthesis_cache and not original_question:
             print("  [Synthesizer Cache]: Hit!")
@@ -206,13 +228,7 @@ class UniversalInterpreter:
                 "1.  **ONLY use the information given in the 'Facts' string.**\n"
                 "2.  **DO NOT add any extra information, commentary, or meta-analysis.**\n"
                 "3.  **DO NOT apologize or mention your own limitations.**\n"
-                "4.  **Your output must be ONLY the rephrased sentence and nothing else.**\n\n"
-                "Example of a BAD response:\n"
-                "Facts: 'I'm not sure how to process that.'\n"
-                "BAD Output: 'I need you to clarify what you mean. Please rephrase the question.'\n\n"
-                "Example of a GOOD response:\n"
-                "Facts: 'I'm not sure how to process that.'\n"
-                "GOOD Output: 'I am not sure how to process that.'"
+                "4.  **Your output must be ONLY the rephrased sentence and nothing else.**"
             )
             task_prompt = f"Facts to rephrase: '{structured_facts}'"
             if original_question:
@@ -227,8 +243,7 @@ class UniversalInterpreter:
                 temperature=0.7 if mode == "clarification_question" else 0.1
             )
             synthesized_text = output["choices"][0]["text"].strip().replace('"', '')
-
-            phrases_to_remove = ["rephrased sentence:", "based on the provided facts,", "the rephrased sentence is:", "good output:"]
+            phrases_to_remove = ["rephrased sentence:", "based on the provided facts,", "the rephrased sentence is:", "good output:", "output:"]
             for phrase in phrases_to_remove:
                 if synthesized_text.lower().startswith(phrase):
                     synthesized_text = synthesized_text[len(phrase):].strip()

@@ -11,9 +11,7 @@ app = Flask(__name__)
 
 # --- Global Agent Initialization ---
 axiom_agent = None
-# --- NEW: A global lock to protect the agent from simultaneous access ---
 agent_interaction_lock = threading.Lock()
-# --- END NEW ---
 agent_status = "uninitialized"
 
 def load_agent():
@@ -21,7 +19,6 @@ def load_agent():
     Function to load the CognitiveAgent and start the background harvester.
     """
     global axiom_agent, agent_status
-    # Use a separate lock for the initial loading process to avoid deadlocks
     loading_lock = threading.Lock()
     with loading_lock:
         if axiom_agent is None and agent_status != "loading":
@@ -33,15 +30,19 @@ def load_agent():
                 
                 axiom_agent = CognitiveAgent(brain_file=brain_file, state_file=state_file)
                 
-                # --- Pass the new interaction lock to the harvester ---
                 harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
                 scheduler = BackgroundScheduler(daemon=True)
                 
-                # For testing, you can change 'hours=1' to 'minutes=X' to see it run quickly.
-                scheduler.add_job(harvester.harvest_and_learn, 'interval', minutes=12)
+                # --- NEW: The Cognitive Scheduler with two independent cycles ---
+                # 1. The "Study" cycle runs frequently to deepen existing knowledge.
+                scheduler.add_job(harvester.study_existing_concept, 'interval', minutes=12)
+                print("--- Study Cycle is scheduled to run every 12 minutes. ---")
+
+                # 2. The "Discovery" cycle runs infrequently to find brand new topics.
+                scheduler.add_job(harvester.discover_new_topic_and_learn, 'interval', hours=1)
+                print("--- Discovery Cycle is scheduled to run every 1 hour. ---")
                 
                 scheduler.start()
-                print("--- Knowledge Harvester is scheduled to run every 12 minutes (for testing). ---")
 
                 agent_status = "ready"
                 print("--- Axiom Agent is Ready! ---")
@@ -93,12 +94,10 @@ def chat():
         return jsonify({"error": "No message provided"}), 400
 
     try:
-        # --- NEW: Acquire the lock before using the agent ---
         with agent_interaction_lock:
             print("  [Lock]: User chat acquired lock.")
             agent_response = axiom_agent.chat(user_message)
         print("  [Lock]: User chat released lock.")
-        # --- END NEW ---
         return jsonify({"response": agent_response})
     except Exception as e:
         print(f"!!! ERROR DURING CHAT PROCESSING: {e} !!!")
@@ -115,7 +114,6 @@ if __name__ == '__main__':
     parser.add_argument('--ngrok', action='store_true', help="Expose the server to the internet using ngrok.")
     args = parser.parse_args()
 
-    # Configure and start ngrok if the flag is provided
     if args.ngrok:
         authtoken = os.environ.get("NGROK_AUTHTOKEN")
         if authtoken:

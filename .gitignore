@@ -26,6 +26,12 @@ models/
 notes.txt
 AgentCurriculum.txt
 Axiom_Voice_Dataset/
+Curriculum
+Curriculum/K-wk4.txt
+Curriculum/K-wk3.txt
+Curriculum/K-wk2.txt
+Curriculum/1st/1-wk1.txt
+Curriculum/1st
 Voicetrain.txt
 *.wav
 *.csv
