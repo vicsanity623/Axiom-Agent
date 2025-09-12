@@ -23,7 +23,6 @@ models/
 *.gguf2_base_q4_K_M.gguf
 *.gguf2_base_q4_K_M.gguf2
 *.gguf2_base_q4_K_M.gguf2_base
-render_model.py
 notes.txt
 AgentCurriculum.txt
 Axiom_Voice_Dataset/
