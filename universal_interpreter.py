@@ -43,7 +43,7 @@ class UniversalInterpreter:
             with open(self.cache_file, 'w') as f:
                 cache_data = {
                     "interpretations": list(self.interpretation_cache.items()),
-                    "synthesis": list(list(self.interpretation_cache.items())),
+                    "synthesis": list(self.synthesis_cache.items()),
                 }
                 json.dump(cache_data, f, indent=4)
         except Exception as e:
@@ -76,27 +76,30 @@ class UniversalInterpreter:
         )
         json_structure_prompt = (
             "The JSON object must have the following fields:\n"
-            "- 'intent': Classify the user's primary intent...\n"
-            "- 'relation': If 'statement_of_fact', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. "
-            "If the sentence contains temporal information (like a date or year), extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.\n"
+            "- 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.\n"
+            "- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. "
+            "If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.\n"
             "- 'key_topics': A list of the main subjects or topics...\n"
             "- 'full_text_rephrased': A neutral, one-sentence rephrasing..."
         )
         examples_prompt = (
-            "Here are some examples:\n"
+            'Here are some examples:\n'
             "Input: 'show all facts'\n"
             'Output: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}\n\n'
+            "Input: 'what is a human'\n"
+            'Output: {"intent": "question_about_concept", "entities": [{"name": "human", "type": "CONCEPT"}], "relation": null, "key_topics": ["human"], "full_text_rephrased": "User is asking for information about a human."}\n\n'
+            "Input: 'correction: the sky is blue'\n"
+            'Output: {"intent": "statement_of_correction", "entities": [{"name": "sky", "type": "CONCEPT"}, {"name": "blue", "type": "COLOR"}], "relation": {"subject": "the sky", "verb": "is", "object": "blue"}, "key_topics": ["sky", "blue"], "full_text_rephrased": "User is correcting the fact about the sky to state that it is blue."}\n\n'
             "Input: 'In 2023, Tim Cook was the CEO of Apple.'\n"
             'Output: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "CEO of Apple", "type": "ROLE"}], "relation": {"subject": "Tim Cook", "verb": "was", "object": "the CEO of Apple", "properties": {"effective_date": "2023-01-01"}}, "key_topics": ["Tim Cook", "Apple", "CEO"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple in 2023."}\n\n'
-            "Input: 'a fact is a piece of information'\n"
-            'Output: {"intent": "statement_of_fact", "entities": [{"name": "fact", "type": "CONCEPT"}, {"name": "piece of information", "type": "CONCEPT"}], "relation": {"subject": "a fact", "verb": "is", "object": "a piece of information"}, "key_topics": ["fact", "information"], "full_text_rephrased": "User is stating that a fact is a piece of information."}\n\n'
             "Input: 'who is Donald Trump?'\n"
             'Output: {"intent": "question_about_entity", "entities": [{"name": "Donald Trump", "type": "PERSON"}], "relation": null, "key_topics": ["Donald Trump"], "full_text_rephrased": "User is asking for information about Donald Trump."}\n'
         )
         
+        sanitized_input = json.dumps(user_input)
         full_prompt = (
             f"<s>[INST] {system_prompt}\n\n{json_structure_prompt}\n\n{examples_prompt}\n\n"
-            f"Now, analyze the following user input and provide ONLY the JSON output:\n'{user_input}'[/INST]"
+            f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
         )
         try:
             output = self.llm(full_prompt, max_tokens=512, stop=["</s>"], echo=False, temperature=0.0)
@@ -111,6 +114,61 @@ class UniversalInterpreter:
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
             return {"intent": "unknown", "entities": [], "relation": None, "key_topics": user_input.split(), "full_text_rephrased": f"Could not fully interpret: '{user_input}'"}
+
+    # --- NEW: The specialized method for resolving conversational context ---
+    def resolve_context(self, history: list[str], new_input: str) -> str:
+        """
+        Uses the Mini LLM to resolve pronouns in a new input based on conversation history.
+        Returns a rephrased version of the new_input with the pronoun replaced.
+        """
+        print("  [Context Resolver]: Attempting to resolve pronouns...")
+
+        # Format the history for the prompt
+        formatted_history = "\n".join(history)
+
+        system_prompt = (
+            "You are a specialized language task assistant. Your ONLY job is to rephrase a 'New Input' sentence "
+            "by replacing any pronouns (like 'it', 'they', 'its') with the specific noun they refer to, "
+            "based on the provided 'Conversation History'. Your output must be ONLY the rephrased sentence."
+        )
+
+        examples_prompt = (
+            "Here are some examples:\n"
+            "Conversation History:\n"
+            "User: what is an apple?\n"
+            "Agent: An apple is a fruit.\n"
+            "New Input: what color is it?\n"
+            "Output: what color is an apple?\n\n"
+            "Conversation History:\n"
+            "User: tell me about dogs\n"
+            "Agent: Dogs are mammals.\n"
+            "New Input: what do they eat?\n"
+            "Output: what do dogs eat?"
+        )
+
+        full_prompt = (
+            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"Conversation History:\n{formatted_history}\n"
+            f"New Input: {new_input}\n"
+            f"Output:[/INST]"
+        )
+
+        try:
+            output = self.llm(full_prompt, max_tokens=128, stop=["</s>", "\n"], echo=False, temperature=0.0)
+            rephrased_input = output["choices"][0]["text"].strip()
+            
+            # A simple check to ensure it didn't just repeat the input
+            if rephrased_input.lower() != new_input.lower():
+                print(f"    - Context resolved: '{new_input}' -> '{rephrased_input}'")
+                return rephrased_input
+            else:
+                # If it just repeats, it means there was likely no pronoun to resolve.
+                return new_input
+
+        except Exception as e:
+            print(f"  [Context Resolver Error]: Could not resolve context. Error: {e}")
+            # If there's an error, it's safest to return the original input
+            return new_input
 
     def synthesize(self, structured_facts: str, original_question: str = None, mode: str = "statement") -> str:
         """
@@ -133,7 +191,6 @@ class UniversalInterpreter:
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
         else: # Default "statement" mode
-            # --- NEW: The final, maximally strict prompt ---
             system_prompt = (
                 "You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. "
                 "You are a fluent parrot. You must follow these rules strictly:\n"

@@ -14,8 +14,22 @@ class KnowledgeHarvester:
         self.nyt_api_key = os.environ.get("NYT_API_KEY")
         if not self.nyt_api_key:
             print("[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. Trending topic source will be disabled.")
+        
+        # --- NEW: Add a "rejection memory" to avoid retrying failed topics ---
+        self.rejected_topics = set()
+        
         wikipedia.set_user_agent('AxiomAgent/1.0 (AxiomAgent@example.com)')
         print("[Knowledge Harvester]: Initialized.")
+
+    def _is_sentence_simple_enough(self, sentence: str, max_words=40, max_commas=3) -> bool:
+        """Checks if a sentence is simple enough for the interpreter to handle reliably."""
+        if len(sentence.split()) > max_words:
+            print(f"  [Simplicity Filter]: Sentence rejected (too long: {len(sentence.split())} words).")
+            return False
+        if sentence.count(',') > max_commas:
+            print(f"  [Simplicity Filter]: Sentence rejected (too complex: {sentence.count(',')} commas).")
+            return False
+        return True
 
     def _extract_core_entity(self, topic_string: str) -> str | None:
         print(f"  [Harvester]: Analyzing topic string for core entity: '{topic_string}'")
@@ -41,16 +55,21 @@ class KnowledgeHarvester:
         for i in range(max_attempts):
             print(f"\n[Harvester]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...")
             topic = None
-            if i % 2 == 0 and self.nyt_api_key:
+            source_choice = random.choice(['nyt', 'wiki', 'wiki']) # Give wiki higher probability
+            
+            if source_choice == 'nyt' and self.nyt_api_key:
                 topic = self.get_trending_topic()
             else:
                 topic = self.get_random_wikipedia_topic()
             
             if topic:
                 clean_topic = self.agent._clean_phrase(topic)
+                # --- UPDATED: Check both the brain and the rejection memory ---
                 if self.agent.graph.get_node_by_name(clean_topic):
                     print(f"  [Harvester Info]: Agent already knows about '{topic}'. Finding a new topic...")
-                    time.sleep(1)
+                    continue
+                elif clean_topic in self.rejected_topics:
+                    print(f"  [Harvester Info]: Agent has already tried and failed to learn about '{topic}'. Finding a new topic...")
                     continue
                 else:
                     print(f"  [Harvester Success]: Found a new, unknown topic: '{topic}'")
@@ -85,7 +104,6 @@ class KnowledgeHarvester:
         return None
 
     def get_random_wikipedia_topic(self) -> str | None:
-        # This function requires the wikipedia-api library for its category feature.
         import wikipediaapi
         wiki_api = wikipediaapi.Wikipedia('AxiomAgent/1.0 (AxiomAgent@example.com)', 'en')
         print("  [Harvester]: Attempting to find a random topic from Wikipedia categories...")
@@ -120,17 +138,17 @@ class KnowledgeHarvester:
                 first_sentence = page.summary.split('. ')[0].strip()
                 if not first_sentence.endswith('.'): first_sentence += '.'
                 
-                if len(first_sentence.split()) > 5:
+                if len(first_sentence.split()) > 5 and self._is_sentence_simple_enough(first_sentence):
                     final_topic = page.title
                     print(f"[Knowledge Harvester]: Extracted fact from Wikipedia: '{first_sentence}'")
                     return final_topic, first_sentence
+                else:
+                    return None
         
         except wikipedia.exceptions.DisambiguationError as e:
             print(f"  [Wiki Search]: Hit a disambiguation page for '{topic}'. Discarding.")
-            return None
         except wikipedia.exceptions.PageError:
             print(f"  [Wiki Search]: PageError. Could not find a specific page for '{topic}'.")
-            return None
         except Exception as e:
             print(f"  [Wiki Search]: An unexpected error occurred: {e}")
 
@@ -154,8 +172,12 @@ class KnowledgeHarvester:
                     fact_sentence = f"{topic.capitalize()} is {fact_sentence.lower()}"
 
                 if "is a redirect to" in fact_sentence.lower(): return None
-                print(f"[Knowledge Harvester]: Extracted fact from DuckDuckGo: '{fact_sentence}'")
-                return topic, fact_sentence
+                
+                if self._is_sentence_simple_enough(fact_sentence):
+                    print(f"[Knowledge Harvester]: Extracted fact from DuckDuckGo: '{fact_sentence}'")
+                    return topic, fact_sentence
+                else:
+                    return None
         except requests.RequestException as e:
             print(f"[Knowledge Harvester]: Error fetching from DuckDuckGo API: {e}")
         except json.JSONDecodeError:
@@ -187,36 +209,43 @@ class KnowledgeHarvester:
                 initial_topic = self.find_new_topic()
             print("  [Lock]: Harvester released lock after topic finding.")
             
-            if initial_topic:
-                learned_topic = None
-                
-                wiki_result = self.get_fact_from_wikipedia(initial_topic)
-                if wiki_result:
-                    final_topic, fact_sentence = wiki_result
-                    if self._try_to_learn(fact_sentence):
-                        learned_this_interval = True
-                        learned_topic = final_topic
-                
-                if not learned_this_interval:
-                    time.sleep(1)
-                    ddg_result = self.get_fact_from_duckduckgo(initial_topic)
-                    if ddg_result:
-                        final_topic, fact_sentence = ddg_result
-                        if self._try_to_learn(fact_sentence):
-                            learned_this_interval = True
-                            learned_topic = final_topic
-
-                if learned_this_interval and learned_topic:
-                    self._anticipate_and_cache(learned_topic)
-                    break
-                else:
-                    print(f"[Knowledge Harvester]: Could not learn a fact for topic '{initial_topic}'. Trying a new topic...")
-            else:
+            if not initial_topic:
                 print("[Knowledge Harvester]: Could not find any new topic to learn about. Ending cycle.")
                 break
 
+            learned_topic = None
+            
+            # Try Wikipedia first
+            wiki_result = self.get_fact_from_wikipedia(initial_topic)
+            if wiki_result:
+                final_topic, fact_sentence = wiki_result
+                if self._try_to_learn(fact_sentence):
+                    learned_this_interval = True
+                    learned_topic = final_topic
+            
+            # If Wikipedia failed, try DuckDuckGo
+            if not learned_this_interval:
+                time.sleep(1) # Small delay between API calls
+                ddg_result = self.get_fact_from_duckduckgo(initial_topic)
+                if ddg_result:
+                    final_topic, fact_sentence = ddg_result
+                    if self._try_to_learn(fact_sentence):
+                        learned_this_interval = True
+                        learned_topic = final_topic
+
+            # --- UPDATED: Centralized failure logic ---
+            # If after all attempts, we still haven't learned, reject the topic.
+            if not learned_this_interval:
+                print(f"[Knowledge Harvester]: Could not learn a fact for topic '{initial_topic}'. Rejecting for this session.")
+                self.rejected_topics.add(self.agent._clean_phrase(initial_topic))
+            else:
+                # If we did learn, pre-warm the cache and exit the loop.
+                if learned_topic:
+                    self._anticipate_and_cache(learned_topic)
+                break # Exit the loop since we succeeded
+
         if not learned_this_interval:
-            print("[Knowledge Harvester]: All attempts failed. Could not learn a new fact this interval.")
+            print("[Knowledge Harvester]: All learning attempts failed for this interval.")
 
         print("--- [Autonomous Learning Cycle Finished] ---\n")
 
@@ -224,10 +253,17 @@ class KnowledgeHarvester:
         print(f"\n  [Anticipatory Cache]: Pre-warming caches for the CORRECT topic: '{topic}'")
         try:
             simulated_question = f"what is {topic}"
+            response_text = ""
             with self.lock:
                 print("  [Lock]: Harvester acquired lock for anticipatory caching.")
-                self.agent.chat(simulated_question)
+                response_text = self.agent.chat(simulated_question)
             print("  [Lock]: Harvester released lock after caching.")
-            print(f"  [Anticipatory Cache]: Caches for '{topic}' have been successfully pre-warmed.")
+
+            failure_keywords = ["i'm not sure", "i am not sure", "rephrase", "i don't have any information", "i cannot answer", "uncertain"]
+            if any(keyword in response_text.lower() for keyword in failure_keywords):
+                print(f"  [Anticipatory Cache]: Pre-warming FAILED. Agent could not answer the simulated question. The cache was not confirmed.")
+            else:
+                print(f"  [Anticipatory Cache]: Caches for '{topic}' have been successfully pre-warmed.")
+
         except Exception as e:
             print(f"  [Anticipatory Cache Error]: Could not pre-warm cache for '{topic}'. Error: {e}")

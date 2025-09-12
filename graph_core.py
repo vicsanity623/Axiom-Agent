@@ -31,19 +31,21 @@ class ConceptNode:
 
 class RelationshipEdge:
     """Represents a directed, weighted relationship between two concepts."""
-    def __init__(self, source, target, type, weight=0.5, id=None, properties=None):
+    def __init__(self, source, target, type, weight=0.5, id=None, properties=None, access_count=0):
         self.id = id or str(uuid.uuid4())
         self.source = source
         self.target = target
         self.type = type
         self.weight = weight
         self.properties = properties or {}
+        self.access_count = access_count
 
     def to_dict(self):
         return {
             "id": self.id, "source": self.source, "target": self.target,
             "type": self.type, "weight": self.weight,
-            "properties": self.properties
+            "properties": self.properties,
+            "access_count": self.access_count
         }
 
     @staticmethod
@@ -52,7 +54,8 @@ class RelationshipEdge:
             id=data.get("id"), source=data.get("source"),
             target=data.get("target"), type=data.get("type"),
             weight=data.get("weight", 0.5),
-            properties=data.get("properties", {})
+            properties=data.get("properties", {}),
+            access_count=data.get("access_count", 0)
         )
 
 class ConceptGraph:
