@@ -6,6 +6,7 @@ import requests
 import wikipedia
 import os
 import json
+from datetime import datetime # Import the datetime module
 
 class KnowledgeHarvester:
     def __init__(self, agent, lock):
@@ -16,8 +17,6 @@ class KnowledgeHarvester:
             print("[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. Trending topic source will be disabled.")
         
         self.rejected_topics = set()
-        
-        # --- NEW: The "kill switch" for the anticipatory cache feature ---
         self.enable_anticipatory_cache = False
         
         wikipedia.set_user_agent('AxiomAgent/1.0 (AxiomAgent@example.com)')
@@ -59,8 +58,9 @@ class KnowledgeHarvester:
             topic = None
             source_choice = random.choice(['nyt', 'wiki', 'wiki'])
             
+            # --- UPDATED: Call the new archival method ---
             if source_choice == 'nyt' and self.nyt_api_key:
-                topic = self.get_trending_topic()
+                topic = self.get_archival_topic()
             else:
                 topic = self.get_random_wikipedia_topic()
             
@@ -79,29 +79,39 @@ class KnowledgeHarvester:
         print(f"[Harvester Warning]: Could not find a new, unknown topic after {max_attempts} attempts.")
         return None
 
-    def get_trending_topic(self) -> str | None:
+    # --- DELETED: The old get_trending_topic method is gone ---
+
+    # --- NEW: The archival topic discovery method ---
+    def get_archival_topic(self) -> str | None:
         if not self.nyt_api_key: return None
-        print("  [Harvester]: Attempting to fetch trending topics from New York Times API...")
+        print("  [Harvester]: Attempting to fetch a random topic from New York Times Archives...")
         try:
-            url = f"https://api.nytimes.com/svc/mostpopular/v2/viewed/1.json?api-key={self.nyt_api_key}"
-            response = requests.get(url, timeout=10)
+            # Pick a random year and month
+            current_year = datetime.now().year
+            year = random.randint(2000, current_year)
+            month = random.randint(1, 12)
+            
+            print(f"    - Searching archive for {year}-{month:02d}...")
+            
+            url = f"https://api.nytimes.com/svc/archive/v1/{year}/{month}.json?api-key={self.nyt_api_key}"
+            response = requests.get(url, timeout=15)
             response.raise_for_status()
             data = response.json()
-            if data.get('status') == 'OK' and data.get('results'):
-                articles = data['results']
-                potential_topics = []
-                for article in articles[:10]:
-                    keywords_str = article.get('adx_keywords', '')
-                    if ';' in keywords_str:
-                        main_keyword = keywords_str.split(';')[0]
-                        if '(' in main_keyword: main_keyword = main_keyword.split('(')[0].strip()
-                        if main_keyword and len(main_keyword) > 3 and main_keyword.lower() not in ['news', 'politics', 'business']:
-                             potential_topics.append(main_keyword)
-                if potential_topics:
-                    chosen_topic_string = random.choice(potential_topics)
-                    return self._extract_core_entity(chosen_topic_string)
+            
+            docs = data.get('response', {}).get('docs', [])
+            if not docs:
+                print("    - No articles found for this month.")
+                return None
+            
+            # Find a random, suitable headline
+            random.shuffle(docs)
+            for article in docs:
+                headline = article.get('headline', {}).get('main', '')
+                if headline and len(headline.split()) > 3: # Ensure headline is reasonably long
+                    return self._extract_core_entity(headline)
+
         except requests.RequestException as e:
-            print(f"  [Harvester]: Error fetching NYT API: {e}")
+            print(f"  [Harvester]: Error fetching NYT Archive API: {e}")
         return None
 
     def get_random_wikipedia_topic(self) -> str | None:
@@ -236,7 +246,7 @@ class KnowledgeHarvester:
                 print(f"[Knowledge Harvester]: Could not learn a fact for topic '{initial_topic}'. Rejecting for this session.")
                 self.rejected_topics.add(self.agent._clean_phrase(initial_topic))
             else:
-                if learned_topic and self.enable_anticipatory_cache: # <-- UPDATED LINE
+                if learned_topic and self.enable_anticipatory_cache:
                     self._anticipate_and_cache(learned_topic)
                 break
 

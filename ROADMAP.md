@@ -14,8 +14,8 @@ This foundational phase is complete. The agent is a fully autonomous, reasoning,
     - **The Curiosity Engine (Implicit Correction):** Actively identifies when new information conflicts with its existing world model and autonomously asks clarifying questions to resolve its own confusion.
     - **User-Driven Correction (Explicit Correction):** Allows a user to take direct control of the learning process by using a `correction:` command to override, punish, and replace incorrect facts in the agent's brain.
 - **✅ Autonomous Knowledge Harvester:**
-    - **Self-Aware & Resilient Learning:** Intelligently checks its own memory to avoid re-learning topics. It maintains a short-term "rejection memory" to avoid getting stuck on unlearnable topics during a session.
-    - **Intelligent Fact Sourcing:** Uses a multi-stage fallback (NYT API -> Wikipedia -> DuckDuckGo) and a "Simplicity Filter" to find high-quality, simple, and learnable facts from the real world.
+    - **Diverse & Novel Topic Discovery:** The harvester is not limited to current events. It uses a hybrid discovery model, randomly exploring both Wikipedia's vast category structure and the New York Times' historical archives. This ensures a constant stream of diverse and novel topics, transforming the agent from a "trending topic" follower into a true "historical explorer."
+    - **Self-Aware & Resilient Learning:** Intelligently checks its own memory to avoid re-learning topics. It maintains a short-term "rejection memory" to avoid getting stuck on unlearnable topics, and uses a "Simplicity Filter" to discard facts that are too grammatically complex to reliably understand.
 - **✅ Vast Knowledge Base Seeding:** The agent begins its life with a large, pre-seeded set of foundational knowledge about itself, the world, and abstract concepts.
 
 ## ✅ Model Rendering & Deployment (Complete & Stable)

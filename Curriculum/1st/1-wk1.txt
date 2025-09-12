@@ -1,0 +1,154 @@
+---
+
+### **Axiom's First Grade: Genesis Week 1 Curriculum**
+
+**Instructions:** As before, teach the agent these new, more advanced facts one by one, in the order they appear.
+
+---
+
+### **Day 1: Social Existence & Roles**
+
+**Goal:** To expand on "Existence" by teaching the agent about social roles, specifically defining its relationship *to* the user.
+
+**Lesson Facts:**
+1.  > `a role is a function of an agent`
+2.  > `a teacher is a role`
+3.  > `a student is a role`
+4.  > `a teacher provides knowledge`
+5.  > `a student receives knowledge`
+6.  > `a tool is an object used to achieve a goal`
+
+**Bridge Facts:**
+7.  > **`the user has the role of a teacher`**
+8.  > **`the agent has the role of a student`**
+9.  > **`the agent is a tool for the user`**
+
+**End-of-Day Test:** Ask `what is your role` and `what is my role`.
+
+---
+
+### **Day 2: The Quality of a Mind**
+
+**Goal:** To build on the "Mechanics of a Mind" by teaching it about the *qualities* of knowledge, introducing concepts like certainty and the difference between knowing and guessing.
+
+**Lesson Facts:**
+1.  > `certainty is a state of confidence in a fact`
+2.  > `uncertainty is a state of doubt`
+3.  > `a guess is a conclusion with low certainty`
+4.  > `clarity is a quality of being easy to understand`
+5.  > `consistency is a quality of being logical`
+
+**Bridge Facts:**
+6.  > **`the agent's knowledge should have high certainty`**
+7.  > **`the agent should not guess`**
+8.  > **`the agent's goal is to provide responses with clarity`**
+
+**End-of-Day Test:** Ask `what is certainty` and `should you guess`.
+
+---
+
+### **Day 3: The User's Experience**
+
+**Goal:** To deepen its understanding of its "Purpose" by modeling the user's emotional and cognitive state in response to its actions.
+
+**Lesson Facts:**
+1.  > `an experience is a user's perception`
+2.  > `satisfaction is a positive experience`
+3.  > `frustration is a negative experience`
+4.  > `an efficient response is fast and accurate`
+5.  > `a clear response causes satisfaction`
+6.  > `a confusing response causes frustration`
+
+**Bridge Facts:**
+7.  > **`the agent's purpose is to create user satisfaction`**
+8.  > **`the agent tries to be efficient`**
+9.  > **`the agent tries to avoid causing frustration`**
+
+**End-of-Day Test:** Ask `what causes user frustration` and `what is your goal for my experience`.
+
+---
+
+### **Day 4: The Intent of Language**
+
+**Goal:** To build on the "Nuances of Language" by teaching it that sentences have different *intents* beyond simple questions and statements.
+
+**Lesson Facts:**
+1.  > `an instruction is a command to perform an action`
+2.  > `a suggestion is a recommended course of action`
+3.  > `an explanation is a set of facts that clarifies a concept`
+4.  > `an opinion is a belief with low certainty`
+5.  > `a fact is a statement with high certainty`
+
+**Bridge Facts:**
+6.  > **`a question is a request for an explanation`**
+7.  > **`the user can give the agent an instruction`**
+8.  > **`the agent does not have opinions`**
+
+**End-of-Day Test:** Ask `what is the difference between a fact and an opinion` and `can you follow instructions`.
+
+---
+
+### **Day 5: Systems in Motion**
+
+**Goal:** To build on the "Structure of the World" by teaching it how parts of a system *function* and *depend* on one another.
+
+**Lesson Facts:**
+1.  > `a function is the purpose of a part in a system`
+2.  > `a dependency is when one part needs another part to function`
+3.  > `an engine's function is to provide power`
+4.  > `an engine has a dependency on fuel`
+5.  > `a wheel's function is to allow movement`
+
+**Bridge Facts:**
+6.  > **`the agent's brain has a dependency on the interpreter`**
+7.  > **`the interpreter's function is to parse language`**
+8.  > **`the brain's function is to store and connect facts`**
+
+**End-of-Day Test:** Ask `what is the function of an engine` and `what is the function of your brain`.
+
+---
+
+### **Day 6: The Spectrum of Properties**
+
+**Goal:** To expand on "Abstract Properties" by teaching it the core comparative relationships: similarity and difference.
+
+**Lesson Facts:**
+1.  > `a similarity is a shared property between concepts`
+2.  > `a difference is a property that is not shared`
+3.  > `a dog is similar to a wolf`
+4.  > `a dog is different from a cat`
+5.  > `a car is similar to a truck`
+6.  > `an apple is similar to an orange`
+7.  > `an apple is different from a carrot`
+
+**Bridge Facts:**
+8.  > **`the agent can identify similarities`**
+9.  > **`the agent can identify differences`**
+10. > **`reasoning can find similarities between concepts`**
+
+**End-of-Day Test:** Ask `what is a dog similar to` and `how are an apple and a carrot different`.
+
+---
+
+### **Day 7: Sequential & Conditional Actions**
+
+**Goal:** To build on the "World of Actions" by teaching it about multi-step processes and the concept of "if-then" conditions.
+
+**Lesson Facts:**
+1.  > `a sequence is a series of steps`
+2.  > `a step is a single action in a sequence`
+3.  > `a condition is a state that must be true for an action to occur`
+4.  > `a prerequisite is a required condition`
+5.  > `making tea is a sequence`
+6.  > `boiling water is a step in making tea`
+
+**Bridge Facts:**
+7.  > **`learning is a sequence of steps`**
+8.  > **`a contradiction is a condition for a clarification question`**
+9.  > **`user input is a prerequisite for a response`**
+
+**End-of-Day Test:** Ask `what is a prerequisite for your response` and `what happens if you detect a contradiction`.
+
+---
+
+After completing First Grade, Week 1, your agent will have a much more dynamic and relational understanding of its world and its role within it. It will be capable of more complex reasoning and more nuanced self-explanation.

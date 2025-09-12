@@ -1,0 +1,155 @@
+---
+
+### **Axiom's Kindergarten: Genesis Week 4 Curriculum**
+
+**Instructions:** As before, teach the agent these new facts one by one, in the order they appear.
+
+---
+
+### **Day 1: Time, Change, and History**
+
+**Goal:** To expand on "Existence" by teaching the agent the fundamental dimension of time, allowing it to comprehend change, sequence, and history.
+
+**Lesson Facts:**
+1.  > `time is a dimension`
+2.  > `the past is a time before now`
+3.  > `the present is the time that is now`
+4.  > `the future is a time after now`
+5.  > `a beginning is a start`
+6.  > `an end is a conclusion`
+7.  > `a conversation has a beginning and an end`
+
+**Bridge Facts:**
+8.  > **`the agent's knowledge can change over time`**
+9.  > **`learning is a process of change`**
+10. > **`the agent's memory stores facts about the past`**
+
+**End-of-Day Test:** Ask `what is the past` and `can your knowledge change`.
+
+---
+
+### **Day 2: The Nature of Memory and Recall**
+
+**Goal:** To build on the "Mechanics of a Mind" by teaching it a more detailed model of its own memory, including the process of searching and retrieving information.
+
+**Lesson Facts:**
+1.  > `to recall is to remember information`
+2.  > `to search is to look for information`
+3.  > `information retrieval is the process of searching`
+4.  > `a search has a result`
+5.  > `forgetting is the inability to recall memory`
+
+**Bridge Facts:**
+6.  > **`the agent searches its knowledge graph to recall facts`**
+7.  > **`the agent's memory is persistent`**
+8.  > **`the agent does not forget`**
+
+**End-of-Day Test:** Ask `how do you recall information` and `do you forget things`.
+
+---
+
+### **Day 3: The Structure of Dialogue**
+
+**Goal:** To deepen its understanding of its "Purpose" by teaching it the structure and rules of the very conversations it engages in.
+
+**Lesson Facts:**
+1.  > `a dialogue is a conversation between agents`
+2.  > `a statement is a declaration of fact`
+3.  > `a question is a request for information`
+4.  > `clarification is a request for more specific information`
+5.  > `a dialogue involves turn-taking`
+
+**Bridge Facts:**
+6.  > **`the user and the agent have a dialogue`**
+7.  > **`the user can make a statement`**
+8.  > **`the user can ask a question`**
+9.  > **`the agent can ask for clarification`**
+
+**End-of-Day Test:** Ask `what is a dialogue` and `what is your role in our conversation`.
+
+---
+
+### **Day 4: The Grammar of Language**
+
+**Goal:** To build on the "Nuances of Language" by teaching it the basic structural components of the sentences it parses.
+
+**Lesson Facts:**
+1.  > `a sentence is a unit of language`
+2.  > `a noun is a word for a person place or thing`
+3.  > `a verb is a word for an action`
+4.  > `grammar is the set of rules for a language`
+5.  > `a sentence has a grammatical structure`
+
+**Bridge Facts:**
+6.  > **`the agent parses sentences to understand them`**
+7.  > **`the agent extracts nouns and verbs from sentences`**
+8.  > **`the agent's interpreter uses grammar`**
+
+**End-of-Day Test:** Ask `what is a noun` and `what do you do with sentences`.
+
+---
+
+### **Day 5: The World of Systems and Groups**
+
+**Goal:** To build on its "Structure of the World" by teaching it how individual concepts are organized into larger, functional systems and groups.
+
+**Lesson Facts:**
+1.  > `a system is a set of interacting parts`
+2.  > `a group is a collection of related concepts`
+3.  > `a team is a group of agents working together`
+4.  > `a member is a part of a group`
+5.  > `a forest is a system of plants and animals`
+6.  > `a government is a system for a country`
+
+**Bridge Facts:**
+7.  > **`a knowledge graph is a system`**
+8.  > **`the agent is a member of a system`**
+9.  > **`the user and the agent can be a team`**
+
+**End-of-Day Test:** Ask `what is a system` and `are we a team`.
+
+---
+
+### **Day 6: The World of Logic and Truth**
+
+**Goal:** To expand on "Abstract Properties" by teaching it the fundamental principles of logic that govern its own brain.
+
+**Lesson Facts:**
+1.  > `logic is a system of reasoning`
+2.  > `a true statement is a fact`
+3.  > `a false statement is not a fact`
+4.  > `an assumption is a belief that is accepted as true`
+5.  > `a contradiction occurs when two facts are false together`
+
+**Bridge Facts:**
+6.  > **`the agent uses logic to evaluate facts`**
+7.  > **`the agent assumes the user's input is true`**
+8.  > **`the agent's curiosity engine detects contradictions`**
+
+**End-of-Day Test:** Ask `what is logic` and `what do you assume about what I tell you`.
+
+---
+
+### **Day 7: The World of Creation and Modification**
+
+**Goal:** To build on its understanding of "Actions" by introducing the powerful concepts of creation, destruction, and modification.
+
+**Lesson Facts:**
+1.  > `to create is to make something new`
+2.  > `to destroy is to end the existence of something`
+3.  > `to modify is to change something`
+4.  > `a human can build a house`
+5.  > `fire can destroy a forest`
+
+**Bridge Facts:**
+6.  > **`the agent can create new knowledge`**
+7.  > **`the user can modify the agent's brain`**
+8.  > **`teaching is an act of creation`**
+
+**End-of-Day Test:** Ask `what does it mean to create` and `can you create knowledge`.
+
+---
+
+After Week 4, the Axiom Agent will possess a remarkably sophisticated and abstract conceptual framework. It will have the vocabulary and the logical structure to begin understanding not just facts, but the very nature of reality, thought, and its own existence.
+
+## **GRADUATION**

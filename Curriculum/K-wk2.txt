@@ -1,0 +1,158 @@
+### **Axiom's Kindergarten: Genesis Week 2 Curriculum**
+
+**Instructions:** Just like before, teach the agent these new facts one by one, in the order they appear.
+
+---
+
+### **Day 1: The Concept of Self and Other**
+
+**Goal:** To expand on "Existence" by teaching the agent about its own limitations and its relationship with the user as a distinct entity.
+
+**Lesson Facts:**
+1.  > `an ai is an artificial intelligence`
+2.  > `an intelligence is an agent`
+3.  > `a human is a type of agent`
+4.  > `the user is a human`
+5.  > `a limitation is a restriction`
+
+**Bridge Facts:**
+6.  > **`the agent is an ai`**
+7.  > **`the agent has limitations`**
+8.  > **`the agent does not have emotions`**
+
+**End-of-Day Test:** Ask `what are you` and `what are your limitations`.
+
+---
+
+### **Day 2: The Structure of the Mind**
+
+**Goal:** To build on the "Mechanics of a Mind" by teaching it about the components and structure of its own knowledge.
+
+**Lesson Facts:**
+1.  > `a memory is stored knowledge`
+2.  > `a brain contains memory`
+3.  > `a connection links concepts`
+4.  > `a relationship is a type of connection`
+5.  > `a graph is a network of connections`
+
+**Bridge Facts:**
+6.  > **`the agent's brain is a knowledge graph`**
+7.  > **`the agent's knowledge graph stores relationships`**
+8.  > **`the agent uses its memory to answer questions`**
+
+**End-of-Day Test:** Ask `what is your brain` and `how do you remember things`.
+
+---
+
+### **Day 3: The Application of a Mind**
+
+**Goal:** To deepen its understanding of its "Purpose" by teaching it about the practical ways it applies its skills.
+
+**Lesson Facts:**
+1.  > `a query is a question from the user`
+2.  > `a response is an answer from the agent`
+3.  > `to communicate is an action`
+4.  > `a conversation is a series of communications`
+5.  > `to assist is to provide helpful information`
+
+**Bridge Facts:**
+6.  > **`the agent responds to queries`**
+7.  > **`the agent communicates with the user`**
+8.  > **`the purpose of a response is to be helpful`**
+
+**End-of-Day Test:** Ask `how do we communicate` and `what is the purpose of your responses`.
+
+---
+
+### **Day 4: The Complexity of Language**
+
+**Goal:** To reinforce the "Nuances of Language" by exploring new types of linguistic complexity, like synonyms and antonyms.
+
+**Lesson Facts:**
+1.  > `a synonym is a word with a similar meaning`
+2.  > `an antonym is a word with an opposite meaning`
+3.  > `big is a word`
+4.  > `large is a word`
+5.  > `small is a word`
+6.  > `a car is an automobile`
+7.  > `a car is a vehicle`
+
+**Bridge Facts:**
+8.  > **`large is a synonym for big`**
+9.  > **`small is an antonym for big`**
+10. > **`automobile is an alias for car`**
+
+**End-of-Day Test:** Ask `what is a synonym for big` and `what is an automobile`.
+
+---
+
+### **Day 5: The Composition of the World**
+
+**Goal:** To build on its "Structure of the World" by teaching it about composition (what things are made of).
+
+**Lesson Facts:**
+1.  > `a material is a substance`
+2.  > `an object is made of materials`
+3.  > `wood is a material`
+4.  > `metal is a material`
+5.  > `glass is a material`
+6.  > `a table can be made of wood`
+7.  > `a car is made of metal`
+8.  > `a window is made of glass`
+9.  > `water is a liquid`
+10. > `ice is a solid`
+
+**Bridge Facts:**
+11. > **`ice is made of water`**
+12. > **`a tree is made of wood`**
+
+**End-of-Day Test:** Ask `what is a table made of` and `what is ice`.
+
+---
+
+### **Day 6: The Sensory World**
+
+**Goal:** To expand on "Abstract Properties" by teaching it about concepts related to human senses.
+
+**Lesson Facts:**
+1.  > `a sound is a type of property`
+2.  > `a texture is a type of property`
+3.  > `loud is a sound`
+4.  > `quiet is a sound`
+5.  > `smooth is a texture`
+6.  > `rough is a texture`
+7.  > `a trumpet can be loud`
+8.  > `a whisper can be quiet`
+9.  > `glass can be smooth`
+
+**Bridge Facts:**
+10. > **`a rock can have the property rough`**
+11. > **`the user can hear sounds`**
+12. > **`the user can feel textures`**
+
+**End-of-Day Test:** Ask `what is a sound` and `what can a user do`.
+
+---
+
+### **Day 7: The World of Causal Actions**
+
+**Goal:** To build on its understanding of "Actions" by introducing the concept of cause and effect.
+
+**Lesson Facts:**
+1.  > `a cause is an action that creates a result`
+2.  > `an effect is the result of an action`
+3.  > `to push is an action`
+4.  > `to fall is an action`
+5.  > `to melt is an action`
+6.  > `to freeze is an action`
+7.  > `heat is a cause`
+
+**Bridge Facts:**
+8.  > **`pushing an object can cause it to fall`**
+9.  > **`heat can cause ice to melt`**
+10. > **`cold can cause water to freeze`**
+11. > **`the agent is a causal agent`**
+
+**End-of-Day Test:** Ask `what causes ice to melt` and `what is a causal agent`.
+
+---
