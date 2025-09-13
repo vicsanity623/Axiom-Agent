@@ -9,6 +9,7 @@ __pycache__/
 my_agent_brain.json
 my_agent_state.json
 interpreter_cache.json
+profile_results.txt
 
 # Ignore system-specific files (like from macOS)
 .DS_Store

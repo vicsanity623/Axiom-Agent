@@ -160,7 +160,6 @@ class UniversalInterpreter:
             contextual_input = self.resolve_context(history, user_input)
         return self.interpret(contextual_input)
 
-    # --- NEW: The "Curiosity" tool for the Study Engine ---
     def generate_curious_questions(self, topic: str, known_fact: str) -> list[str]:
         """
         Uses the Mini LLM in a creative mode to generate follow-up questions.
@@ -190,8 +189,6 @@ class UniversalInterpreter:
         try:
             output = self.llm(full_prompt, max_tokens=128, stop=["</s>"], echo=False, temperature=0.8)
             response_text = output["choices"][0]["text"].strip()
-            
-            # Parse the bulleted list of questions
             questions = [q.strip() for q in response_text.replace('-', '').split('\n') if q.strip()]
             
             if questions:
@@ -202,13 +199,20 @@ class UniversalInterpreter:
             print(f"  [Question Generation Error]: Could not generate questions. Error: {e}")
             return []
 
+    # --- METHOD UPDATED WITH FULL CACHING LOGIC ---
     def synthesize(self, structured_facts: str, original_question: str = None, mode: str = "statement") -> str:
         """
         Uses the Mini LLM to convert structured facts into natural language.
+        Results are cached to avoid repeated LLM calls for the same synthesis task.
         """
-        if mode == "statement" and structured_facts in self.synthesis_cache and not original_question:
+        # --- CACHING FIX: Use a more robust cache key ---
+        # The original question makes the context unique, so it must be part of the key.
+        cache_key = f"{mode}|{original_question}|{structured_facts}"
+        
+        if cache_key in self.synthesis_cache:
             print("  [Synthesizer Cache]: Hit!")
-            return self.synthesis_cache[structured_facts]
+            return self.synthesis_cache[cache_key]
+        
         print(f"  [Synthesizer Cache]: Miss. Running LLM for synthesis in '{mode}' mode.")
         
         system_prompt = ""
@@ -251,9 +255,10 @@ class UniversalInterpreter:
             if "(" in synthesized_text:
                 synthesized_text = synthesized_text.split("(")[0].strip()
             
-            if mode == "statement" and not original_question:
-                self.synthesis_cache[structured_facts] = synthesized_text
-                self._save_cache()
+            # --- CACHING FIX: Save the result to the cache before returning ---
+            self.synthesis_cache[cache_key] = synthesized_text
+            self._save_cache()
+            
             return synthesized_text
         except Exception as e:
             print(f"  [Synthesizer Error]: Could not generate fluent text. Error: {e}")
