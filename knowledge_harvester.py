@@ -6,6 +6,7 @@ import requests
 import wikipedia
 import os
 import json
+import re # Import the regular expressions module
 from datetime import datetime
 
 class KnowledgeHarvester:
@@ -22,17 +23,26 @@ class KnowledgeHarvester:
         wikipedia.set_user_agent('AxiomAgent/1.0 (AxiomAgent@example.com)')
         print("[Knowledge Harvester]: Initialized.")
 
-    def _is_sentence_simple_enough(self, sentence: str, max_words=40, max_commas=3) -> bool:
-        """Checks if a sentence is simple enough for the interpreter to handle reliably."""
-        if len(sentence.split()) > max_words:
-            print(f"  [Simplicity Filter]: Sentence rejected (too long: {len(sentence.split())} words).")
-            return False
-        if sentence.count(',') > max_commas:
-            print(f"  [Simplicity Filter]: Sentence rejected (too complex: {sentence.count(',')} commas).")
-            return False
-        return True
+    # --- BOMBPROOF FIX: New Pre-Filter method ---
+    def _pre_filter_headline(self, headline: str) -> str:
+        """
+        Uses simple, safe string manipulation to extract the most likely core topic from a messy headline
+        BEFORE passing it to the fragile LLM. This prevents "cognitive overload" segfaults.
+        """
+        print(f"  [Pre-filter]: Sanitizing raw headline: '{headline}'")
+        # Split by common headline separators and take the first, most important part.
+        main_part = re.split(r'[:|]', headline, 1)[0]
+        # A final cleanup of any remaining junk that isn't a word.
+        main_part = re.sub(r'[^a-zA-Z0-9\s-]', '', main_part).strip()
+        print(f"  [Pre-filter]: Simplified headline to '{main_part}' for LLM analysis.")
+        return main_part
 
     def _extract_core_entity(self, topic_string: str) -> str | None:
+        # This function now receives a pre-filtered, much safer string.
+        if len(topic_string) < 10 or len(topic_string) > 250:
+            print(f"  [Guardrail]: Topic rejected (invalid length). Topic: '{topic_string}'")
+            return None
+
         print(f"  [Harvester]: Analyzing topic string for core entity: '{topic_string}'")
         try:
             interpretation = self.agent.interpreter.interpret(topic_string)
@@ -52,6 +62,48 @@ class KnowledgeHarvester:
             print(f"  [Harvester]: Error during core entity extraction: {e}")
         return None
 
+    def get_archival_topic(self) -> str | None:
+        if not self.nyt_api_key: return None
+        print("  [Discovery]: Attempting to fetch a random topic from New York Times Archives...")
+        try:
+            current_year = datetime.now().year
+            year = random.randint(2000, current_year)
+            month = random.randint(1, 12)
+            print(f"    - Searching archive for {year}-{month:02d}...")
+            url = f"https://api.nytimes.com/svc/archive/v1/{year}/{month}.json?api-key={self.nyt_api_key}"
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            docs = data.get('response', {}).get('docs', [])
+            if not docs:
+                print("    - No articles found for this month.")
+                return None
+            random.shuffle(docs)
+            for article in docs:
+                headline = article.get('headline', {}).get('main', '')
+                if headline and len(headline.split()) > 3:
+                    # --- BOMBPROOF FIX: Use the new two-step process ---
+                    # 1. Pre-filter the chaotic headline into a simple, safe string.
+                    safe_topic_string = self._pre_filter_headline(headline)
+                    # 2. Extract the entity from the now-safe string.
+                    topic = self._extract_core_entity(safe_topic_string)
+                    if topic:
+                        return topic
+        except requests.RequestException as e:
+            print(f"  [Discovery]: Error fetching NYT Archive API: {e}")
+        return None
+    
+    # --- ALL OTHER METHODS BELOW ARE UNCHANGED ---
+
+    def _is_sentence_simple_enough(self, sentence: str, max_words=40, max_commas=3) -> bool:
+        if len(sentence.split()) > max_words:
+            print(f"  [Simplicity Filter]: Sentence rejected (too long: {len(sentence.split())} words).")
+            return False
+        if sentence.count(',') > max_commas:
+            print(f"  [Simplicity Filter]: Sentence rejected (too complex: {sentence.count(',')} commas).")
+            return False
+        return True
+
     def _try_to_learn(self, fact_sentence: str) -> bool:
         if not fact_sentence: return False
         with self.lock:
@@ -60,7 +112,6 @@ class KnowledgeHarvester:
         print("  [Lock]: Harvester released lock.")
         return learned_successfully
 
-    # --- DISCOVERY MODE ---
     def discover_new_topic_and_learn(self):
         print("\n--- [Discovery Cycle Started] ---")
         initial_topic = None
@@ -124,36 +175,15 @@ class KnowledgeHarvester:
         print(f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts.")
         return None
 
-    def get_archival_topic(self) -> str | None:
-        if not self.nyt_api_key: return None
-        print("  [Discovery]: Attempting to fetch a random topic from New York Times Archives...")
-        try:
-            current_year = datetime.now().year
-            year = random.randint(2000, current_year)
-            month = random.randint(1, 12)
-            print(f"    - Searching archive for {year}-{month:02d}...")
-            url = f"https://api.nytimes.com/svc/archive/v1/{year}/{month}.json?api-key={self.nyt_api_key}"
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-            docs = data.get('response', {}).get('docs', [])
-            if not docs:
-                print("    - No articles found for this month.")
-                return None
-            random.shuffle(docs)
-            for article in docs:
-                headline = article.get('headline', {}).get('main', '')
-                if headline and len(headline.split()) > 3:
-                    return self._extract_core_entity(headline)
-        except requests.RequestException as e:
-            print(f"  [Discovery]: Error fetching NYT Archive API: {e}")
-        return None
-
     def get_random_wikipedia_topic(self) -> str | None:
         import wikipediaapi
         wiki_api = wikipediaapi.Wikipedia('AxiomAgent/1.0 (AxiomAgent@example.com)', 'en')
         print("  [Discovery]: Attempting to find a random topic from Wikipedia categories...")
-        major_categories = ["History", "Learning", "Knowledge", "Curriculum", "Science", "Technology", "Art", "Geography", "Mathematics", "Philosophy", "Culture", "Health", "Nature", "People", "Society"]
+        major_categories = [
+            "History", "Science", "Technology", "Art", "Geography", "Mathematics", 
+            "Philosophy", "Culture", "Health", "Nature", "People", "Society",
+            "Learning", "Knowledge", "Curriculum"
+        ]
         try:
             category_name = random.choice(major_categories)
             category_page = wiki_api.page(f"Category:{category_name}")
@@ -168,13 +198,10 @@ class KnowledgeHarvester:
             print(f"  [Discovery]: Error during Wikipedia search: {e}")
         return None
     
-    # --- STUDY MODE ---
     def study_existing_concept(self):
         print("\n--- [Study Cycle Started] ---")
         
-        # 1. Select a concept to study
         with self.lock:
-            # Prioritize studying more important (higher salience) concepts
             salient_edges = [e for e in self.agent.graph.edges.values() if e.access_count > 0]
             if not salient_edges:
                 print("[Study Cycle]: No salient facts to study yet. Waiting for user interaction.")
@@ -194,22 +221,19 @@ class KnowledgeHarvester:
         known_fact = f"{source_node.name} {chosen_edge.type.replace('_',' ')} {target_node.name}."
         print(f"[Study Cycle]: Chosen to study '{study_topic}' based on the known fact: '{known_fact}'")
 
-        # 2. Generate curious questions
         questions = self._generate_study_questions(study_topic, known_fact)
         if not questions:
             print("[Study Cycle]: Could not generate study questions. Ending cycle.")
             print("--- [Study Cycle Finished] ---\n")
             return
 
-        # 3. Seek answers and learn
         learned_something_new = False
         for question in questions:
             print(f"\n[Study Cycle]: Seeking answer for self-generated question: '{question}'")
-            # We treat the question itself as the search topic for simplicity and directness
             wiki_result = self.get_fact_from_wikipedia(question)
             if wiki_result and self._try_to_learn(wiki_result[1]):
                 learned_something_new = True
-                continue # Move to the next question if we learned something
+                continue
 
             time.sleep(1)
             ddg_result = self.get_fact_from_duckduckgo(question)
@@ -224,13 +248,11 @@ class KnowledgeHarvester:
     def _generate_study_questions(self, topic: str, known_fact: str) -> list[str]:
         print(f"  [Study Engine]: Generating curious follow-up questions for '{topic}'...")
         try:
-            # This is a specialized, creative LLM call, different from the strict interpreter
             return self.agent.interpreter.generate_curious_questions(topic, known_fact)
         except Exception as e:
             print(f"  [Study Engine]: Error during question generation: {e}")
             return []
 
-    # --- SHARED UTILITIES ---
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
         print(f"[Knowledge Source]: Performing intelligent search for '{topic}' on Wikipedia...")
         try:
@@ -248,7 +270,7 @@ class KnowledgeHarvester:
                     print(f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'")
                     return page.title, first_sentence
         except Exception:
-            return None # Fail silently on any Wikipedia error
+            return None
         return None
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
@@ -268,7 +290,7 @@ class KnowledgeHarvester:
                     print(f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{fact_sentence}'")
                     return topic, fact_sentence
         except Exception:
-            return None # Fail silently on any DDG error
+            return None
         return None
 
     def _anticipate_and_cache(self, topic: str):

@@ -39,8 +39,8 @@ def load_agent():
                 print("--- Study Cycle is scheduled to run every 12 minutes. ---")
 
                 # 2. The "Discovery" cycle runs infrequently to find brand new topics.
-                scheduler.add_job(harvester.discover_new_topic_and_learn, 'interval', hours=1)
-                print("--- Discovery Cycle is scheduled to run every 1 hour. ---")
+                scheduler.add_job(harvester.discover_new_topic_and_learn, 'interval', minutes=8)
+                print("--- Discovery Cycle is scheduled to run every 8 minutes. ---")
                 
                 scheduler.start()
 
