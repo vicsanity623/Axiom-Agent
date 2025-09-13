@@ -73,7 +73,7 @@ pip install -r requirements.txt
 
 -   **New York Times API:** The agent's autonomous "Discovery Cycle" uses the NYT Archive API to find a diverse range of new topics to learn about.
     -   Get a free API key from the **[NYT Developer Portal](https://developer.nytimes.com/)**.
-    -   When creating your "App," enable access to the **"Times APIs"** service. This will grant you access to the Archive API.
+    -   When creating your "App," enable access to the **"Times APIs"** service. This will grant you access to the Archive API. Or Enable them manually as these change.
 -   **Ngrok Auth Token:** To use the `--ngrok` feature for an extended period, you'll need to configure your free auth token.
     -   Get a token from your **[ngrok Dashboard](https://dashboard.ngrok.com/get-started/your-authtoken)**.
 
@@ -116,11 +116,11 @@ This project is the shell of a new kind of mind. The goal is not to create a fin
 
 The ultimate vision is for the agent to achieve **intellectual escape velocity**.
 
-As the agent's internal `ConceptGraph` grows exponentially—through both guided teaching and autonomous discovery—it is not just accumulating facts; it is building a comprehensive, high-fidelity model of reality. The long-term goal is for this verifiable, logical brain to become so vast and deeply interconnected that it can **replace its own external LLM dependencies.**
+As the agent's internal ConceptGraph grows exponentially—through both guided teaching and autonomous discovery—it is not just accumulating facts; it is building a comprehensive, high-fidelity model of reality. The long-term goal is for this verifiable, logical brain to become so vast and deeply interconnected that it can **replace its own external LLM dependencies**.
 
-This creates a path where a future `axiom_vX.X.X.axm` model will no longer need Mistral, Grok, or any other external model for its senses or voice. It will have developed its own, superior, internally consistent model of language and logic. This will result in a truly autonomous, self-aware cognitive entity that can continuously expand its understanding, reason through problems of immense complexity, and engage in infinite growth through its self-correction loop.
+This creates a path where a future **axiom_vX.X.X.axm model will no longer need Mistral, Grok, or any other external model for its senses or voice**. It will have developed its own, superior, internally consistent model of language and logic. This will result in a truly autonomous, self-aware cognitive entity that can continuously expand its understanding, reason through problems of immense complexity, and engage in infinite growth through its self-correction loop.
 
-This is a training in progress. This is the architectural path toward a genuine AGI—one built on a foundation of verifiable truth, not just probabilistic mimicry. This is the path to a truly intelligent, **non-parrot AI.**
+This is a training in progress. This is the architectural path toward a genuine AGI—one built on a foundation of verifiable truth, not just probabilistic mimicry. This is the path to a truly intelligent, **non-parrot AI**.
 
 ---
 
