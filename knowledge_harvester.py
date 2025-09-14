@@ -8,7 +8,7 @@ import os
 import json
 import re
 from datetime import datetime
-from graph_core import RelationshipEdge # We need this to reconstruct edge objects
+from graph_core import RelationshipEdge
 
 class KnowledgeHarvester:
     def __init__(self, agent, lock):
@@ -110,6 +110,7 @@ class KnowledgeHarvester:
         if not initial_topic:
             print("[Discovery Cycle]: Could not find any new topic to learn about. Ending cycle.")
             print("--- [Discovery Cycle Finished] ---\n")
+            self.agent.log_autonomous_cycle_completion() # Log completion for reboot logic
             return
 
         learned_topic = None
@@ -135,6 +136,7 @@ class KnowledgeHarvester:
                 self._anticipate_and_cache(learned_topic)
         
         print("--- [Discovery Cycle Finished] ---\n")
+        self.agent.log_autonomous_cycle_completion() # Log completion for reboot logic
 
     def _find_new_topic(self, max_attempts=10) -> str | None:
         for i in range(max_attempts):
@@ -198,16 +200,24 @@ class KnowledgeHarvester:
             if not all_edges:
                 print("[Study Cycle]: Brain has no facts to study yet.")
                 print("--- [Study Cycle Finished] ---\n")
+                self.agent.log_autonomous_cycle_completion() # Log completion for reboot logic
                 return
 
             chosen_edge = random.choice(all_edges)
             
-            source_node = self.agent.graph.get_node_by_name(self.agent.graph.graph.nodes[chosen_edge.source]['name'])
-            target_node = self.agent.graph.get_node_by_name(self.agent.graph.graph.nodes[chosen_edge.target]['name'])
-        
+            # This logic correctly fetches the node data and then reconstructs the full object
+            source_node_data = self.agent.graph.graph.nodes.get(chosen_edge.source)
+            target_node_data = self.agent.graph.graph.nodes.get(chosen_edge.target)
+            
+            if source_node_data:
+                source_node = self.agent.graph.get_node_by_name(source_node_data['name'])
+            if target_node_data:
+                target_node = self.agent.graph.get_node_by_name(target_node_data['name'])
+
         if not source_node or not target_node:
             print("[Study Cycle]: Could not retrieve nodes for a chosen fact. Ending cycle.")
             print("--- [Study Cycle Finished] ---\n")
+            self.agent.log_autonomous_cycle_completion() # Log completion for reboot logic
             return
             
         study_topic = source_node.name
@@ -218,6 +228,7 @@ class KnowledgeHarvester:
         if not questions:
             print("[Study Cycle]: Could not generate study questions. Ending cycle.")
             print("--- [Study Cycle Finished] ---\n")
+            self.agent.log_autonomous_cycle_completion() # Log completion for reboot logic
             return
 
         learned_something_new = False
@@ -237,6 +248,7 @@ class KnowledgeHarvester:
             print("[Study Cycle]: Completed study, but did not find any new, simple facts to learn.")
 
         print("--- [Study Cycle Finished] ---\n")
+        self.agent.log_autonomous_cycle_completion() # Log completion for reboot logic
 
     def _generate_study_questions(self, topic: str, known_fact: str) -> list[str]:
         print(f"  [Study Engine]: Generating curious follow-up questions for '{topic}'...")

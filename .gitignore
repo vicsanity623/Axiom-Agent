@@ -10,6 +10,9 @@ my_agent_brain.json
 my_agent_state.json
 interpreter_cache.json
 profile_results.txt
+axiom_agent_error.log
+axiom_agent_output.log
+waker.log
 
 # Ignore system-specific files (like from macOS)
 .DS_Store

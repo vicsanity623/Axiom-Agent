@@ -63,6 +63,43 @@ class CognitiveAgent:
         self.clarification_context = {}
         self.conversation_history = []
         self.enable_contextual_memory = False
+        self.autonomous_cycle_count = 0
+        self.INTERPRETER_REBOOT_THRESHOLD = 50 # Reboot interpreter every 50 cycles
+        # --- END OF REBOOT LOGIC ---
+
+    # --- NEW METHOD: Prophylactic Reboot ---
+    def _reboot_interpreter(self):
+        """
+        Destroys and recreates the UniversalInterpreter to prevent long-term
+        memory leaks or state corruption in the underlying C++ library.
+        """
+        print("\n--- [SYSTEM HEALTH]: Prophylactically rebooting Universal Interpreter ---")
+        print("This is a preventative measure to ensure long-term stability.")
+        
+        # Preserve the old cache before destroying the interpreter
+        old_interp_cache = self.interpreter.interpretation_cache
+        old_synth_cache = self.interpreter.synthesis_cache
+        
+        # Destroy the old interpreter
+        del self.interpreter
+        
+        # Create a new, clean instance
+        self.interpreter = UniversalInterpreter()
+        
+        # Restore the cache to the new instance
+        self.interpreter.interpretation_cache = old_interp_cache
+        self.interpreter.synthesis_cache = old_synth_cache
+        
+        print("--- [SYSTEM HEALTH]: Interpreter reboot complete. Caches restored. ---\n")
+
+    # --- NEW METHOD: Cycle Counter ---
+    def log_autonomous_cycle_completion(self):
+        """Called by the harvester after each cycle to track interpreter lifetime."""
+        self.autonomous_cycle_count += 1
+        print(f"  [System Health]: Autonomous cycles since last interpreter reboot: {self.autonomous_cycle_count}/{self.INTERPRETER_REBOOT_THRESHOLD}")
+        if self.autonomous_cycle_count >= self.INTERPRETER_REBOOT_THRESHOLD:
+            self._reboot_interpreter()
+            self.autonomous_cycle_count = 0 # Reset the counter
 
     def _load_agent_state(self):
         if os.path.exists(self.state_file):
