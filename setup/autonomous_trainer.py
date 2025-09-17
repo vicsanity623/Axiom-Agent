@@ -1,13 +1,15 @@
 # autonomous_trainer.py (auto train study and discovery cycle no chat)
 
-import sys
 import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import threading
 import time
+
 from apscheduler.schedulers.background import BackgroundScheduler
+
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
 
@@ -30,7 +32,9 @@ def start_autonomous_training():
 
         # We pass inference_mode=False to ensure it can learn and save.
         axiom_agent = CognitiveAgent(
-            brain_file=brain_file, state_file=state_file, inference_mode=False
+            brain_file=brain_file,
+            state_file=state_file,
+            inference_mode=False,
         )
 
         harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
@@ -43,10 +47,12 @@ def start_autonomous_training():
 
         # 2. The "Discovery" cycle runs infrequently to find brand new topics.
         scheduler.add_job(
-            harvester.discover_new_topic_and_learn, "interval", minutes=35
+            harvester.discover_new_topic_and_learn,
+            "interval",
+            minutes=35,
         )
         print(
-            "--- [SCHEDULER]: Discovery Cycle is scheduled to run every 35 minutes. ---"
+            "--- [SCHEDULER]: Discovery Cycle is scheduled to run every 35 minutes. ---",
         )
 
         scheduler.start()

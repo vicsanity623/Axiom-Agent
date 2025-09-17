@@ -1,9 +1,10 @@
 # profiler.py
 
 import cProfile
-import pstats
 import io
+import pstats
 from threading import Lock
+
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
 

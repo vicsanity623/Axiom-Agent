@@ -22,6 +22,10 @@ repos:
     rev: v0.13.0
     hooks:
       - id: ruff-format
+      - id: ruff-check
+        types: [file]
+        types_or: [python, pyi, toml]
+        args: ["--show-fixes"]
   - repo: https://github.com/adhtruong/mirrors-typos
     rev: v1.36.2
     hooks:

@@ -3,6 +3,7 @@
 import json
 import os
 import re
+
 from llama_cpp import Llama
 
 
@@ -11,7 +12,7 @@ class UniversalInterpreter:
         print("Initializing Universal Interpreter (loading Mini LLM)...")
         if not os.path.exists(model_path):
             raise FileNotFoundError(
-                f"Interpreter model not found at {model_path}. Please download it."
+                f"Interpreter model not found at {model_path}. Please download it.",
             )
 
         self.llm = Llama(
@@ -32,18 +33,18 @@ class UniversalInterpreter:
         """Loads the interpretation and synthesis caches from a JSON file."""
         if os.path.exists(self.cache_file):
             try:
-                with open(self.cache_file, "r") as f:
+                with open(self.cache_file) as f:
                     cache_data = json.load(f)
                     self.interpretation_cache = dict(
-                        cache_data.get("interpretations", [])
+                        cache_data.get("interpretations", []),
                     )
                     self.synthesis_cache = dict(cache_data.get("synthesis", []))
                 print(
-                    f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}."
+                    f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}.",
                 )
             except Exception as e:
                 print(
-                    f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}"
+                    f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}",
                 )
                 self.interpretation_cache, self.synthesis_cache = {}, {}
         else:
@@ -61,7 +62,7 @@ class UniversalInterpreter:
                 json.dump(cache_data, f, indent=4)
         except Exception as e:
             print(
-                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {e}"
+                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {e}",
             )
 
     def _clean_llm_json_output(self, raw_text: str) -> str:
@@ -72,8 +73,7 @@ class UniversalInterpreter:
             return ""
         json_str = raw_text[start_brace : end_brace + 1]
         json_str = re.sub(r",\s*(\}|\])", r"\1", json_str)
-        json_str = re.sub(r'"\s*\n\s*"', '", "', json_str)
-        return json_str
+        return re.sub(r'"\s*\n\s*"', '", "', json_str)
 
     def interpret(self, user_input: str) -> dict:
         """
@@ -116,7 +116,11 @@ class UniversalInterpreter:
         )
         try:
             output = self.llm(
-                full_prompt, max_tokens=512, stop=["</s>"], echo=False, temperature=0.0
+                full_prompt,
+                max_tokens=512,
+                stop=["</s>"],
+                echo=False,
+                temperature=0.0,
             )
             response_text = output["choices"][0]["text"].strip()
             cleaned_json_str = self._clean_llm_json_output(response_text)
@@ -176,9 +180,8 @@ class UniversalInterpreter:
             if rephrased_input and rephrased_input.lower() != new_input.lower():
                 print(f"    - Context resolved: '{new_input}' -> '{rephrased_input}'")
                 return rephrased_input
-            else:
-                print("    - No context to resolve, using original input.")
-                return new_input
+            print("    - No context to resolve, using original input.")
+            return new_input
         except Exception as e:
             print(f"  [Context Resolver Error]: Could not resolve context. Error: {e}")
             return new_input
@@ -220,7 +223,11 @@ class UniversalInterpreter:
         )
         try:
             output = self.llm(
-                full_prompt, max_tokens=128, stop=["</s>"], echo=False, temperature=0.8
+                full_prompt,
+                max_tokens=128,
+                stop=["</s>"],
+                echo=False,
+                temperature=0.8,
             )
             response_text = output["choices"][0]["text"].strip()
             questions = [
@@ -235,7 +242,7 @@ class UniversalInterpreter:
             return []
         except Exception as e:
             print(
-                f"  [Question Generation Error]: Could not generate questions. Error: {e}"
+                f"  [Question Generation Error]: Could not generate questions. Error: {e}",
             )
             return []
 
@@ -259,7 +266,7 @@ class UniversalInterpreter:
             return self.synthesis_cache[cache_key]
 
         print(
-            f"  [Synthesizer Cache]: Miss. Running LLM for synthesis in '{mode}' mode."
+            f"  [Synthesizer Cache]: Miss. Running LLM for synthesis in '{mode}' mode.",
         )
 
         system_prompt = ""

@@ -1,13 +1,14 @@
 # knowledge_harvester.py
 
-import time
+import os
 import random
+import re
+import time
+from datetime import datetime
+
 import requests
 import wikipedia
-import os
-import json
-import re
-from datetime import datetime
+
 from .graph_core import RelationshipEdge
 
 
@@ -18,7 +19,7 @@ class KnowledgeHarvester:
         self.nyt_api_key = os.environ.get("NYT_API_KEY")
         if not self.nyt_api_key:
             print(
-                "[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. NYT topic source will be disabled."
+                "[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. NYT topic source will be disabled.",
             )
 
         self.rejected_topics = set()
@@ -37,12 +38,12 @@ class KnowledgeHarvester:
     def _extract_core_entity(self, topic_string: str) -> str | None:
         if len(topic_string) < 10 or len(topic_string) > 250:
             print(
-                f"  [Guardrail]: Topic rejected (invalid length). Topic: '{topic_string}'"
+                f"  [Guardrail]: Topic rejected (invalid length). Topic: '{topic_string}'",
             )
             return None
 
         print(
-            f"  [Harvester]: Analyzing topic string for core entity: '{topic_string}'"
+            f"  [Harvester]: Analyzing topic string for core entity: '{topic_string}'",
         )
         try:
             interpretation = self.agent.interpreter.interpret(topic_string)
@@ -61,12 +62,12 @@ class KnowledgeHarvester:
                         if entity.get("type") == ent_type:
                             core_entity = entity.get("name")
                             print(
-                                f"  [Harvester]: Extracted core entity: '{core_entity}'"
+                                f"  [Harvester]: Extracted core entity: '{core_entity}'",
                             )
                             return core_entity
                 core_entity = entities[0].get("name")
                 print(
-                    f"  [Harvester]: Extracted core entity (fallback): '{core_entity}'"
+                    f"  [Harvester]: Extracted core entity (fallback): '{core_entity}'",
                 )
                 return core_entity
         except Exception as e:
@@ -77,7 +78,7 @@ class KnowledgeHarvester:
         if not self.nyt_api_key:
             return None
         print(
-            "  [Discovery]: Attempting to fetch a random topic from New York Times Archives..."
+            "  [Discovery]: Attempting to fetch a random topic from New York Times Archives...",
         )
         try:
             current_year = datetime.now().year
@@ -104,16 +105,19 @@ class KnowledgeHarvester:
         return None
 
     def _is_sentence_simple_enough(
-        self, sentence: str, max_words=40, max_commas=3
+        self,
+        sentence: str,
+        max_words=40,
+        max_commas=3,
     ) -> bool:
         if len(sentence.split()) > max_words:
             print(
-                f"  [Simplicity Filter]: Sentence rejected (too long: {len(sentence.split())} words)."
+                f"  [Simplicity Filter]: Sentence rejected (too long: {len(sentence.split())} words).",
             )
             return False
         if sentence.count(",") > max_commas:
             print(
-                f"  [Simplicity Filter]: Sentence rejected (too complex: {sentence.count(',')} commas)."
+                f"  [Simplicity Filter]: Sentence rejected (too complex: {sentence.count(',')} commas).",
             )
             return False
         return True
@@ -137,7 +141,7 @@ class KnowledgeHarvester:
 
         if not initial_topic:
             print(
-                "[Discovery Cycle]: Could not find any new topic to learn about. Ending cycle."
+                "[Discovery Cycle]: Could not find any new topic to learn about. Ending cycle.",
             )
             print("--- [Discovery Cycle Finished] ---\n")
             self.agent.log_autonomous_cycle_completion()  # Log completion for reboot logic
@@ -160,7 +164,7 @@ class KnowledgeHarvester:
 
         if not learned_topic:
             print(
-                f"[Discovery Cycle]: Could not learn a fact for topic '{initial_topic}'. Rejecting for this session."
+                f"[Discovery Cycle]: Could not learn a fact for topic '{initial_topic}'. Rejecting for this session.",
             )
             self.rejected_topics.add(self.agent._clean_phrase(initial_topic))
         else:
@@ -173,7 +177,7 @@ class KnowledgeHarvester:
     def _find_new_topic(self, max_attempts=10) -> str | None:
         for i in range(max_attempts):
             print(
-                f"\n[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})..."
+                f"\n[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...",
             )
             topic = None
             source_choice = random.choice(["nyt", "wiki", "wiki"])
@@ -187,22 +191,21 @@ class KnowledgeHarvester:
                 clean_topic = self.agent._clean_phrase(topic)
                 if self.agent.graph.get_node_by_name(clean_topic):
                     print(
-                        f"  [Discovery]: Agent already knows about '{topic}'. Finding a new topic..."
+                        f"  [Discovery]: Agent already knows about '{topic}'. Finding a new topic...",
                     )
                     continue
-                elif clean_topic in self.rejected_topics:
+                if clean_topic in self.rejected_topics:
                     print(
-                        f"  [Discovery]: Agent has already tried and failed to learn about '{topic}'. Finding a new topic..."
+                        f"  [Discovery]: Agent has already tried and failed to learn about '{topic}'. Finding a new topic...",
                     )
                     continue
-                else:
-                    print(
-                        f"  [Discovery Success]: Found a new, unknown topic: '{topic}'"
-                    )
-                    return topic
+                print(
+                    f"  [Discovery Success]: Found a new, unknown topic: '{topic}'",
+                )
+                return topic
 
         print(
-            f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts."
+            f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts.",
         )
         return None
 
@@ -210,10 +213,11 @@ class KnowledgeHarvester:
         import wikipediaapi
 
         wiki_api = wikipediaapi.Wikipedia(
-            "AxiomAgent/1.0 (AxiomAgent@example.com)", "en"
+            "AxiomAgent/1.0 (AxiomAgent@example.com)",
+            "en",
         )
         print(
-            "  [Discovery]: Attempting to find a random topic from Wikipedia categories..."
+            "  [Discovery]: Attempting to find a random topic from Wikipedia categories...",
         )
         major_categories = [
             "History",
@@ -288,17 +292,17 @@ class KnowledgeHarvester:
 
             if source_node_data:
                 source_node = self.agent.graph.get_node_by_name(
-                    source_node_data["name"]
+                    source_node_data["name"],
                 )
             if target_node_data:
                 target_node = self.agent.graph.get_node_by_name(
-                    target_node_data["name"]
+                    target_node_data["name"],
                 )
 
         if not source_node or not target_node:
             # This message should no longer appear, but it's good to keep as a safeguard
             print(
-                "[Study Cycle]: Could not retrieve nodes for a chosen fact. Ending cycle."
+                "[Study Cycle]: Could not retrieve nodes for a chosen fact. Ending cycle.",
             )
             print("--- [Study Cycle Finished] ---\n")
             self.agent.log_autonomous_cycle_completion()
@@ -307,7 +311,7 @@ class KnowledgeHarvester:
         study_topic = source_node.name
         known_fact = f"{source_node.name} {chosen_edge.type.replace('_', ' ')} {target_node.name}."
         print(
-            f"[Study Cycle]: Chosen to study '{study_topic}' based on the known fact: '{known_fact}'"
+            f"[Study Cycle]: Chosen to study '{study_topic}' based on the known fact: '{known_fact}'",
         )
 
         questions = self._generate_study_questions(study_topic, known_fact)
@@ -320,7 +324,7 @@ class KnowledgeHarvester:
         learned_something_new = False
         for question in questions:
             print(
-                f"\n[Study Cycle]: Seeking answer for self-generated question: '{question}'"
+                f"\n[Study Cycle]: Seeking answer for self-generated question: '{question}'",
             )
             # This part of your logic remains the same
             wiki_result = self.get_fact_from_wikipedia(question)
@@ -335,7 +339,7 @@ class KnowledgeHarvester:
 
         if not learned_something_new:
             print(
-                "[Study Cycle]: Completed study, but did not find any new, simple facts to learn."
+                "[Study Cycle]: Completed study, but did not find any new, simple facts to learn.",
             )
 
         print("--- [Study Cycle Finished] ---\n")
@@ -343,7 +347,7 @@ class KnowledgeHarvester:
 
     def _generate_study_questions(self, topic: str, known_fact: str) -> list[str]:
         print(
-            f"  [Study Engine]: Generating curious follow-up questions for '{topic}'..."
+            f"  [Study Engine]: Generating curious follow-up questions for '{topic}'...",
         )
         try:
             return self.agent.interpreter.generate_curious_questions(topic, known_fact)
@@ -353,7 +357,7 @@ class KnowledgeHarvester:
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
         print(
-            f"[Knowledge Source]: Performing intelligent search for '{topic}' on Wikipedia..."
+            f"[Knowledge Source]: Performing intelligent search for '{topic}' on Wikipedia...",
         )
         try:
             search_results = wikipedia.search(topic, results=5)
@@ -369,10 +373,10 @@ class KnowledgeHarvester:
                     first_sentence += "."
 
                 if len(first_sentence.split()) > 5 and self._is_sentence_simple_enough(
-                    first_sentence
+                    first_sentence,
                 ):
                     print(
-                        f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'"
+                        f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'",
                     )
                     return page.title, first_sentence
         except Exception:
@@ -381,7 +385,7 @@ class KnowledgeHarvester:
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
         print(
-            f"[Knowledge Source]: Falling back to DuckDuckGo with query: '{topic}'..."
+            f"[Knowledge Source]: Falling back to DuckDuckGo with query: '{topic}'...",
         )
         try:
             url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
@@ -398,7 +402,7 @@ class KnowledgeHarvester:
 
                 if self._is_sentence_simple_enough(fact_sentence):
                     print(
-                        f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{fact_sentence}'"
+                        f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{fact_sentence}'",
                     )
                     return topic, fact_sentence
         except Exception:
@@ -407,7 +411,7 @@ class KnowledgeHarvester:
 
     def _anticipate_and_cache(self, topic: str):
         print(
-            f"\n  [Anticipatory Cache]: Pre-warming caches for the CORRECT topic: '{topic}'"
+            f"\n  [Anticipatory Cache]: Pre-warming caches for the CORRECT topic: '{topic}'",
         )
         try:
             simulated_question = f"what is {topic}"
@@ -426,13 +430,13 @@ class KnowledgeHarvester:
             ]
             if any(keyword in response_text.lower() for keyword in failure_keywords):
                 print(
-                    f"  [Anticipatory Cache]: Pre-warming FAILED. Agent could not answer the simulated question."
+                    "  [Anticipatory Cache]: Pre-warming FAILED. Agent could not answer the simulated question.",
                 )
             else:
                 print(
-                    f"  [Anticipatory Cache]: Caches for '{topic}' have been successfully pre-warmed."
+                    f"  [Anticipatory Cache]: Caches for '{topic}' have been successfully pre-warmed.",
                 )
         except Exception as e:
             print(
-                f"  [Anticipatory Cache Error]: Could not pre-warm cache for '{topic}'. Error: {e}"
+                f"  [Anticipatory Cache Error]: Could not pre-warm cache for '{topic}'. Error: {e}",
             )

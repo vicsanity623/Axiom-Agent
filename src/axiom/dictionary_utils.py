@@ -1,9 +1,9 @@
 # dictionary_utils.py
 
+
 import nltk
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
-from collections import defaultdict
 
 # Initialize the lemmatizer
 lemmatizer = WordNetLemmatizer()
@@ -76,7 +76,7 @@ def get_word_info_from_wordnet(word):
         if ss.pos() == "n":
             best_synset = ss
             break
-        elif ss.pos() == "v" and not best_synset:
+        if ss.pos() == "v" and not best_synset:
             best_synset = ss
         elif (
             ss.pos() == "a" or ss.pos() == "s" and not best_synset
@@ -140,7 +140,7 @@ def get_pos_tag_simple(word):
             return pos_map.get(tagged_word[0][1], "concept")
     except LookupError:
         print(
-            f"WARNING: NLTK pos_tagger resource missing for '{word}'. Falling back to WordNet primary POS."
+            f"WARNING: NLTK pos_tagger resource missing for '{word}'. Falling back to WordNet primary POS.",
         )
         # Fallback: Use WordNet's primary POS for the word if pos_tagger fails
         synsets = wn.synsets(word.lower())
@@ -150,7 +150,7 @@ def get_pos_tag_simple(word):
                 if ss.pos() == "n":
                     best_synset = ss
                     break
-                elif ss.pos() == "v" and not best_synset:
+                if ss.pos() == "v" and not best_synset:
                     best_synset = ss
                 elif ss.pos() == "a" or ss.pos() == "s" and not best_synset:
                     best_synset = ss
@@ -161,16 +161,16 @@ def get_pos_tag_simple(word):
                 nltk_pos = best_synset.pos()
                 if nltk_pos == "n":
                     return "noun"
-                elif nltk_pos == "v":
+                if nltk_pos == "v":
                     return "verb"
-                elif nltk_pos == "a" or nltk_pos == "s":
+                if nltk_pos == "a" or nltk_pos == "s":
                     return "descriptor"
-                elif nltk_pos == "r":
+                if nltk_pos == "r":
                     return "adverb"
         return "concept"  # Final fallback if WordNet also doesn't give a specific POS
     except Exception as e:
         print(
-            f"An unexpected error occurred in get_pos_tag_simple for '{word}': {e}. Falling back to 'concept'."
+            f"An unexpected error occurred in get_pos_tag_simple for '{word}': {e}. Falling back to 'concept'.",
         )
         return "concept"  # General error fallback
     return "concept"  # Default if no specific POS found

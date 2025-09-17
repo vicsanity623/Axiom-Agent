@@ -1,7 +1,7 @@
 # pyproject.toml
 
 [project]
-name = "axiom-agent"
+name = "axiom"
 version = "0.1.0"
 description = "A cognitive architecture for a new type of AI designed for self-directed learning."
 authors = [
@@ -29,17 +29,36 @@ dev = [
     "pyngrok", # Moving ngrok here as it's a dev/optional feature
 ]
 
+[project.urls]
+"Source" = "https://github.com/vicsanity623/Axiom-Agent"
+"Bug Tracker" = "https://github.com/vicsanity623/Axiom-Agent/issues"
+
+
 # --- Tool Configurations ---
 
 [tool.ruff]
 line-length = 88
+fix = true
+
+include = ["*.py", "*.pyi", "**/pyproject.toml"]
 
 [tool.ruff.lint]
 select = [
-    "E",  # errors
-    "F",  # Pyflakes
-    "W",  # warnings
-    "I",  # isort
+    "C4",   # flake8-comprehensions
+    "COM",  # flake8-commas
+    "E",    # Error
+    "F",    # pyflakes
+    "W",    # warnings
+    "I",    # isort
+    "N",    # pep8-naming
+    "PT",   # flake8-pytest-style
+    "PYI",  # flake8-pyi
+    "R",    # Refactor
+    "RET",  # flake8-return
+    "SLOT", # flake8-slots
+    "TCH",  # flake8-type-checking
+    "UP",   # pyupgrade
+    "YTT",  # flake8-2020
 ]
 
 [tool.mypy]
@@ -63,11 +82,38 @@ warn_unreachable = true
 minversion = "6.0"
 # Add options here to avoid typing them in check.sh
 # -v for verbose, --cov for coverage report
-addopts = "-v --cov=axiom --cov-report=term-missing"
+addopts = "-v --cov-report=term-missing --cov=axiom"
 testpaths = [
     "tests",
 ]
 
-##[tool.setuptools.packages.find]
-##where = ["."]
-##include = ["axiom*"]
+[tool.coverage.run]
+branch = true
+source_pkgs = ["axiom"]
+omit = []
+parallel = true
+relative_files = true
+source = ["."]
+
+[tool.coverage.report]
+precision = 1
+skip_covered = true
+exclude_also = [
+    "pragma: no cover",
+    "abc.abstractmethod",
+    "if TYPE_CHECKING.*:",
+    "if _t.TYPE_CHECKING:",
+    "if t.TYPE_CHECKING:",
+    "@overload",
+    'class .*\bProtocol\b.*\):',
+    "raise NotImplementedError",
+]
+partial_branches = [
+    "pragma: no branch",
+    "if not TYPE_CHECKING:",
+    "if not _t.TYPE_CHECKING:",
+    "if not t.TYPE_CHECKING:",
+    "if .* or not TYPE_CHECKING:",
+    "if .* or not _t.TYPE_CHECKING:",
+    "if .* or not t.TYPE_CHECKING:",
+]

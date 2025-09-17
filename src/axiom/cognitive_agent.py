@@ -1,16 +1,15 @@
 # cognitive_agent.py
 
-import uuid
-import random
 import json
 import os
 import re
 from datetime import datetime
 from functools import lru_cache
-from .graph_core import ConceptNode, RelationshipEdge, ConceptGraph
+
+from .dictionary_utils import get_word_info_from_wordnet
+from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
 from .knowledge_base import seed_domain_knowledge
 from .universal_interpreter import UniversalInterpreter
-from .dictionary_utils import get_word_info_from_wordnet
 
 
 class CognitiveAgent:
@@ -23,7 +22,7 @@ class CognitiveAgent:
         cache_data=None,
         inference_mode=False,
     ):
-        print(f"Initializing Cognitive Agent...")
+        print("Initializing Cognitive Agent...")
         self.brain_file = brain_file
         self.state_file = state_file
         self.inference_mode = inference_mode
@@ -57,7 +56,7 @@ class CognitiveAgent:
 
             if not name_edge_exists:
                 print(
-                    "   - CRITICAL FAILURE: Agent's core identity is missing. Re-seeding brain for integrity."
+                    "   - CRITICAL FAILURE: Agent's core identity is missing. Re-seeding brain for integrity.",
                 )
                 # We need a completely fresh graph object before seeding
                 self.graph = ConceptGraph()
@@ -70,7 +69,7 @@ class CognitiveAgent:
             print("   - Initializing brain from loaded .axm model data.")
             self.graph = ConceptGraph.load_from_dict(brain_data)
             self.interpreter.interpretation_cache = dict(
-                cache_data.get("interpretations", [])
+                cache_data.get("interpretations", []),
             )
             self.interpreter.synthesis_cache = dict(cache_data.get("synthesis", []))
             self.learning_iterations = brain_data.get("learning_iterations", 0)
@@ -92,7 +91,7 @@ class CognitiveAgent:
         memory leaks or state corruption in the underlying C++ library.
         """
         print(
-            "\n--- [SYSTEM HEALTH]: Prophylactically rebooting Universal Interpreter ---"
+            "\n--- [SYSTEM HEALTH]: Prophylactically rebooting Universal Interpreter ---",
         )
         print("This is a preventative measure to ensure long-term stability.")
 
@@ -111,7 +110,7 @@ class CognitiveAgent:
         self.interpreter.synthesis_cache = old_synth_cache
 
         print(
-            "--- [SYSTEM HEALTH]: Interpreter reboot complete. Caches restored. ---\n"
+            "--- [SYSTEM HEALTH]: Interpreter reboot complete. Caches restored. ---\n",
         )
 
     # --- NEW METHOD: Cycle Counter ---
@@ -119,7 +118,7 @@ class CognitiveAgent:
         """Called by the harvester after each cycle to track interpreter lifetime."""
         self.autonomous_cycle_count += 1
         print(
-            f"  [System Health]: Autonomous cycles since last interpreter reboot: {self.autonomous_cycle_count}/{self.INTERPRETER_REBOOT_THRESHOLD}"
+            f"  [System Health]: Autonomous cycles since last interpreter reboot: {self.autonomous_cycle_count}/{self.INTERPRETER_REBOOT_THRESHOLD}",
         )
         if self.autonomous_cycle_count >= self.INTERPRETER_REBOOT_THRESHOLD:
             self._reboot_interpreter()
@@ -128,13 +127,13 @@ class CognitiveAgent:
     def _load_agent_state(self):
         if os.path.exists(self.state_file):
             try:
-                with open(self.state_file, "r") as f:
+                with open(self.state_file) as f:
                     state_data = json.load(f)
                     self.learning_iterations = state_data.get("learning_iterations", 0)
                 print(
-                    f"Agent state loaded from {self.state_file} (Learning Iterations: {self.learning_iterations})."
+                    f"Agent state loaded from {self.state_file} (Learning Iterations: {self.learning_iterations}).",
                 )
-            except Exception as e:
+            except Exception:
                 self.learning_iterations = 0
         else:
             self.learning_iterations = 0
@@ -146,19 +145,34 @@ class CognitiveAgent:
 
     def _preprocess_self_reference(self, text: str) -> str:
         processed_text = re.sub(
-            r"\byour name\b", "the agent's name", text, flags=re.IGNORECASE
+            r"\byour name\b",
+            "the agent's name",
+            text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"\bwho are you\b", "what is the agent", processed_text, flags=re.IGNORECASE
+            r"\bwho are you\b",
+            "what is the agent",
+            processed_text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"\byou are\b", "the agent is", processed_text, flags=re.IGNORECASE
+            r"\byou are\b",
+            "the agent is",
+            processed_text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"\byour\b", "the agent's", processed_text, flags=re.IGNORECASE
+            r"\byour\b",
+            "the agent's",
+            processed_text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"(?<!thank )\byou\b", "the agent", processed_text, flags=re.IGNORECASE
+            r"(?<!thank )\byou\b",
+            "the agent",
+            processed_text,
+            flags=re.IGNORECASE,
         )
 
         if processed_text != text:
@@ -183,12 +197,14 @@ class CognitiveAgent:
                 if subject_node and relation_type:
                     self._gather_facts_multihop.cache_clear()
                     print(
-                        "  [Cache]: Cleared reasoning cache due to knowledge correction."
+                        "  [Cache]: Cleared reasoning cache due to knowledge correction.",
                     )
                     for u, v, key, data in list(
                         self.graph.graph.out_edges(
-                            subject_node.id, keys=True, data=True
-                        )
+                            subject_node.id,
+                            keys=True,
+                            data=True,
+                        ),
                     ):
                         if data.get("type") == relation_type:
                             target_node_data = self.graph.graph.nodes.get(v)
@@ -198,13 +214,13 @@ class CognitiveAgent:
                             ):
                                 self.graph.graph[u][v][key]["weight"] = 1.0
                                 print(
-                                    f"    - REINFORCED: {subject_name} --[{relation_type}]--> {correct_answer_name}"
+                                    f"    - REINFORCED: {subject_name} --[{relation_type}]--> {correct_answer_name}",
                                 )
                             else:
                                 self.graph.graph[u][v][key]["weight"] = 0.1
                                 if target_node_data:
                                     print(
-                                        f"    - PUNISHED: {subject_name} --[{relation_type}]--> {target_node_data.get('name')}"
+                                        f"    - PUNISHED: {subject_name} --[{relation_type}]--> {target_node_data.get('name')}",
                                     )
                     self.save_brain()
 
@@ -219,7 +235,8 @@ class CognitiveAgent:
 
         if self.enable_contextual_memory:
             interpretation = self.interpreter.interpret_with_context(
-                user_input, self.conversation_history
+                user_input,
+                self.conversation_history,
             )
         else:
             normalized_input = self._preprocess_self_reference(user_input)
@@ -228,7 +245,7 @@ class CognitiveAgent:
         print(
             f"  [Interpreter Output]: Intent='{interpretation.get('intent', 'N/A')}', "
             f"Entities={[e.get('name') for e in interpretation.get('entities', [])]}, "
-            f"Relation={interpretation.get('relation')}"
+            f"Relation={interpretation.get('relation')}",
         )
 
         intent = interpretation.get("intent", "unknown")
@@ -248,7 +265,7 @@ class CognitiveAgent:
             structured_response = "I'm glad you think so!"
         elif intent == "statement_of_fact" and relation:
             was_learned, response_message = self._process_statement_for_learning(
-                relation
+                relation,
             )
             if not was_learned and self.is_awaiting_clarification:
                 self.conversation_history.append(f"User: {user_input}")
@@ -264,33 +281,37 @@ class CognitiveAgent:
 
             if subject_name:
                 subject_node = self.graph.get_node_by_name(
-                    self._clean_phrase(subject_name)
+                    self._clean_phrase(subject_name),
                 )
                 if subject_node:
                     self._gather_facts_multihop.cache_clear()
                     print(
-                        "  [Cache]: Cleared reasoning cache due to knowledge correction."
+                        "  [Cache]: Cleared reasoning cache due to knowledge correction.",
                     )
                     verb = relation.get("verb", "").lower().strip()
                     object_name = relation.get("object", "")
                     relation_type = self._get_relation_type(
-                        verb, subject_name, object_name
+                        verb,
+                        subject_name,
+                        object_name,
                     )
                     for u, v, key, data in list(
                         self.graph.graph.out_edges(
-                            subject_node.id, keys=True, data=True
-                        )
+                            subject_node.id,
+                            keys=True,
+                            data=True,
+                        ),
                     ):
                         if data.get("type") == relation_type:
                             old_fact_target_data = self.graph.graph.nodes.get(v)
                             if old_fact_target_data:
                                 print(
-                                    f"    - PUNISHING old fact: {subject_node.name} --[{data.get('type')}]--> {old_fact_target_data.get('name')}"
+                                    f"    - PUNISHING old fact: {subject_node.name} --[{data.get('type')}]--> {old_fact_target_data.get('name')}",
                                 )
                                 self.graph.graph[u][v][key]["weight"] = 0.1
 
             was_learned, response_message = self._process_statement_for_learning(
-                relation
+                relation,
             )
             if was_learned:
                 structured_response = "Thank you. I have corrected my knowledge."
@@ -316,7 +337,9 @@ class CognitiveAgent:
             else:
                 # 2. Sort the full objects by their .weight attribute.
                 sorted_edges = sorted(
-                    reconstructed_edges, key=lambda edge: edge.weight, reverse=True
+                    reconstructed_edges,
+                    key=lambda edge: edge.weight,
+                    reverse=True,
                 )
 
                 for edge in sorted_edges:
@@ -382,10 +405,11 @@ class CognitiveAgent:
                     )
                 else:
                     print(
-                        f"  [CognitiveAgent]: Starting reasoning for '{entity_name}'."
+                        f"  [CognitiveAgent]: Starting reasoning for '{entity_name}'.",
                     )
                     facts_with_props = self._gather_facts_multihop(
-                        subject_node.id, max_hops=4
+                        subject_node.id,
+                        max_hops=4,
                     )
 
                     is_temporal_query = any(
@@ -400,7 +424,7 @@ class CognitiveAgent:
                     if not facts:
                         structured_response = f"I know the concept of {subject_node.name.capitalize()}, but I don't have any specific details for that query."
                     else:
-                        structured_response = ". ".join(sorted(list(facts))) + "."
+                        structured_response = ". ".join(sorted(facts)) + "."
 
         else:
             structured_response = (
@@ -428,7 +452,8 @@ class CognitiveAgent:
         else:
             print(f"  [Structured Response]: {structured_response}")
             fluent_response = self.interpreter.synthesize(
-                structured_response, original_question=user_input
+                structured_response,
+                original_question=user_input,
             )
             print(f"  [Synthesized Response]: {fluent_response}")
             final_response = fluent_response
@@ -444,12 +469,12 @@ class CognitiveAgent:
     @lru_cache(maxsize=256)
     def _gather_facts_multihop(self, start_node_id: str, max_hops: int) -> tuple:
         print(
-            f"  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: {start_node_id}"
+            f"  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: {start_node_id}",
         )
 
         start_node_data = self.graph.graph.nodes.get(start_node_id)
         if not start_node_data:
-            return tuple()
+            return ()
 
         found_facts = {}
         queue = [(start_node_id, 0)]
@@ -502,11 +527,10 @@ class CognitiveAgent:
             all_facts_items.sort(key=lambda item: item[1].access_count, reverse=True)
             all_facts_items = all_facts_items[:10]
 
-        final_fact_tuples = tuple(
+        return tuple(
             (fact_str, tuple(sorted(edge.properties.items())))
             for fact_str, edge in all_facts_items
         )
-        return final_fact_tuples
 
     def _filter_facts_for_temporal_query(self, facts_with_props_tuple: tuple) -> set:
         print("  [TemporalReasoning]: Filtering facts by date...")
@@ -532,12 +556,11 @@ class CognitiveAgent:
                     continue
         if best_fact:
             return {best_fact}
-        else:
-            return {
-                fact_str
-                for fact_str, props in facts_list
-                if not props.get("effective_date")
-            }
+        return {
+            fact_str
+            for fact_str, props in facts_list
+            if not props.get("effective_date")
+        }
 
     def _clean_phrase(self, phrase: str) -> str:
         words = phrase.lower().split()
@@ -583,7 +606,7 @@ class CognitiveAgent:
             return (False, "Could not determine the object(s) of the fact.")
 
         print(
-            f"  [AGENT LEARNING: Processing interpreted statement: {subject_name} -> {verb} -> {objects_to_process}]"
+            f"  [AGENT LEARNING: Processing interpreted statement: {subject_name} -> {verb} -> {objects_to_process}]",
         )
         self.learning_iterations += 1
         learned_at_least_one = False
@@ -592,7 +615,9 @@ class CognitiveAgent:
             verb_cleaned = verb.lower().strip()
             sub_node = self._add_or_update_concept(subject_name)
             relation_type = self._get_relation_type(
-                verb_cleaned, subject_name, object_name
+                verb_cleaned,
+                subject_name,
+                object_name,
             )
 
             exclusive_relations = ["has_name", "is_capital_of", "is_located_in"]
@@ -602,17 +627,18 @@ class CognitiveAgent:
                     if edge.type == relation_type:
                         existing_target_data = self.graph.graph.nodes[edge.target]
                         if existing_target_data.get("name") != self._clean_phrase(
-                            object_name
+                            object_name,
                         ):
                             print(
-                                f"  [Curiosity]: CONTRADICTION DETECTED (Exclusive Relationship)!"
+                                "  [Curiosity]: CONTRADICTION DETECTED (Exclusive Relationship)!",
                             )
                             conflicting_facts_str = (
                                 f"Fact 1: {sub_node.name} {edge.type.replace('_', ' ')} {existing_target_data.get('name')}. "
                                 f"Fact 2: {sub_node.name} {relation_type.replace('_', ' ')} {object_name}."
                             )
                             question = self.interpreter.synthesize(
-                                conflicting_facts_str, mode="clarification_question"
+                                conflicting_facts_str,
+                                mode="clarification_question",
                             )
                             self.is_awaiting_clarification = True
                             self.clarification_context = {
@@ -627,17 +653,21 @@ class CognitiveAgent:
                 for edge in self.graph.get_edges_from_node(sub_node.id):
                     if edge.type == relation_type and edge.target == obj_node.id:
                         print(
-                            f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}"
+                            f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
                         )
                         fact_already_exists = True
                         break
 
                 if not fact_already_exists:
                     self.graph.add_edge(
-                        sub_node, obj_node, relation_type, 0.9, properties=properties
+                        sub_node,
+                        obj_node,
+                        relation_type,
+                        0.9,
+                        properties=properties,
                     )
                     print(
-                        f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}"
+                        f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}",
                     )
                     learned_at_least_one = True
 
@@ -685,18 +715,17 @@ class CognitiveAgent:
         print(f"  [Autonomous Learning]: Interpreted Relation: {relation}")
         if interpretation.get("intent") == "statement_of_fact" and relation:
             was_learned, response_message = self._process_statement_for_learning(
-                relation
+                relation,
             )
             if was_learned:
                 print("[Autonomous Learning]: Successfully learned and saved new fact.")
                 return True
-            else:
-                print(
-                    f"[Autonomous Learning]: Failed to process fact. Reason: {response_message}"
-                )
+            print(
+                f"[Autonomous Learning]: Failed to process fact. Reason: {response_message}",
+            )
         else:
             print(
-                "[Autonomous Learning]: Could not interpret the sentence as a statement of fact."
+                "[Autonomous Learning]: Could not interpret the sentence as a statement of fact.",
             )
         return False
 
@@ -712,10 +741,11 @@ class CognitiveAgent:
                 )
             else:
                 determined_type = get_word_info_from_wordnet(clean_name).get(
-                    "type", node_type
+                    "type",
+                    node_type,
                 )
             node = self.graph.add_node(
-                ConceptNode(clean_name, node_type=determined_type)
+                ConceptNode(clean_name, node_type=determined_type),
             )
             print(f"    Added new concept to graph: {clean_name} ({node.type})")
         return node
@@ -733,7 +763,7 @@ class CognitiveAgent:
         if node1 and node2:
             self.graph.add_edge(node1, node2, relation, weight)
             print(
-                f"Manually added knowledge: {concept_name1} --[{relation}]--> {concept_name2}"
+                f"Manually added knowledge: {concept_name1} --[{relation}]--> {concept_name2}",
             )
 
     def save_brain(self):

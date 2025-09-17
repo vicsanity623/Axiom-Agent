@@ -1,15 +1,17 @@
 # setup/app_model.py
 
 # Add these lines at the very top to handle the new project structure
-import sys
 import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import zipfile
-import json
 import glob
-from flask import Flask, render_template, request, jsonify, send_from_directory
+import json
+import zipfile
+
+from flask import Flask, jsonify, render_template, request, send_from_directory
+
 from axiom.cognitive_agent import CognitiveAgent
 
 # --- Global variable for our loaded agent ---
@@ -21,7 +23,7 @@ axiom_agent = None
 # '..' means "go up one directory".
 STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
 TEMPLATE_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "templates")
+    os.path.join(os.path.dirname(__file__), "..", "templates"),
 )
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
@@ -29,13 +31,13 @@ app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 
 def find_latest_model(directory="rendered"):
     print(
-        f"--- [Server]: Searching for the latest .axm model file in '{directory}'... ---"
+        f"--- [Server]: Searching for the latest .axm model file in '{directory}'... ---",
     )
     search_pattern = os.path.join(directory, "axiom_model_*.axm")
     model_files = glob.glob(search_pattern)
     if not model_files:
         print(
-            f"!!! [Server]: CRITICAL ERROR: No .axm model files found in '{directory}'."
+            f"!!! [Server]: CRITICAL ERROR: No .axm model files found in '{directory}'.",
         )
         return None
     latest_file = sorted(model_files, reverse=True)[0]
@@ -58,7 +60,7 @@ def load_axiom_model(axm_filepath):
             return brain_data, cache_data
     except Exception as e:
         print(
-            f"!!! [Server]: CRITICAL ERROR: Failed to load or parse .axm model. Error: {e}"
+            f"!!! [Server]: CRITICAL ERROR: Failed to load or parse .axm model. Error: {e}",
         )
         return None
 
@@ -113,7 +115,7 @@ if __name__ == "__main__":
     latest_model_path = find_latest_model()
     if not latest_model_path:
         print(
-            "--- [Server]: Shutting down. Please run a trainer to generate a model first."
+            "--- [Server]: Shutting down. Please run a trainer to generate a model first.",
         )
         sys.exit(1)
 

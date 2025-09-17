@@ -1,7 +1,7 @@
 # app.py (Command-Line Manual Trainer)
 
-import sys
 import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -33,7 +33,7 @@ def run_training_session():
             user_input = input("You: ")
             if user_input.lower() in ["quit", "exit"]:
                 print(
-                    "\n--- [TRAINER]: Exiting training session. All knowledge has been saved. ---"
+                    "\n--- [TRAINER]: Exiting training session. All knowledge has been saved. ---",
                 )
                 break
 

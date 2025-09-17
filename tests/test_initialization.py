@@ -1,8 +1,6 @@
 # tests/test_initialization.py
 
 # Add these lines to fix the import path
-import sys
-import os
 
 from axiom.cognitive_agent import CognitiveAgent
 

@@ -1,14 +1,16 @@
 # app.py (original autonomous and chat auto save)
-import sys
 import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from flask import Flask, render_template, request, jsonify, send_from_directory
-from axiom.cognitive_agent import CognitiveAgent
 import threading
 import time
+
 from apscheduler.schedulers.background import BackgroundScheduler
+from flask import Flask, jsonify, render_template, request, send_from_directory
+
+from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
 
 app = Flask(__name__)
@@ -34,24 +36,30 @@ def load_agent():
                 state_file = "my_agent_state.json"
 
                 axiom_agent = CognitiveAgent(
-                    brain_file=brain_file, state_file=state_file
+                    brain_file=brain_file,
+                    state_file=state_file,
                 )
 
                 harvester = KnowledgeHarvester(
-                    agent=axiom_agent, lock=agent_interaction_lock
+                    agent=axiom_agent,
+                    lock=agent_interaction_lock,
                 )
                 scheduler = BackgroundScheduler(daemon=True)
 
                 # --- NEW: The Cognitive Scheduler with two independent cycles ---
                 # 1. The "Study" cycle runs frequently to deepen existing knowledge.
                 scheduler.add_job(
-                    harvester.study_existing_concept, "interval", minutes=6
+                    harvester.study_existing_concept,
+                    "interval",
+                    minutes=6,
                 )
                 print("--- Study Cycle is scheduled to run every 6 minutes. ---")
 
                 # 2. The "Discovery" cycle runs infrequently to find brand new topics.
                 scheduler.add_job(
-                    harvester.discover_new_topic_and_learn, "interval", hours=35
+                    harvester.discover_new_topic_and_learn,
+                    "interval",
+                    hours=35,
                 )
                 print("--- Discovery Cycle is scheduled to run every 35 minutes. ---")
 
@@ -129,8 +137,9 @@ def chat():
 
 if __name__ == "__main__":
     import argparse
-    from pyngrok import ngrok
     import os
+
+    from pyngrok import ngrok
 
     parser = argparse.ArgumentParser(description="Run the Axiom Agent Training App.")
     parser.add_argument(
@@ -146,7 +155,7 @@ if __name__ == "__main__":
             ngrok.set_auth_token(authtoken)
         else:
             print(
-                "[ngrok Warning]: NGROK_AUTHTOKEN environment variable not set. Using anonymous tunnel."
+                "[ngrok Warning]: NGROK_AUTHTOKEN environment variable not set. Using anonymous tunnel.",
             )
 
         public_url = ngrok.connect(7500)

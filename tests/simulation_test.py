@@ -1,6 +1,7 @@
 # simulation_test.py
 
 import threading
+
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
 
@@ -16,7 +17,8 @@ def run_simulation():
 
     # Initialize the core components
     axiom_agent = CognitiveAgent(
-        brain_file="my_agent_brain.json", state_file="my_agent_state.json"
+        brain_file="my_agent_brain.json",
+        state_file="my_agent_state.json",
     )
     harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
 
@@ -51,7 +53,7 @@ def run_simulation():
 
     print("\n\n--- [SIMULATION]: ALL TASKS FINISHED. ---")
     print(
-        "The agent's brain should now contain all seeded, manual, and discovered knowledge."
+        "The agent's brain should now contain all seeded, manual, and discovered knowledge.",
     )
     print("You can now inspect the 'my_agent_brain.json' file.")
 

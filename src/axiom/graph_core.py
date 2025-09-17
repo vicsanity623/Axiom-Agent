@@ -1,41 +1,59 @@
-# graph_core.py
+from __future__ import annotations
 
 import json
-import uuid
 import os
+import uuid
+
+# graph_core.py
+from typing import TYPE_CHECKING, TypedDict
+
 import networkx as nx
 from networkx.readwrite import json_graph
+
+if TYPE_CHECKING:
+    from typing import Self
+
+
+class ConceptNodeData(TypedDict):
+    id: str
+    name: str
+    type: str
+    properties: dict[str, object]
+    value: float
+    activation: float
 
 
 class ConceptNode:
     def __init__(
         self,
-        name,
-        node_type="concept",
+        name: str,
+        node_type: str = "concept",
         properties=None,
-        value=0.5,
-        activation=0.0,
-        id=None,
-    ):
-        self.id = id or str(uuid.uuid4())
+        value: float = 0.5,
+        activation: float = 0.0,
+        id_=None,
+    ) -> None:
+        self.id = id_ or str(uuid.uuid4())
         self.name = name.lower()
         self.type = node_type
         self.properties = properties or {}
         self.value = value
         self.activation = activation
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "type": self.type,
-            "properties": self.properties,
-            "value": self.value,
-            "activation": self.activation,
-        }
+    def to_dict(self) -> ConceptNodeData:
+        return ConceptNodeData(
+            {
+                "id": self.id,
+                "name": self.name,
+                "type": self.type,
+                "properties": self.properties,
+                "value": self.value,
+                "activation": self.activation,
+            },
+        )
 
     @staticmethod
-    def from_dict(data):
+    def from_dict(data: ConceptNodeData) -> Self:
         return ConceptNode(
             id=data.get("id"),
             name=data.get("name"),
@@ -48,8 +66,15 @@ class ConceptNode:
 
 class RelationshipEdge:
     def __init__(
-        self, source, target, type, weight=0.5, id=None, properties=None, access_count=0
-    ):
+        self,
+        source,
+        target,
+        type: str,
+        weight: float = 0.5,
+        id: str | None = None,
+        properties=None,
+        access_count: int = 0,
+    ) -> None:
         self.id = id or str(uuid.uuid4())
         self.source = source
         self.target = target
@@ -70,7 +95,7 @@ class RelationshipEdge:
         }
 
     @staticmethod
-    def from_dict(data):
+    def from_dict(data) -> Self:
         return RelationshipEdge(
             id=data.get("id"),
             source=data.get("source"),
@@ -83,12 +108,12 @@ class RelationshipEdge:
 
 
 class ConceptGraph:
-    def __init__(self):
+    def __init__(self) -> None:
         self.graph = nx.MultiDiGraph()
         # This is the correct name for your lookup dictionary
         self.name_to_id = {}
 
-    def add_node(self, node: ConceptNode):
+    def add_node(self, node: ConceptNode) -> ConceptNode:
         if self.get_node_by_name(node.name):
             return self.get_node_by_name(node.name)
 
@@ -97,7 +122,7 @@ class ConceptGraph:
         self.name_to_id[node.name] = node.id
         return node
 
-    def get_node_by_name(self, name):
+    def get_node_by_name(self, name: str) -> ConceptNode | None:
         # Your original code correctly used .lower() for case-insensitivity
         node_id = self.name_to_id.get(name.lower())
         if node_id and self.graph.has_node(node_id):
@@ -110,15 +135,21 @@ class ConceptGraph:
 
     # Your original add_edge method is robust and good, let's keep it.
     def add_edge(
-        self, source_node, target_node, relation_type, weight=0.5, properties=None
-    ):
+        self,
+        source_node,
+        target_node,
+        relation_type: str,
+        weight: float = 0.5,
+        properties: Any | None = None,
+    ) -> RelationshipEdge | None:
         if not all([source_node, target_node]):
             return None
 
         # Check for existing edges to reinforce them
         if self.graph.has_edge(source_node.id, target_node.id):
             for key, data in self.graph.get_edge_data(
-                source_node.id, target_node.id
+                source_node.id,
+                target_node.id,
             ).items():
                 if data.get("type") == relation_type:
                     data["weight"] = max(data["weight"], weight)
@@ -131,10 +162,17 @@ class ConceptGraph:
                     return RelationshipEdge.from_dict(full_edge_data)
 
         new_edge = RelationshipEdge(
-            source_node.id, target_node.id, relation_type, weight, properties=properties
+            source_node.id,
+            target_node.id,
+            relation_type,
+            weight,
+            properties=properties,
         )
         self.graph.add_edge(
-            new_edge.source, new_edge.target, key=new_edge.id, **new_edge.to_dict()
+            new_edge.source,
+            new_edge.target,
+            key=new_edge.id,
+            **new_edge.to_dict(),
         )
         return new_edge
 
@@ -166,7 +204,8 @@ class ConceptGraph:
         for node_id in self.graph.nodes:
             current_activation = self.graph.nodes[node_id].get("activation", 0.0)
             self.graph.nodes[node_id]["activation"] = max(
-                0.0, current_activation - decay_rate
+                0.0,
+                current_activation - decay_rate,
             )
 
     # --- SAVING AND LOADING LOGIC ---
@@ -179,7 +218,7 @@ class ConceptGraph:
         print(f"Agent brain saved to {filename}")
 
     @classmethod
-    def load_from_dict(cls, data):
+    def load_from_dict(cls, data) -> Self:
         """THE NEW, CRITICAL METHOD FOR LOADING FROM .AXM MODELS"""
         instance = cls()
 
@@ -195,22 +234,22 @@ class ConceptGraph:
             if "name" in data
         }
         print(
-            f"   - Brain loaded from dictionary. Nodes: {len(instance.graph.nodes)}, Edges: {len(instance.graph.edges)}"
+            f"   - Brain loaded from dictionary. Nodes: {len(instance.graph.nodes)}, Edges: {len(instance.graph.edges)}",
         )
         return instance
 
     @classmethod
-    def load_from_file(cls, filename):
+    def load_from_file(cls, filename: str) -> Self:
         """LOADS FROM A .JSON FILE (USED BY THE TRAINER)"""
         if os.path.exists(filename):
             try:
-                with open(filename, "r") as f:
+                with open(filename) as f:
                     graph_data = json.load(f)
                 # We simply delegate to the robust load_from_dict method
                 return cls.load_from_dict(graph_data)
             except Exception as e:
                 print(
-                    f"Error loading brain from {filename}: {e}. Creating a fresh brain."
+                    f"Error loading brain from {filename}: {e}. Creating a fresh brain.",
                 )
                 return cls()  # Return a fresh instance on error
         else:

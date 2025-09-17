@@ -1,14 +1,16 @@
 # chat_app.py (original read only chat)
 
-import sys
 import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-import zipfile
-import json
 import argparse
-from flask import Flask, render_template, request, jsonify
+import json
+import zipfile
+
+from flask import Flask, jsonify, render_template, request
+
 from axiom.cognitive_agent import CognitiveAgent
 
 # --- Global variable for our loaded agent ---
@@ -33,7 +35,7 @@ def load_axiom_model(axm_filepath):
             return brain_data, cache_data
     except Exception as e:
         print(
-            f"❌ CRITICAL ERROR: Failed to load or parse the .axm model file. Error: {e}"
+            f"❌ CRITICAL ERROR: Failed to load or parse the .axm model file. Error: {e}",
         )
         return None
 
@@ -75,7 +77,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Run the Axiom Agent Chat App.")
     parser.add_argument(
-        "model_path", type=str, help="Path to the .axm model file to load."
+        "model_path",
+        type=str,
+        help="Path to the .axm model file to load.",
     )
     parser.add_argument(
         "--ngrok",
@@ -103,7 +107,7 @@ if __name__ == "__main__":
                 ngrok.set_auth_token(authtoken)
             else:
                 print(
-                    "[ngrok Warning]: NGROK_AUTHTOKEN environment variable not set. Using anonymous tunnel."
+                    "[ngrok Warning]: NGROK_AUTHTOKEN environment variable not set. Using anonymous tunnel.",
                 )
 
             public_url = ngrok.connect(7501)  # Connect to the correct port for this app
