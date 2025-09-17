@@ -53,7 +53,8 @@ def run_simulation():
 
     print("\n\n--- [SIMULATION]: ALL TASKS FINISHED. ---")
     print(
-        "The agent's brain should now contain all seeded, manual, and discovered knowledge.",
+        "The agent's brain should now contain all seeded, manual, and"
+        " discovered knowledge.",
     )
     print("You can now inspect the 'my_agent_brain.json' file.")
 

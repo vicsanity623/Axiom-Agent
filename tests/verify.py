@@ -49,7 +49,8 @@ def run_verification_tests():
             print("  [SUCCESS]: Query time is under the 2-second goal.")
         else:
             print(
-                f"  [FAILURE]: Query time ({duration_hit:.4f}s) exceeds the 2-second goal.",
+                f"  [FAILURE]: Query time ({duration_hit:.4f}s) exceeds"
+                " the 2-second goal.",
             )
     except Exception as e:
         print(f"  [FAILURE]: An error occurred during the query time test: {e}")
@@ -84,7 +85,8 @@ def run_verification_tests():
     except KeyboardInterrupt:
         print("\n\n--- [Soak Test Manually Stopped] ---")
         print(
-            f"The system successfully completed {cycle_count} autonomous cycles without crashing.",
+            f"The system successfully completed {cycle_count} autonomous"
+            " cycles without crashing.",
         )
         print("  [SUCCESS]: The agent has demonstrated long-term stability.")
     except Exception as e:
