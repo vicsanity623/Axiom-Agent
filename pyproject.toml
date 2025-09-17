@@ -27,15 +27,12 @@ dev = [
     "pytest>=6.0.0",
     "pytest-cov>=6.0.0",
     "pyngrok", # Moving ngrok here as it's a dev/optional feature
-    "pre-commit>=4.3.0",
-    "uv>=0.8.18",
 ]
 
 # --- Tool Configurations ---
 
 [tool.ruff]
 line-length = 88
-target-version = "py311"
 
 [tool.ruff.lint]
 select = [
