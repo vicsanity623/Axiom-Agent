@@ -1,5 +1,3 @@
-# requirements.txt
-
 APScheduler
 Flask
 llama-cpp-python
@@ -7,4 +5,10 @@ networkx
 nltk
 requests
 wikipedia
-wikipedia-api
+
+[dev]
+ruff
+mypy
+pytest
+pytest-cov
+pyngrok

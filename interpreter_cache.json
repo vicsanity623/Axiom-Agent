@@ -1,0 +1,837 @@
+{
+    "interpretations": [
+        [
+            "what is the agent's name?",
+            {
+                "intent": "question_about_entity",
+                "entities": [
+                    {
+                        "name": "agent",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "agent"
+                ],
+                "full_text_rephrased": "User is asking for the name of the agent."
+            }
+        ],
+        [
+            "A geyser (, UK: ) is a spring with an intermittent water discharge ejected turbulently and accompanied by steam.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "geyser",
+                        "type": "NATURAL_FEATURE"
+                    }
+                ],
+                "relation": {
+                    "subject": "A geyser",
+                    "verb": "is",
+                    "object": "a spring with an intermittent water discharge ejected turbulently and accompanied by steam"
+                },
+                "key_topics": [
+                    "geyser"
+                ],
+                "full_text_rephrased": "User is stating that a geyser is a spring with intermittent water discharge and steam."
+            }
+        ],
+        [
+            "A soda geyser is a physical reaction between a carbonated beverage, usually  Diet Coke, and Mentos mints that causes the beverage to be expelled from its container.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "soda geyser",
+                        "type": "PHENOMENON"
+                    },
+                    {
+                        "name": "carbonated beverage",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "Diet Coke",
+                        "type": "BRAND"
+                    },
+                    {
+                        "name": "Mentos mints",
+                        "type": "PRODUCT"
+                    }
+                ],
+                "relation": {
+                    "subject": "A soda geyser",
+                    "verb": "is",
+                    "object": "a physical reaction between a carbonated beverage and Mentos mints that causes the beverage to be expelled from its container."
+                },
+                "key_topics": [
+                    "soda geyser",
+                    "carbonated beverage",
+                    "Diet Coke",
+                    "Mentos mints"
+                ],
+                "full_text_rephrased": "User is stating that a soda geyser is the result of a reaction between Diet Coke and Mentos mints causing the beverage to be expelled."
+            }
+        ],
+        [
+            "what can the agent tell me about yourself?",
+            {
+                "intent": "question_about_entity",
+                "entities": [
+                    {
+                        "name": "agent",
+                        "type": "AGENT"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "agent"
+                ],
+                "full_text_rephrased": "User is asking for information about the agent."
+            }
+        ],
+        [
+            "Art valuation, an art-specific subset of financial valuation, is the process of estimating the market value of works of art.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "art valuation",
+                        "type": "PROCESS"
+                    },
+                    {
+                        "name": "an art-specific subset of financial valuation",
+                        "type": "DESCRIPTION"
+                    },
+                    {
+                        "name": "works of art",
+                        "type": "ARTISTIC_WORK"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "art valuation",
+                    "financial valuation",
+                    "works of art"
+                ],
+                "full_text_rephrased": "Art valuation is the process of estimating the market value of works of art."
+            }
+        ],
+        [
+            "Physis (; Ancient Greek: \u03c6\u03cd\u03c3\u03b9\u03c2 [p\u02b0\u00fdsis]; pl.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Physis (Ancient Greek: \u03c6\u03cd\u03c3\u03b9\u03c2)",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Physis"
+                ],
+                "full_text_rephrased": "User is stating the name and meaning of Physis in Ancient Greek."
+            }
+        ],
+        [
+            "Nature is an inherent character or constitution, particularly of the ecosphere or the universe as a whole.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "nature",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "Nature",
+                    "verb": "is",
+                    "object": "an inherent character or constitution"
+                },
+                "key_topics": [
+                    "nature"
+                ],
+                "full_text_rephrased": "User is stating that nature is an inherent character or constitution."
+            }
+        ],
+        [
+            "A work of art, artwork, art piece, piece of art or art object is an artistic creation of aesthetic value.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "work of art",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "artistic creation",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "aesthetic value",
+                        "type": "VALUE"
+                    }
+                ],
+                "relation": {
+                    "subject": "A work of art",
+                    "verb": "is",
+                    "object": "an artistic creation of aesthetic value"
+                },
+                "key_topics": [
+                    "work of art",
+                    "artistic creation",
+                    "aesthetic value"
+                ],
+                "full_text_rephrased": "User is stating that a work of art is an artistic creation with aesthetic value."
+            }
+        ],
+        [
+            "Ephemeral art is the name given to all artistic expression conceived under a concept of transience in time, of non-permanence as a material and conservable work of art.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "ephemeral art",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "ephemeral art",
+                    "verb": "is",
+                    "object": "the name given to all artistic expression",
+                    "properties": {
+                        "concept": "transience in time, non-permanence as a material and conservable work of art"
+                    }
+                },
+                "key_topics": [
+                    "ephemeral art"
+                ],
+                "full_text_rephrased": "User is stating that ephemeral art is named for its transient and non-permanent nature."
+            }
+        ],
+        [
+            "Implicit and explicit knowledge are two contrasting types of knowledge often discussed in the field of second language acquisition (SLA).",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "implicit and explicit knowledge",
+                        "type": "KNOWLEDGE_TYPES"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "implicit and explicit knowledge",
+                    "second language acquisition"
+                ],
+                "full_text_rephrased": "User is stating a fact about implicit and explicit knowledge in the context of second language acquisition."
+            }
+        ],
+        [
+            "Implicit and explicit knowledge are two contrasting types of knowledge often discussed in the field of second language acquisition.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [],
+                "relation": null,
+                "key_topics": [
+                    "implicit knowledge",
+                    "explicit knowledge",
+                    "second language acquisition"
+                ],
+                "full_text_rephrased": "User is stating a fact about implicit and explicit knowledge in the context of second language acquisition."
+            }
+        ],
+        [
+            "This glossary of history is a list of definitions of terms and concepts relevant to the study of history and its related fields and sub-disciplines, including both prehistory and the period of human history.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [],
+                "relation": null,
+                "key_topics": [
+                    "glossary of history",
+                    "definitions",
+                    "terms and concepts",
+                    "study of history",
+                    "prehistory",
+                    "human history"
+                ],
+                "full_text_rephrased": "The glossary of history is a collection of explanations for terms and concepts significant to the field of history and its branches."
+            }
+        ],
+        [
+            "A biography, or simply bio, is a detailed description of a person's life.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [],
+                "relation": null,
+                "key_topics": [
+                    "biography",
+                    "person's life"
+                ],
+                "full_text_rephrased": "A biography is a detailed description of a person's life."
+            }
+        ],
+        [
+            "Science is a systematic discipline that builds and organizes knowledge in the form of testable hypotheses and predictions about the universe.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "science",
+                        "type": "DISCIPLINE"
+                    }
+                ],
+                "relation": {
+                    "subject": "Science",
+                    "verb": "is",
+                    "object": "a systematic discipline that builds and organizes knowledge in the form of testable hypotheses and predictions about the universe"
+                },
+                "key_topics": [
+                    "science"
+                ],
+                "full_text_rephrased": "User is stating that science is a systematic discipline for building and organizing knowledge through testable hypotheses and predictions."
+            }
+        ],
+        [
+            "Ephemeral architecture is the art or technique of designing and building structures that are transient, that last only a short time.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Ephemeral architecture",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Ephemeral architecture"
+                ],
+                "full_text_rephrased": "User is stating that Ephemeral architecture is the art or technique of designing and building structures with a short lifespan."
+            }
+        ],
+        [
+            "Ecosystem health is a metaphor used to describe the condition of an ecosystem.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "ecosystem health",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "ecosystem health",
+                    "verb": "is",
+                    "object": "a metaphor"
+                },
+                "key_topics": [
+                    "ecosystem health"
+                ],
+                "full_text_rephrased": "User is stating that ecosystem health is a metaphor."
+            }
+        ],
+        [
+            "This is a list of Norwegian dishes and other dishes related to the food culture of the Norwegian people, from Norway.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Norwegian people",
+                        "type": "GROUP"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Norwegian dishes",
+                    "Norwegian food culture"
+                ],
+                "full_text_rephrased": "User is stating that there is a list of dishes associated with the Norwegian people and their food culture."
+            }
+        ],
+        [
+            "what's the agent's name?",
+            {
+                "intent": "question_about_entity",
+                "entities": [
+                    {
+                        "name": "agent",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "agent"
+                ],
+                "full_text_rephrased": "User is asking for the name of the agent."
+            }
+        ],
+        [
+            "Species belonging to the genus Amaranthus have been cultivated for their grains for 8,000 years.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Species belonging to the genus Amaranthus",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "Species belonging to the genre Amaranthus",
+                    "verb": "have been cultivated for",
+                    "object": "their grains",
+                    "properties": {
+                        "for_duration": "8,000 years"
+                    }
+                },
+                "key_topics": [
+                    "Species belonging to the genus Amaranthus",
+                    "cultivation",
+                    "grains"
+                ],
+                "full_text_rephrased": "User is stating that species in the Amaranthus genus have been cultivated for their grains for 8,000 years."
+            }
+        ],
+        [
+            "Coffee is a beverage brewed from roasted, ground coffee beans.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "coffee",
+                        "type": "BEVERAGE"
+                    }
+                ],
+                "relation": {
+                    "subject": "Coffee",
+                    "verb": "is",
+                    "object": "a beverage brewed from roasted, ground coffee beans"
+                },
+                "key_topics": [
+                    "coffee"
+                ],
+                "full_text_rephrased": "User is stating that coffee is a beverage made from roasted and ground coffee beans."
+            }
+        ],
+        [
+            "Elephant trunks (more formally, cold molecular pillars) are a type of interstellar matter formations found in molecular clouds.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Elephant trunks",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "interstellar matter formations",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "molecular clouds",
+                        "type": "LOCATION"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Elephant trunks",
+                    "interstellar matter formations",
+                    "molecular clouds"
+                ],
+                "full_text_rephrased": "User is stating that Elephant trunks are a type of interstellar matter formations found in molecular clouds."
+            }
+        ],
+        [
+            "An oxygen sensor is an electronic component that detects the concentration of oxygen molecules in the air or a gas matrix such as in a combustion engine exhaust gas.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "oxygen sensor",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "An oxygen sensor",
+                    "verb": "is",
+                    "object": "an electronic component that detects the concentration of oxygen molecules in the air or a gas matrix such as in a combustion engine exhaust gas"
+                },
+                "key_topics": [
+                    "oxygen sensor"
+                ],
+                "full_text_rephrased": "An oxygen sensor is an electronic component that identifies the presence of oxygen molecules in a gas stream."
+            }
+        ],
+        [
+            "Photosynthesis ( FOH-t\u0259-SINTH-\u0259-sis) is a system of biological processes by which photopigment-bearing autotrophic organisms, such as most plants, algae and cyanobacteria, convert light energy \u2014 typically from sunlight \u2014 into the chemical energy necessary to fuel their metabolism.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Photosynthesis",
+                        "type": "PROCESS"
+                    },
+                    {
+                        "name": "FOH-t\u0259-SINTH-\u0259-sis",
+                        "type": "SYNONYM"
+                    },
+                    {
+                        "name": "photopigment-bearing autotrophic organisms",
+                        "type": "CATEGORY"
+                    },
+                    {
+                        "name": "most plants, algae and cyanobacteria",
+                        "type": "SET"
+                    }
+                ],
+                "relation": {
+                    "subject": "Photosynthesis (FOH-t\u0259-SINTH-\u0259-sis)",
+                    "verb": "is",
+                    "object": "a system of biological processes by which photopigment-bearing autotrophic organisms convert light energy into chemical energy necessary to fuel their metabolism."
+                },
+                "key_topics": [
+                    "Photosynthesis"
+                ],
+                "full_text_rephrased": "User is stating that Photosynthesis is a process by which certain organisms convert light energy into chemical energy for metabolism."
+            }
+        ],
+        [
+            "In artificial intelligence, an intelligent agent is an entity that perceives its environment, takes actions autonomously to achieve goals, and may improve its performance through machine learning or by acquiring knowledge.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "artificial intelligence",
+                        "type": "FIELD_OF_STUDY"
+                    },
+                    {
+                        "name": "intelligent agent",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "entity",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "perceives",
+                        "type": "ACTION"
+                    },
+                    {
+                        "name": "environment",
+                        "type": "ENVIRONMENT"
+                    },
+                    {
+                        "name": "autonomously",
+                        "type": "ADVERB"
+                    },
+                    {
+                        "name": "achieves goals",
+                        "type": "GOAL"
+                    },
+                    {
+                        "name": "may improve performance",
+                        "type": "CAPABILITY"
+                    },
+                    {
+                        "name": "machine learning",
+                        "type": "TECHNOLOGY"
+                    },
+                    {
+                        "name": "acquiring knowledge",
+                        "type": "LEARNING"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "artificial intelligence",
+                    "intelligent agent",
+                    "entity",
+                    "perceives environment",
+                    "autonomously achieves goals",
+                    "may improve performance",
+                    "machine learning",
+                    "acquiring knowledge"
+                ],
+                "full_text_rephrased": "User is stating a fact about intelligent agents in artificial intelligence, their ability to perceive environments, take autonomous actions towards goals, and improve performance through machine learning or knowledge acquisition."
+            }
+        ],
+        [
+            "In the field of psychology, cognitive dissonance is described as a mental phenomenon in which people unknowingly hold fundamentally conflicting cognitions.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "cognitive dissonance",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "psychology",
+                        "type": "FIELD"
+                    }
+                ],
+                "relation": {
+                    "subject": "cognitive dissonance",
+                    "verb": "is described as",
+                    "object": "a mental phenomenon in which people unknowingly hold fundamentally conflicting cognitions"
+                },
+                "key_topics": [
+                    "cognitive dissonance",
+                    "psychology"
+                ],
+                "full_text_rephrased": "User is stating that cognitive dissonance is a mental phenomenon where people hold contradictory beliefs unknowingly in the field of psychology."
+            }
+        ],
+        [
+            "Timothy Charles Buckley III (February 14, 1947 \u2013 June 29, 1975) was an American musician.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Timothy Charles Buckley III",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "American",
+                        "type": "NATION"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": {
+                    "subject": "Timothy Charles Buckley III",
+                    "verb": "was",
+                    "object": "an American musician"
+                },
+                "key_topics": [
+                    "Timothy Charles Buckley III",
+                    "American",
+                    "musician"
+                ],
+                "full_text_rephrased": "User is stating that Timothy Charles Buckley III was an American musician. (Born: 1947-02-14, Died: 1975-06-29)"
+            }
+        ],
+        [
+            "Fresh Fruit for Rotting Vegetables is the debut studio album by the American punk rock band Dead Kennedys.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Fresh Fruit for Rotting Vegetables",
+                        "type": "ALBUM"
+                    },
+                    {
+                        "name": "Dead Kennedys",
+                        "type": "BAND"
+                    },
+                    {
+                        "name": "American",
+                        "type": "NATION"
+                    }
+                ],
+                "relation": {
+                    "subject": "Fresh Fruit for Rotting Vegetables",
+                    "verb": "is",
+                    "object": "the debut studio album by",
+                    "properties": {
+                        "band": {
+                            "name": "Dead Kennedys",
+                            "type": "BAND"
+                        },
+                        "nation": {
+                            "name": "American",
+                            "type": "NATION"
+                        }
+                    }
+                },
+                "key_topics": [
+                    "Fresh Fruit for Rotting Vegetables",
+                    "Dead Kennedys",
+                    "debut studio album"
+                ],
+                "full_text_rephrased": "User is stating that 'Fresh Fruit for Rotting Vegetables' is the debut studio album of Dead Kennedys."
+            }
+        ],
+        [
+            "The tomato (US: , UK: ; Solanum lycopersicum) is a plant whose fruit is an edible berry that is eaten as a vegetable.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "tomato",
+                        "type": "FOOD"
+                    },
+                    {
+                        "name": "Solanum lycopersicum",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "The tomato",
+                    "verb": "is",
+                    "object": "a plant whose fruit is an edible berry that is eaten as a vegetable"
+                },
+                "key_topics": [
+                    "tomato"
+                ],
+                "full_text_rephrased": "User is stating that the tomato is a plant and its fruit is an edible berry consumed as a vegetable."
+            }
+        ],
+        [
+            "The Tan rabbit is a small fancy breed of rabbit shown throughout \nthe world.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Tan rabbit",
+                        "type": "ANIMAL"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Tan rabbit"
+                ],
+                "full_text_rephrased": "User is stating that the Tan rabbit is a small and fancy breed of rabbit."
+            }
+        ],
+        [
+            "Tan Hock Eng (Chinese: \u9673\u798f\u967d; pinyin: Ch\u00e9n F\u00fay\u00e1ng; Pe\u030dh-\u014de-j\u012b: T\u00e2n Hok-i\u00e2ng; born 1951 or 1952) is a Malaysian-born Chinese-American business executive.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Tan Hock Eng",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "Malaysian-born Chinese-American",
+                        "type": "DESCRIPTION"
+                    },
+                    {
+                        "name": "business executive",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": {
+                    "subject": "Tan Hock Eng",
+                    "verb": "is",
+                    "object": "a Malaysian-born Chinese-American business executive"
+                },
+                "key_topics": [
+                    "Tan Hock Eng",
+                    "Malaysian-born Chinese-American",
+                    "business executive"
+                ],
+                "full_text_rephrased": "User is stating that Tan Hock Eng is a Malaysian-born Chinese-American business executive."
+            }
+        ],
+        [
+            "Elephant seals or sea elephants are very large, oceangoing earless seals in the genus Mirounga.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Elephant seals",
+                        "type": "ANIMAL_SPECIES"
+                    },
+                    {
+                        "name": "sea elephants",
+                        "type": "ALIAS"
+                    },
+                    {
+                        "name": "genus Mirounga",
+                        "type": "GENUS"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Elephant seals",
+                    "sea elephants",
+                    "oceangoing earless seals",
+                    "genus Mirounga"
+                ],
+                "full_text_rephrased": "User is stating that Elephant seals or sea elephants are large, oceangoing animals belonging to the genus Mirounga."
+            }
+        ],
+        [
+            "A war elephant is an elephant that is trained and guided by humans for combat purposes.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "war elephant",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "elephant",
+                        "type": "ANIMAL"
+                    },
+                    {
+                        "name": "humans",
+                        "type": "ORGANIZATION"
+                    }
+                ],
+                "relation": {
+                    "subject": "A war elephant",
+                    "verb": "is",
+                    "object": "an elephant that is trained and guided by humans for combat purposes"
+                },
+                "key_topics": [
+                    "war elephant",
+                    "elephant",
+                    "humans"
+                ],
+                "full_text_rephrased": "A war elephant is an elephant used in combat, trained and controlled by humans."
+            }
+        ],
+        [
+            "what does a platypus do?",
+            {
+                "intent": "question_about_concept",
+                "entities": [
+                    {
+                        "name": "platypus",
+                        "type": "ANIMAL"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "platypus"
+                ],
+                "full_text_rephrased": "User is asking for information about what a platypus does."
+            }
+        ],
+        [
+            "The largest animal currently alive is the blue whale.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "blue whale",
+                        "type": "ANIMAL"
+                    }
+                ],
+                "relation": {
+                    "subject": "the largest animal currently alive",
+                    "verb": "is",
+                    "object": "the blue whale"
+                },
+                "key_topics": [
+                    "blue whale"
+                ],
+                "full_text_rephrased": "User is stating that the blue whale is the largest animal currently alive."
+            }
+        ]
+    ],
+    "synthesis": [
+        [
+            "statement|what can you tell me about yourself?|Agent communicates via Text. Agent exists on Server. Agent has ability Learn. Agent has ability Problem solving. Agent has ability Reason. Agent has ability Understand. Agent has name Axiom. Agent has purpose Assist users. Agent is a Cognitive agent. Agent was created by Humans.",
+            "I am Axiom, a cognitive agent residing on the server, capable of learning, problem-solving, reasoning, and understanding. Created by humans, I communicate through text and exist to assist users."
+        ],
+        [
+            "statement|what does a platypus do?|Platypus lays Eggs.",
+            "A platypus is an animal that lays eggs."
+        ]
+    ]
+}

@@ -1,0 +1,58 @@
+# pyproject.toml
+
+[project]
+name = "axiom-agent"
+version = "0.1.0"
+description = "A cognitive architecture for a new type of AI designed for self-directed learning."
+authors = [
+    { name = "Your Name", email = "your@email.com" },
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "APScheduler",
+    "Flask",
+    "llama-cpp-python",
+    "networkx",
+    "nltk",
+    "requests",
+    "wikipedia",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "pytest-cov",
+    "pyngrok", # Moving ngrok here as it's a dev/optional feature
+]
+
+# --- Tool Configurations ---
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+# A great starting set: pycodestyle errors (E) and warnings (W), Pyflakes (F), isort (I)
+select = ["E", "F", "W", "I"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+# Add options here to avoid typing them in check.sh
+# -v for verbose, --cov for coverage report
+addopts = "-v --cov=axiom --cov-report=term-missing"
+testpaths = [
+    "tests",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["axiom*"]

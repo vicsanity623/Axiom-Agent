@@ -2,278 +2,100 @@
 
 This document outlines the current status, planned features, and architectural improvements for the Axiom Agent project.
 
-## ✅ Core Architecture & Capabilities (Complete & Stable)
+## ✅ Genesis Phase: Autonomous Local Agent (Complete & Stable)
 
-This foundational genesis phase is complete. The agent is a fully autonomous, reasoning, and self-correcting learning entity with a robust user interface.
+This foundational phase is **complete**. The project has successfully evolved from a prototype into a stable, high-performance cognitive agent capable of autonomous learning, logical reasoning, and robust deployment, all on local CPU hardware. This phase serves as the stable bedrock for all future development.
 
-- **✅ Hybrid Cognitive Architecture:** The agent's mind is a hybrid of a symbolic **Knowledge Graph** (for verifiable, persistent memory) and a neural **Universal Interpreter** (for flexible language understanding), giving it the strengths of both paradigms.
-- **✅ Multi-Hop Logical Reasoning:** The agent can answer complex questions by traversing its knowledge graph and connecting multiple facts to infer new conclusions.
-- **✅ Dual-Cycle Autonomous Learning (Study & Discovery):** The agent's learning is not just passive. It operates on a sophisticated "Cognitive Scheduler" with two distinct modes:
-    - **The Study Cycle (Knowledge Integration):** On a frequent timer, the agent introspectively reviews its own knowledge. It then uses a specialized "curiosity" tool to generate its own follow-up questions about concepts it wants to understand more deeply, actively seeking to enrich its own brain.
-    - **The Discovery Cycle (Knowledge Acquisition):** On a less frequent timer, the agent actively seeks out brand new, unknown topics from the outside world, ensuring it continues to broaden its horizons.
-- **✅ Temporal Reasoning:** The agent can perceive, learn, and reason with time-based facts. It understands the context of words like "now" or "currently" and can determine the most relevant fact from a series of historical events.
-- **✅ Dual-Mode Learning System:** The agent possesses two distinct but complementary mechanisms for learning and self-correction.
-    - **The Curiosity Engine (Implicit Correction):** Actively identifies when new information conflicts with its existing world model and autonomously asks clarifying questions to resolve its own confusion.
-    - **User-Driven Correction (Explicit Correction):** Allows a user to take direct control of the learning process by using a `correction:` command to override, punish, and replace incorrect facts in the agent's brain.
-- **✅ Resilient Knowledge Harvester:** The agent's tool for acquiring knowledge is designed for resilience. It uses a hybrid discovery model (Wikipedia Categories, NYT Archives), maintains a "rejection memory" to avoid getting stuck on unlearnable topics, and uses a "Simplicity Filter" to discard grammatically complex facts.
-- **✅ Vast Knowledge Base Seeding:** The agent begins its life with a large, pre-seeded set of foundational knowledge about itself, the world, and abstract concepts.
+### ✅ **Core Architecture & Capabilities**
+- **Hybrid Cognitive Architecture:** Combines a symbolic **Knowledge Graph** (NetworkX) with a neural **Universal Interpreter** (LLM) for verifiable memory and flexible understanding.
+- **Multi-Hop Logical Reasoning:** Traverses the knowledge graph to infer conclusions from connected facts.
+- **Dual-Cycle Autonomous Learning:** Employs a "Cognitive Scheduler" for continuous self-improvement:
+    - **Study Cycle:** Introspectively reviews and enriches existing knowledge.
+    - **Discovery Cycle:** Actively seeks out and learns entirely new topics.
+- **Dual-Mode Learning System:** Possesses both an autonomous **Curiosity Engine** for resolving internal conflicts and a **User-Driven Correction** mechanism for explicit instruction.
+- **Resilient Knowledge Harvester:** Uses multiple sources (Wikipedia, DDG) and intelligent filters to acquire new, high-quality knowledge.
+- **Vast Knowledge Base Seeding:** Initializes with a large, pre-seeded set of foundational knowledge.
 
-## ✅ Scalability & Performance Optimization (Genesis Phase Complete)
+### ✅ **Scalability & Performance**
+- **Knowledge Graph Engine Upgrade:** The core graph is powered by the battle-tested, C-optimized **`NetworkX`** engine, ensuring scalability.
+- **Multi-Layer Caching System:** Drastically reduces query latency and LLM calls via in-memory **Reasoning Caches** (`lru_cache`) and on-disk **Interpreter/Synthesizer Caches**.
+- **Bombproof Stability:** All critical, show-stopping bugs (segmentation faults, amnesia on restart, autonomous cycle failures) have been identified and **permanently fixed**.
+- **Verified Performance:** Profiling confirms Python-level bottlenecks are eliminated, with cached queries resolving in **under 0.01 seconds**.
 
-This critical architectural overhaul is complete. The agent's core has been re-engineered for long-term stability and high-performance operation on local CPU hardware.
+### ✅ **Professional Development & Deployment Workflow**
+- **Structured Project Layout:** The codebase has been professionally reorganized into a clean package structure (`axiom/`, `setup/`, `tests/`, etc.) for maintainability and scalability.
+- **Centralized Configuration (`pyproject.toml`):** The project now uses the modern standard for managing dependencies and tool settings, replacing multiple legacy `requirements.txt` files.
+- **Automated Quality Assurance (`check.sh`):** A comprehensive check script automates a full suite of software quality tests with a single command:
+    - **Code Formatting (`Ruff Format`):** Enforces a consistent, professional code style across the entire project.
+    - **Linting (`Ruff Check`):** Statically analyzes code to catch potential bugs, style errors, and anti-patterns before they become runtime issues.
+    - **Static Type Checking (`MyPy`):** Verifies type hints to prevent a whole class of common bugs and improve code reliability.
+    - **Unit Testing (`Pytest`):** Runs an automated test suite to ensure core components function as expected.
+- **Versioned Model Rendering (`.axm`):** A custom "Axiom Mind" format packages the agent's brain and cache into a single, portable snapshot.
+- **Complete Toolchain:** A full suite of scripts enables a professional "Offline Training, Online Inference" workflow:
+    - **`autonomous_trainer.py`:** A headless script for 24/7 autonomous learning.
+    - **`cnt.py`:** A command-line tool for manual, interactive training.
+    - **`render_model.py`:** Packages the trained brain into a new `.axm` model.
+    - **`app_model.py`:** A read-only Flask server that deploys the latest model for safe user interaction.
 
-- **✅ Knowledge Graph Engine Upgrade:** The original, custom Python-based graph has been successfully replaced with a **`NetworkX`** engine. This provides a battle-tested, C-optimized foundation that eliminates traversal bottlenecks and ensures the agent can scale to tens of thousands of facts without performance degradation.
-- **✅ Multi-Layer Caching System:** A sophisticated, multi-layer caching system has been implemented to dramatically reduce query latency:
-    - **Reasoning Cache (`lru_cache`):** The most computationally expensive function—multi-hop graph traversal—is now cached in memory. This prevents the agent from re-thinking the same logical paths, resulting in an exponential performance increase for repeated queries.
-    - **Interpreter & Synthesizer Cache:** All calls to the underlying LLM for both interpretation and sentence synthesis are cached to disk, ensuring that identical language tasks are instantaneous.
-- **✅ Bombproof Stability:** The notoriously unstable **Discovery Cycle** has been permanently fixed. A new "pre-filtering" and sanitization guardrail now protects the core LLM from malformed, real-world data, eliminating the segmentation faults that caused frequent crashes.
-- **✅ Verified Performance:** The success of this phase has been empirically verified using **`cProfile`** and custom timing tests. The results confirmed that all Python-level bottlenecks have been eliminated and that cached query times are now under the **0.01-second** mark, far exceeding the initial 2-second goal.
-
-## ✅ Model Rendering & Deployment (Complete & Stable)
-
-- **✅ Versioned Model Format (`.axm`):** A custom "Axiom Mind" file format packages the agent's brain and cache into a single, portable, versioned snapshot.
-- **✅ Model Renderer:** A dedicated script (`render_model.py`) allows for the easy creation of new model versions after training milestones.
-- **✅ Read-Only Inference App:** A separate, lightweight chat application (`chat_app.py`) can load any `.axm` model, allowing for safe, distributable deployment of a "finished" agent that cannot learn or change its mind.
-- **✅ Remote Access with `ngrok`:** Both the training and inference apps have integrated support for exposing the local server to the internet via an optional `--ngrok` flag.
-
-## ✅ User Interface & Experience (Complete & Stable)
-
-- **✅ Multi-Conversation Management:** The UI supports multiple, persistent chat sessions, which are saved to the browser's local storage.
-- **✅ Chat History Sidebar:** Users can easily navigate, review, and delete previous conversations.
-- **✅ Rich Message Interaction:** Individual chat bubbles feature a menu with a cross-browser compatible "Copy to Clipboard" function.
-- **✅ PWA (Progressive Web App):** The agent is fully configured as an installable web application with a service worker and custom icons, allowing for a native-like experience on both desktop and mobile.
-- **✅ Thread-Safe Operation:** A global lock protects the agent from memory corruption during simultaneous user interaction and autonomous learning cycles.
+### ✅ **User Interface & Experience**
+- **Multi-Conversation Management:** A robust UI with persistent chat sessions saved to local storage.
+- **Full PWA (Progressive Web App) Support:** The agent is installable on desktop and mobile for a native-like experience.
+- **Thread-Safe Operation:** A global lock ensures memory integrity during simultaneous user chats and autonomous learning cycles.
 
 ---
 
 ## 🛑 On Hold / Deprecated Features
 
-*Features that have been implemented but are currently unstable or have been superseded by architectural changes.*
+*Features that are architecturally sound but have been temporarily disabled to prioritize core stability and performance. They can be revisited in future development phases.*
 
 ### 1. Dynamic Fact Salience (`access_count`)
-- **Status:** **`On Hold / Partially Deprecated`**. The mechanism for tracking the `access_count` of facts during queries was found to be incompatible with the high-performance `lru_cache` system.
-- **Path Forward:** This feature has been temporarily disabled in favor of massive performance gains. It can be re-introduced in a future phase with a more sophisticated, cache-aware architecture if needed.
+- **Status:** **`On Hold / Partially Deprecated`**. Incompatible with the current high-performance `lru_cache` system.
+- **Path Forward:** Can be re-introduced with a more sophisticated, cache-aware architecture.
 
 ### 2. Conversational Context (Short-Term Memory)
-- **Status:** **`On Hold / Disabled`**. The architectural approach of using a separate LLM call to resolve context has proven to be unreliable. The feature has been disabled to ensure core system stability.
-- **Path Forward:** This feature requires a complete architectural rethink. A future solution might involve a more powerful base model or a different logical approach entirely.
-
----
-
-## Phase 1: Local CPU Optimization & Stability (Completed)
-
-This foundational phase focused on transforming the agent from a fragile prototype into a stable, efficient, and scalable system capable of running reliably on local CPU hardware (iMac i5). All objectives for this phase have been successfully met.
-
-### Flaw Addressed: Scalability of the Knowledge Graph
-
--   **Milestone Achieved:** The agent can now handle a large-scale knowledge graph with fast query times, laying the groundwork for massive, lifelong learning.
-
--   **Completed Steps & Successes:**
-    1.  **Replaced Core Graph Engine:** The original, slow, custom dictionary-based graph in `graph_core.py` was successfully replaced with a high-performance `NetworkX` `MultiDiGraph`. This provides C-optimized traversals and robust, industry-standard data structures.
-    2.  **Implemented Multi-Layer Caching:** To ensure high performance, a two-layer caching system was implemented in `cognitive_agent.py` and `universal_interpreter.py`:
-        -   **Reasoning Cache (`lru_cache`):** The most expensive graph traversal function, `_gather_facts_multihop`, is now cached.
-        -   **Synthesis Cache (Dictionary):** The final LLM-based language generation step in `synthesize` is also cached.
-        -   **Bombproof Invalidation:** The caches are intelligently and automatically cleared the moment the agent learns a new fact, preventing the use of stale data.
-    3.  **Performance Profiling:** Using Python's `cProfile`, we empirically proved that over 95% of the system's runtime was spent in the LLM. This confirms that our Python logic for graph traversal, caching, and autonomous cycles is now highly efficient.
-    4.  **Achieved Success Metrics:**
-        -   **Query Speed:** The `verify.py` script confirmed that cached queries now resolve in **~0.0005 seconds**, vastly exceeding the sub-2-second goal.
-        -   **System Stability:** All known critical bugs, including fatal segmentation faults, amnesia on restart, and Study Cycle errors, have been resolved. The agent's autonomous learning cycles have been proven stable.
+- **Status:** **`On Hold / Disabled`**. The initial LLM-based approach proved unreliable.
+- **Path Forward:** Requires a complete architectural rethink, potentially leveraging a more powerful base model or a different logical framework.
 
 ---
 
 ## Future Development Roadmap (Next 12 Months)
 
-This section outlines the strategic, multi-phase plan for the agent's continued development. The plan is structured around addressing core architectural flaws in stages, leveraging free-tier cloud resources to achieve massive scale and intelligence without incurring costs.
+With the local agent now stable and robust, the strategic focus shifts to **overcoming the physical limitations of a single machine**. The next phases will leverage free-tier cloud resources to give the agent a massively scaled memory and enhanced cognitive abilities, all without incurring costs.
 
 ### Free Cloud GPU/Resource Strategy
 
--   **Google Colab**: Free T4 GPU (up to 16GB VRAM), 12-hour session limits, idle timeouts after 90 minutes. You can run Jupyter notebooks for code execution, model inference, or simulations. Restart sessions as needed; use Google Drive (free) for persistent storage.
--   **Kaggle**: Free P100/T4 GPUs, 9-hour kernels, 20GB persistent datasets. Ideal for data-intensive tasks like knowledge sourcing or benchmarking; kernels can be scheduled or run interactively.
--   **AWS SageMaker Studio Lab**: Completely free ML environment with GPU access (T4-equivalent), 15GB storage, no time limits per session but overall usage quotas (e.g., 4 hours GPU/day). Supports full Python setups for fine-tuning or long runs.
--   **Hugging Face Spaces/Lightning.ai**: Free GPU for model hosting/demos (limited runtime, e.g., 1-2 hours) or student/hobbyist plans; useful for quick inference bursts.
-
-These resources cover all future GPU needs in the roadmap. Limitations will be managed by saving frequent checkpoints and rotating services if quotas are hit.
+The entire future roadmap is designed to be executed using a suite of powerful, free-tier cloud services. This allows for massive scaling without financial investment.
+- **Primary Tools:** Google Colab, Kaggle Kernels, AWS SageMaker Studio Lab.
+- **Persistent Storage:** Google Drive.
+- **Strategy:** Distribute computationally intensive tasks (large-scale graph queries, model fine-tuning) to these services while keeping the core agent logic portable.
 
 ---
 
-## Flaw 1: Scalability of the Knowledge Graph
+### **Phase 2: The Distributed Mind (Cloud Knowledge Graph Integration)**
+- **Goal:** Overcome local RAM/storage limits by migrating the knowledge graph to a free-tier cloud database, enabling the agent to scale its memory to hundreds of thousands of concepts.
+- **Milestone:** Agent's brain lives in a persistent, scalable cloud database (e.g., Neo4j AuraDB Free, Redis Cloud).
+- **Key Steps:**
+    1.  **Migrate Graph Storage:** Replace `NetworkX` file I/O in `graph_core.py` with a connector to a cloud graph database.
+    2.  **Refactor Learning Cycles:** Update `knowledge_harvester.py` to perform queries and writes directly against the cloud database.
+    3.  **Implement Efficient Syncing:** Develop a mechanism in `cloud_utils.py` to sync or "cache" relevant sub-graphs from the cloud for fast local reasoning.
+    4.  **Introduce Graph Pruning:** Implement a "salience decay" mechanism to periodically prune old, unused edges from the cloud graph to keep it lean.
+- **Success Metrics:** Agent can successfully read/write to the cloud graph. The local agent can operate with a small memory footprint by only caching active sub-graphs. Graph size can grow beyond local machine limits.
 
-### Phase 1: Short-Term Fixes (0-3 Months) - CPU-Efficient Optimization
-- **Status:** **COMPLETED**
+### **Phase 3: The Enlightened Interpreter (LLM Independence & Accuracy)**
+- **Goal:** Reduce reliance on a single, general-purpose LLM for interpretation, leading to higher accuracy, fewer errors, and the ability to process more complex information.
+- **Milestone:** The `UniversalInterpreter` evolves into a hybrid, rule-based/ensemble system.
+- **Key Steps:**
+    1.  **Implement a Hybrid Parser:** Integrate a fast, local NLP library (like `spaCy`) into `universal_interpreter.py` to handle simple, unambiguous sentences without needing an LLM call.
+    2.  **Develop an Ensemble Model:** For complex sentences, query multiple small, efficient models (e.g., Phi-2, Gemma 2B running in a Colab GPU instance) and use a "voting" system to determine the most likely correct interpretation.
+    3.  **Self-Correction via Web Verification:** When the agent detects a knowledge conflict, it will use its cloud-bursting capability to perform a web search to verify the conflicting facts and autonomously correct its own brain.
+    4.  **Fine-Tuning:** Use the history of successful interpretations to generate a dataset for fine-tuning a small, specialized interpretation model in SageMaker Studio Lab.
+- **Success Metrics:** >60% of simple statements are interpreted locally without an LLM call. Interpretation accuracy for complex statements increases to >90%.
 
-### Phase 2: Medium-Term Enhancements (3-6 Months) - Free Cloud Database Integration
-- **Milestone Explanation**: Scale to 500k nodes by storing the graph in free cloud databases, offloading storage/querying from the local iMac's limited RAM.
-- **Steps Explanation**:
-  1. **Migrate to free graph DB**: Use Neo4j Aura free tier or RedisGraph (via Redis Cloud free).
-     - Why: Local JSON files bloat; clouds handle large data without crashing the local machine.
-     - How: Sign up for free accounts; use Python drivers to connect.
-  2. **Partition graph**: Label nodes by domains (e.g., "science" vs. "history") for loading only needed parts.
-     - Why: Reduces memory load during syncs.
-     - How: Add labels in queries (e.g., Neo4j Cypher: `MATCH (n:Science)`).
-  3. **Salience tweaks**: Add decay (e.g., reduce `access_count` by 1% daily) to prune unused edges.
-     - Why: Keeps graph lean, preventing bloat.
-     - How: Simple math in code.
-  4. **Test in Colab**: Upload the project to Colab and run simulations with larger data.
-     - Why: Colab's free GPU/RAM tests scalability beyond the iMac.
-- **Files Modified or Added**:
-  - Modify `graph_core.py`: Add cloud connection code.
-  - Modify `knowledge_harvester.py`: Update cycles to query the cloud.
-  - Add `cloud_utils.py`: New file for helper functions like syncing.
-- **Resources/Tools**: Neo4j Aura/Redis Cloud, Google Colab.
-- **Success Metrics**: Graph syncs to cloud without errors. Pruning reduces size by 15%.
-
-### Phase 3: Long-Term Optimizations (6-12+ Months) - Hybrid Scaling
-- **Milestone Explanation**: Enable "near-unlimited" growth by distributing across free services.
-- **Steps Explanation**:
-  1. **Distributed free storage**: Use Kaggle datasets for backups; shard graph across multiple free accounts.
-  2. **Offload traversals**: Run complex queries in SageMaker Studio Lab (free GPU).
-  3. **Compression**: Use `zlib` to zip graph data.
-  4. **Benchmark**: Compare reasoning to LLMs using cloud runs.
-- **Files Modified or Added**:
-  - Modify `graph_core.py`: Add sharding logic.
-  - Add `benchmark.py`: New script for tests against LLMs.
-- **Resources/Tools**: Kaggle, SageMaker, zlib.
-- **Success Metrics**: Handle 1M+ nodes. Cloud queries 5x faster than local.
-
----
-
-## Flaw 2: LLM Dependency and Interpretation Risks
-
-### Phase 1: Short-Term Fixes (0-3 Months) - CPU Prompt Optimization
-- **Milestone Explanation**: Reduce parsing errors by 40% on the iMac.
-- **Steps Explanation**:
-  1. **Refine prompts**: Add few-shot examples to LLM calls.
-  2. **Validation layers**: Use Pydantic to check JSON output.
-  3. **Simpler inputs**: Break complex sentences in the filter.
-  4. **Test**: Create a local `test_dataset.txt` and score accuracy.
-- **Files Modified or Added**:
-  - Modify `universal_interpreter.py`: Update `interpret()` prompts and add validation.
-  - Add `test_dataset.txt`.
-- **Resources/Tools**: Pydantic.
-- **Success Metrics**: Manual scoring on dataset shows <15% errors.
-
-### Phase 2: Medium-Term Enhancements (3-6 Months) - Free GPU Ensemble
-- **Milestone Explanation**: Achieve 85% accuracy by combining models, using GPU bursts.
-- **Steps Explanation**:
-  1. **Multi-model**: Add a smaller model (e.g., Phi-2 GGUF) for voting.
-  2. **Bias checks**: Implement rule-based flags.
-  3. **Cloud bursts**: Run tough interpretations in Colab GPU.
-  4. **User loop**: Batch interpretations for user review.
-- **Files Modified or Added**:
-  - Modify `universal_interpreter.py`: Add ensemble logic.
-  - Add `cloud_inference.py`: For GPU offloading.
-- **Resources/Tools**: Colab/Kaggle, Hugging Face.
-- **Success Metrics**: Tested handling of complexity; 3x speed improvement.
-
-### Phase 3: Long-Term Optimizations (6-12+ Months) - Reduced Dependency
-- **Milestone Explanation**: Cut LLM use for interpretation, targeting >90% accuracy.
-- **Steps Explanation**:
-  1. **Custom quantization**: Lower model bit-rate for speed.
-  2. **Rule-based hybrids**: Use `spaCy` for basic entity recognition.
-  3. **Self-data**: Generate and fine-tune a smaller model in SageMaker.
-  4. **Evaluate**: Cloud benchmarks.
-- **Files Modified or Added**:
-  - Modify `universal_interpreter.py`: Add hybrid parsers.
-  - Add `fine_tune_script.py`.
-- **Resources/Tools**: llama.cpp, SageMaker, spaCy.
-- **Success Metrics**: 60% fewer LLM calls for interpretation; high accuracy.
-
----
-
-## Flaw 3: Autonomous Learning Loops
-
-### Phase 1: Short-Term Fixes (0-3 Months) - CPU-Adaptive Loops
-- **Milestone**: Stable, faster cycles with adaptive timing.
-- **Steps**: Implement persistent memory for rejected topics; use `psutil` to create dynamic timers based on CPU load; local caches for sources; simulate.
-- **Files**: Modify `knowledge_harvester.py`.
-- **Resources**: `psutil` library.
-- **Metrics**: No cycle hangs or crashes.
-
-### Phase 2: Medium-Term Enhancements (3-6 Months) - Smarter Curation
-- **Milestone**: Denser, more relevant knowledge acquisition.
-- **Steps**: Use templates for question generation; re-introduce salience for topic selection; use Kaggle APIs for data sourcing; integrate.
-- **Files**: Modify `knowledge_harvester.py`.
-- **Resources**: Kaggle APIs.
-- **Metrics**: Lower rate of failed learning attempts.
-
-### Phase 3: Long-Term Optimizations (6-12+ Months) - Autonomous Scaling
-- **Milestone**: An efficient, self-driven learning curriculum.
-- **Steps**: Develop heuristics for reinforcement learning (rewarding successful topics); fuse multiple APIs; set configurable learning goals; compare.
-- **Files**: Add `rl_heuristics.py`.
-- **Resources**: SageMaker.
-- **Metrics**: Achieves learning efficiency comparable to a baseline LLM.
-
----
-
-## Flaw 4: User Reliance and Self-Correction
-
-### Phase 1: Short-Term Fixes (0-3 Months) - Basic Rules
-- **Milestone**: Partial self-resolution of knowledge conflicts.
-- **Steps**: Implement rule-based conflict detection; queue conflicts for later review; simulate.
-- **Files**: Modify `cognitive_agent.py`.
-- **Resources**: Local.
-- **Metrics**: Fewer conversation stalls due to contradictions.
-
-### Phase 2: Medium-Term Enhancements (3-6 Months) - Probabilistic Tools
-- **Milestone**: High degree of autonomous error correction.
-- **Steps**: Add probabilities to facts; use web searches in Colab to verify conflicting facts; stabilize context memory.
-- **Files**: Modify `graph_core.py`.
-- **Resources**: Colab.
-- **Metrics**: Increased independence from user correction.
-
-### Phase 3: Long-Term Optimizations (6-12+ Months) - Advanced Awareness
-- **Milestone**: Minimal reliance on the user for knowledge integrity.
-- **Steps**: Implement meta-reasoning about knowledge confidence; use cloud services for large-scale verification; long-duration runs.
-- **Files**: Add `meta_reasoning.py`.
-- **Resources**: Kaggle.
-- **Metrics**: High adaptability to new, potentially incorrect information.
-
----
-
-## Flaw 5: Security and Stability
-
-### Phase 1: Short-Term Fixes (0-3 Months) - Local Safeguards
-- **Milestone**: High uptime and resilience to deadlocks.
-- **Steps**: Implement thread timeouts; enhance logging for easier debugging; stress test.
-- **Files**: Modify `app.py`.
-- **Resources**: Local.
-- **Metrics**: Zero crashes during extended local runs.
-
-### Phase 2: Medium-Term Enhancements (3-6 Months) - Feature Stability
-- **Milestone**: All features can be enabled without compromising stability.
-- **Steps**: Optimize and stabilize context memory; add feature toggles/controls.
-- **Files**: Modify `universal_interpreter.py`.
-- **Resources**: Local.
-- **Metrics**: Full feature set is stable.
-
-### Phase 3: Long-Term Optimizations (6-12+ Months) - Cloud Robustness
-- **Milestone**: Agent is ready for load testing and potential deployment.
-- **Steps**: Containerize the application with Docker; perform code reviews for security.
-- **Files**: Add `Dockerfile`.
-- **Resources**: Docker.
-- **Metrics**: Can handle bursts of simulated requests.
-
----
-
-## Flaw 6: General Overheads
-
-### Phase 1: Short-Term Fixes (0-3 Months) - Efficiency Tweaks
-- **Milestone**: Reduced CPU and memory footprint.
-- **Steps**: Experiment with 4-bit quantization for the LLM; optimize all data caches.
-- **Files**: Modify `universal_interpreter.py`.
-- **Resources**: llama.cpp.
-- **Metrics**: Faster startup and cycle execution times.
-
-### Phase 2: Medium-Term Enhancements (3-6 Months) - Cloud Migration
-- **Milestone**: A hybrid system capable of 24/7 operation.
-- **Steps**: Migrate autonomous cycles to run in Colab; implement rules for when to use local vs. cloud resources.
-- **Files**: Add `cloud_migration.py`.
-- **Resources**: Free cloud services.
-- **Metrics**: Can sustain learning sessions for 24 hours.
-
-### Phase 3: Long-Term Optimizations (6-12+ Months) - Sustainable Scaling
-- **Milestone**: A fully scalable, sustainable, and powerful learning architecture.
-- **Steps**: Create automated restart/recovery scripts for cloud sessions; implement ethical safeguards for autonomous learning.
-- **Files**: Modify `app.py`, add deployment scripts.
-- **Resources**: Multiple cloud accounts.
-- **Metrics**: Competes with baseline benchmarks for knowledge acquisition.
+### **Phase 4: The Autonomous Scholar (Advanced Curriculum Learning)**
+- **Goal:** Evolve the agent's learning from random discovery to a strategic, goal-oriented "curriculum."
+- **Milestone:** The agent can autonomously set and pursue learning goals.
+- **Key Steps:**
+    1.  **Develop a Goal System:** Implement a mechanism for the agent to set high-level learning goals (e.g., "Understand quantum physics").
+    2.  **Curriculum Generation:** When a goal is set, the agent will use its tools to generate a curriculum of prerequisite topics (e.g., "First, I must learn what an atom is. Then, what a subatomic particle is.").
+    3.  **Reinforcement Heuristics:** Implement a simple reinforcement system in `rl_heuristics.py` that "rewards" the agent for learning facts related to its current curriculum goal, making it more likely to study related topics.
+- **Success Metrics:** The agent demonstrates the ability to learn a complex topic by systematically exploring its foundational concepts first. The knowledge graph shows dense, interconnected clusters of knowledge around specific domains.

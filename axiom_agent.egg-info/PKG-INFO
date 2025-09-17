@@ -1,3 +1,26 @@
+Metadata-Version: 2.4
+Name: axiom-agent
+Version: 0.1.0
+Summary: A cognitive architecture for a new type of AI designed for self-directed learning.
+Author-email: Your Name <your@email.com>
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: APScheduler
+Requires-Dist: Flask
+Requires-Dist: llama-cpp-python
+Requires-Dist: networkx
+Requires-Dist: nltk
+Requires-Dist: requests
+Requires-Dist: wikipedia
+Provides-Extra: dev
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: pyngrok; extra == "dev"
+Dynamic: license-file
+
 # Axiom Agent
 
 Axiom is not a chatbot. It is a cognitive architecture—a framework for a new type of artificial intelligence designed to achieve genuine understanding through continuous, self-directed learning and introspection. This project is not building a product; it is cultivating a mind.
@@ -26,75 +49,70 @@ The initial Genesis Phase of development is complete. Axiom is now a stable, hig
 
 ### Cognitive & Reasoning Abilities
 *   **Dual-Cycle Autonomous Learning:** The agent's learning is not just passive; it operates on a "Cognitive Scheduler" with two distinct modes:
-    -   **The Study Cycle:** The agent introspectively reviews its own knowledge and generates its own follow-up questions to deepen its understanding.
-    -   **The Discovery Cycle:** The agent actively seeks out brand new topics from the outside world, ensuring it continues to broaden its horizons.
+    -   **The Study Cycle:** The agent introspectively reviews its own knowledge and generates its own follow-up questions to deepen its understanding. This is the agent's "homework."
+    -   **The Discovery Cycle:** The agent actively seeks out brand new topics from the outside world, ensuring it continues to broaden its horizons. This is the agent "going to school."
 *   **Persistent, Lifelong Learning:** Every fact the agent learns is permanently integrated into its brain. The agent running today is smarter than it was yesterday.
 *   **Multi-Hop Logical Reasoning:** Axiom can answer questions it has never seen before by connecting multiple known facts. This is a true act of reasoning, not just pattern matching.
-*   **Self-Correction:** The agent possesses both an autonomous **Curiosity Engine** to resolve internal conflicts and a **User-Driven Correction** mechanism for explicit instruction.
+*   **The Curiosity Engine (Implicit Correction):** The agent can recognize when new information conflicts with its existing world model. It formulates a clarifying question and uses feedback to actively correct its own brain.
+*   **User-Driven Correction:** A user can act as a teacher, explicitly overriding and replacing incorrect facts.
 
-### Professional Development & Deployment
-*   **Automated Quality Assurance:** A single command (`./check.sh`) runs a full suite of static analysis tools to ensure code is clean, consistent, and bug-free before deployment.
-    -   **`Ruff`:** For lightning-fast code formatting and linting.
-    -   **`MyPy`:** For robust static type checking.
-    -   **`Pytest`:** For running the automated unit test suite.
-*   **Modern Python Packaging:** The project uses a central `pyproject.toml` to manage all dependencies and tool configurations, adhering to the latest standards.
-*   **Offline Training, Online Inference:** A professional toolchain separates training from deployment:
-    - **Training Scripts (`autonomous_trainer.py`, `cnt.py`):** Learn new knowledge safely offline.
-    - **Model Renderer (`render_model.py`):** Package the trained brain into a versioned `.axm` snapshot.
-    - **Inference Server (`app_model.py`):** A lightweight, read-only server that deploys a finished model for safe interaction.
-*   **Polished UI & PWA:** A custom dark mode theme, multi-conversation management, and Progressive Web App configuration provide a distinct and native-like experience.
+### Professional Deployment Workflow
+*   **Versioned Model Rendering (`.axm`):** A custom "Axiom Mind" file format and a dedicated renderer allow for the creation of stable, versioned snapshots of the agent's brain after training.
+*   **Offline Training, Online Inference:** The project is now structured with a professional toolchain that separates training from deployment:
+    - **Training Scripts (`autonomous_trainer.py`, `cnt.py`):** Learn new knowledge safely offline, continuously updating the source brain files.
+    - **Inference Server (`app_model.py`):** A lightweight, read-only server that loads a finished `.axm` model for safe, public-facing interaction.
+*   **Polished UI & PWA:** A custom dark mode theme, multi-conversation management, and Progressive Web App configuration provide a distinct and native-like experience on both desktop and mobile.
 
 ---
 
-## 🛠️ Setup and Installation
+## 🛠️ Setup and Usage
 
 ### Prerequisites
 - Python 3.11+
 - Git
 
-### Step 1: Clone and Install
-
-This single command clones the repository, sets up a virtual environment, and installs all project and development dependencies using the modern `pyproject.toml` standard.
+### Step 1: Clone the Repository & Install
 ```bash
 git clone <your-repo-url>
 cd <your-repo-folder>
 python3 -m venv venv
 source venv/bin/activate
-pip install -e '.[dev]'
+pip install -r requirements.txt
 ```
 
-### Step 2: Configure API Keys (Optional)
+### Step 2: Configure API Keys (Optional but Recommended)
 The agent's autonomous learning cycles can use the New York Times API to discover new topics.
+
 -   Get a free API key from the **[NYT Developer Portal](https://developer.nytimes.com/)**.
--   Set the key as an environment variable:
+-   Set the key as an environment variable in your terminal:
 ```bash
 export NYT_API_KEY="YOUR_API_KEY_HERE"
 ```
 *(For a permanent setup, add this line to your shell's configuration file, e.g., `~/.zshrc` or `~/.bash_profile`)*
 
-### Step 3: Verify Your Setup (Recommended)
-Before running the agent, run the master check script to ensure your environment is configured correctly and the code is clean.
-```bash
-./check.sh
-```
-All checks should pass with green checkmarks. If the formatter or linter fails, simply run `ruff format .` and `ruff check . --fix` to automatically clean the codebase.
-
-### Step 4: Running the Agent
-The agent is designed around a robust **Train -> Render -> Deploy** cycle.
+### Step 3: The Development Workflow
+The agent is now designed around a robust Train -> Render -> Deploy cycle.
 
 #### **1. Train the Agent (Offline)**
-Modify the agent's brain, which is stored in the `brain/` directory. Choose a method:
--   **Autonomous:** `python setup/autonomous_trainer.py`
--   **Manual (CLI):** `python setup/cnt.py`
+You can train the agent in two ways. Both methods read from and write to the source files in the `brain/` directory.
+
+-   **Autonomous Training (Headless):** Run this script to start the agent's autonomous learning cycles. It will run silently in the background, continuously improving the agent's brain.
+    ```bash
+    python setup/autonomous_trainer.py
+    ```
+-   **Manual Training (Interactive):** Run this script to chat directly with the agent on the command line to teach it specific facts.
+    ```bash
+    python setup/cnt.py
+    ```
 
 #### **2. Render a Model**
-Package the trained brain into a stable `.axm` model, which will be saved in the `rendered/` directory.
+After a training session, package the updated brain into a stable, versioned model file. This script automatically finds the latest brain files and saves the new model to the `rendered/` directory.
 ```bash
 python setup/render_model.py
 ```
 
 #### **3. Deploy the Agent (Online)**
-Run the web server. It automatically loads the most recent `.axm` model for user interaction.
+Run the web server. It will automatically find and load the most recent `.axm` model from the `rendered/` folder, providing a read-only web interface for users.
 ```bash
 python setup/app_model.py
 ```
@@ -106,7 +124,7 @@ You can now access the agent in your browser at `http://127.0.0.1:7501`.
 
 This project is the shell of a new kind of mind. The goal is not to create a finished chat application, but to cultivate a brain that, through continued growth, can achieve a level of contextual understanding and logical consistency that is structurally impossible for current LLMs.
 
-The long-term vision is for the agent's internal, verifiable `ConceptGraph` to become so vast and deeply interconnected that it can **replace its own external LLM dependencies**, leading to a truly autonomous cognitive entity built on a foundation of verifiable truth, not just probabilistic mimicry.
+The long-term vision is for the agent's internal, verifiable `ConceptGraph` to become so vast and deeply interconnected that it can **replace its own external LLM dependencies**. This creates a path where a future version no longer needs an external model for its senses or voice, leading to a truly autonomous cognitive entity built on a foundation of verifiable truth, not just probabilistic mimicry.
 
 ---
 

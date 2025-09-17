@@ -1,41 +1,59 @@
-# Ignore the large language model file
-*.gguf
+# .gitignore
 
-# Ignore Python's automatic cache folder
+# -----------------------------------------------------------------------------
+# Python & Environment
+# -----------------------------------------------------------------------------
+# Ignore Python's automatic cache and compiled files
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Ignore the agent's memory and state files
-# These will be different on every machine and shouldn't be in version control
-my_agent_brain.json
-my_agent_state.json
-interpreter_cache.json
+# Ignore the virtual environment folder
+venv/
+
+# -----------------------------------------------------------------------------
+# Project-Specific Data & Models
+# -----------------------------------------------------------------------------
+# Ignore the directory containing brain, state, and cache files
+/brain/
+
+# Ignore the directory containing large, rendered model snapshots
+/rendered/
+
+# Ignore the directory for LLM files
+/models/
+
+# Ignore any large dataset directories
+/Axiom_Voice_Dataset/
+/Curriculum/
+
+# -----------------------------------------------------------------------------
+# Log & Output Files
+# -----------------------------------------------------------------------------
+# Ignore all log files
+*.log
 profile_results.txt
-axiom_agent_error.log
-axiom_agent_output.log
 waker.log
+/facts/
 
-# Ignore system-specific files (like from macOS)
+# -----------------------------------------------------------------------------
+# System & Editor Files
+# -----------------------------------------------------------------------------
+# Ignore system-specific files (macOS, Windows, Linux)
 .DS_Store
+Thumbs.db
+desktop.ini
 
-#Ignore proprietary files
-models/
-*.axm
-*.gguf
-*.gguf2
-*.gguf2_base
-*.gguf2_base_q4_K_M
-*.gguf2_base_q4_K_M.gguf
-*.gguf2_base_q4_K_M.gguf2
-*.gguf2_base_q4_K_M.gguf2_base
+# Ignore IDE/editor-specific folders
+.vscode/
+.idea/
+
+# -----------------------------------------------------------------------------
+# Miscellaneous
+# -----------------------------------------------------------------------------
+# Ignore personal or temporary files
 notes.txt
-AgentCurriculum.txt
-Axiom_Voice_Dataset/
-Curriculum
-Curriculum/K-wk4.txt
-Curriculum/K-wk3.txt
-Curriculum/K-wk2.txt
-Curriculum/1st/1-wk1.txt
-Curriculum/1st
 Voicetrain.txt
 *.wav
 *.csv

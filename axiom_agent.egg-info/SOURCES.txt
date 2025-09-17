@@ -1,0 +1,16 @@
+LICENSE
+README.md
+pyproject.toml
+axiom/__init__.py
+axiom/cognitive_agent.py
+axiom/dictionary_utils.py
+axiom/graph_core.py
+axiom/knowledge_base.py
+axiom/knowledge_harvester.py
+axiom/universal_interpreter.py
+axiom_agent.egg-info/PKG-INFO
+axiom_agent.egg-info/SOURCES.txt
+axiom_agent.egg-info/dependency_links.txt
+axiom_agent.egg-info/requires.txt
+axiom_agent.egg-info/top_level.txt
+tests/test_initialization.py

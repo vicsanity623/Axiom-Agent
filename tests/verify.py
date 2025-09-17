@@ -3,8 +3,9 @@
 import time
 import random
 from threading import Lock
-from cognitive_agent import CognitiveAgent
-from knowledge_harvester import KnowledgeHarvester
+from axiom.cognitive_agent import CognitiveAgent
+from axiom.knowledge_harvester import KnowledgeHarvester
+
 
 def run_verification_tests():
     """
@@ -47,7 +48,9 @@ def run_verification_tests():
         if duration_hit < 2.0:
             print("  [SUCCESS]: Query time is under the 2-second goal.")
         else:
-            print(f"  [FAILURE]: Query time ({duration_hit:.4f}s) exceeds the 2-second goal.")
+            print(
+                f"  [FAILURE]: Query time ({duration_hit:.4f}s) exceeds the 2-second goal."
+            )
     except Exception as e:
         print(f"  [FAILURE]: An error occurred during the query time test: {e}")
 
@@ -57,22 +60,22 @@ def run_verification_tests():
     print("Let this run for as long as possible (ideally overnight).")
     print("Press CTRL+C to stop the test at any time.")
     print("Look for any crashes or fatal errors in the log.")
-    
+
     cycle_count = 0
     try:
         while True:
             cycle_count += 1
             print(f"\n--- Soak Test Cycle #{cycle_count} ---")
-            
+
             print("  -> Running Study Cycle...")
             harvester.study_existing_concept()
-            
+
             # Add a small delay to simulate time passing
-            time.sleep(2) 
-            
+            time.sleep(2)
+
             print("\n  -> Running Discovery Cycle...")
             harvester.discover_new_topic_and_learn()
-            
+
             print(f"\n--- Cycle #{cycle_count} Complete. System is stable. ---")
             # In a real 24-hour test, you'd have a much longer sleep here.
             # For simulation, we'll just loop.
@@ -80,7 +83,9 @@ def run_verification_tests():
 
     except KeyboardInterrupt:
         print("\n\n--- [Soak Test Manually Stopped] ---")
-        print(f"The system successfully completed {cycle_count} autonomous cycles without crashing.")
+        print(
+            f"The system successfully completed {cycle_count} autonomous cycles without crashing."
+        )
         print("  [SUCCESS]: The agent has demonstrated long-term stability.")
     except Exception as e:
         print(f"\n\n--- [Soak Test FAILED] ---")
@@ -89,5 +94,6 @@ def run_verification_tests():
 
     print("\n--- [Phase 1 Verification Complete] ---")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     run_verification_tests()
