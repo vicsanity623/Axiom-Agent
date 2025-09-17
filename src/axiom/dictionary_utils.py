@@ -45,12 +45,7 @@ pos_map = {
     "WRB": "wh_adverb",
     "EX": "existential",
     "PDT": "predeterminer",
-    "RBS": "adverb",
     "SYM": "symbol",
-    "TO": "to",
-    "UH": "interjection",
-    "CD": "number",
-    "POS": "possessive",
 }
 
 
