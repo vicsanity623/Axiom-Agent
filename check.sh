@@ -19,7 +19,7 @@ echo "✅ Linter found no issues."
 # --- Static Type Checking ---
 echo -e "\n[3/4] Static type checking with MyPy..."
 # MyPy also finds and uses the config in pyproject.toml
-mypy .
+mypy
 echo "✅ Type checking passed."
 
 # --- Unit & Integration Tests ---

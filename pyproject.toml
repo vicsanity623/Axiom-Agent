@@ -7,7 +7,8 @@ description = "A cognitive architecture for a new type of AI designed for self-d
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
 ]
-readme = "README.md"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
     "APScheduler",
@@ -21,10 +22,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "ruff",
-    "mypy",
-    "pytest",
-    "pytest-cov",
+    "ruff>=0.9.2",
+    "mypy>=1.18.1",
+    "pytest>=6.0.0",
+    "pytest-cov>=6.0.0",
     "pyngrok", # Moving ngrok here as it's a dev/optional feature
 ]
 
@@ -35,14 +36,29 @@ line-length = 88
 target-version = "py311"
 
 [tool.ruff.lint]
-# A great starting set: pycodestyle errors (E) and warnings (W), Pyflakes (F), isort (I)
-select = ["E", "F", "W", "I"]
+select = [
+    "E",  # errors
+    "F",  # Pyflakes
+    "W",  # warnings
+    "I",  # isort
+]
 
 [tool.mypy]
-python_version = "3.11"
+files = ["src/", "tests/", "setup/"]
+enable_error_code = [
+    "truthy-bool",
+    "mutable-override",
+    "exhaustive-match",
+]
+show_column_numbers = true
+show_error_codes = true
+show_traceback = true
 ignore_missing_imports = true
 warn_return_any = true
 warn_unused_configs = true
+local_partial_types = true
+no_implicit_optional = true
+warn_unreachable = true
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -53,6 +69,6 @@ testpaths = [
     "tests",
 ]
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["axiom*"]
+##[tool.setuptools.packages.find]
+##where = ["."]
+##include = ["axiom*"]
