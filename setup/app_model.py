@@ -52,7 +52,7 @@ def load_axiom_model(axm_filepath):
             brain_data = json.loads(zf.read("brain.json"))
             cache_data = json.loads(zf.read("cache.json"))
             version_data = json.loads(zf.read("version.json"))
-            print("--- [Server]: Axiom Mind Data Sucessfully Read ---")
+            print("--- [Server]: Axiom Mind Data Successfully Read ---")
             print(f"  - Version: {version_data.get('version')}")
             print(f"  - Render Date (UTC): {version_data.get('render_date_utc')}")
             return brain_data, cache_data

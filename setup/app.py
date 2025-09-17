@@ -1,4 +1,4 @@
-# app.py (orignal autonomous and chat auto save)
+# app.py (original autonomous and chat auto save)
 import sys
 import os
 
