@@ -908,6 +908,1105 @@
                 ],
                 "full_text_rephrased": "User is stating that Kangaroos are a type of marsupial, specifically belonging to the subfamily Macropodinae and referred to as macropods due to their large feet."
             }
+        ],
+        [
+            "Purple is a color similar in appearance to violet light.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "purple",
+                        "type": "COLOR"
+                    },
+                    {
+                        "name": "violet light",
+                        "type": "LIGHT"
+                    }
+                ],
+                "relation": {
+                    "subject": "purple",
+                    "verb": "is",
+                    "object": "a color similar in appearance to",
+                    "properties": {
+                        "comparison": "similar in appearance to",
+                        "comparison_subject": "violet light"
+                    }
+                },
+                "key_topics": [
+                    "purple",
+                    "color",
+                    "violet light"
+                ],
+                "full_text_rephrased": "User is stating that purple is a color similar in appearance to violet light."
+            }
+        ],
+        [
+            "The British Guiana 1c magenta is regarded by many philatelists as the world's most famous rare stamp.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "British Guiana 1c magenta",
+                        "type": "STAMP"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "British Guiana 1c magenta"
+                ],
+                "full_text_rephrased": "The British Guiana 1c magenta stamp is considered very famous and rare among philatelists."
+            }
+        ],
+        [
+            "Lavender is a light shade of purple or violet.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Lavender",
+                        "type": "COLOR"
+                    }
+                ],
+                "relation": {
+                    "subject": "Lavender",
+                    "verb": "is",
+                    "object": "a light shade of purple or violet"
+                },
+                "key_topics": [
+                    "Lavender"
+                ],
+                "full_text_rephrased": "User is stating that lavender is a light shade of purple or violet."
+            }
+        ],
+        [
+            "Sea turtles (superfamily Chelonioidea), sometimes called marine turtles, are reptiles of the order Testudines and of the suborder Cryptodira.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Sea turtles",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "superfamily Chelonioidea",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "marine turtles",
+                        "type": "ALIAS"
+                    },
+                    {
+                        "name": "reptiles",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "order Testudines",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "suborder Cryptodira",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Sea turtles"
+                ],
+                "full_text_rephrased": "User is stating that Sea turtles are reptiles of the order Testudines and suborder Cryptodira, also known as marine turtles."
+            }
+        ],
+        [
+            "The Red Turtle is a 2016 animated fantasy drama film directed by Dutch animator Micha\u00ebl Dudok de Wit who co-wrote the film with French screenwriter Pascale Ferran.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "The Red Turtle",
+                        "type": "FILM"
+                    },
+                    {
+                        "name": "Micha\u00ebl Dudok de Wit",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "Dutch animator",
+                        "type": "ROLE"
+                    },
+                    {
+                        "name": "Pascale Ferran",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "French screenwriter",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "The Red Turtle",
+                    "Micha\u00ebl Dudok de Wit",
+                    "Dutch animator",
+                    "Pascale Ferran",
+                    "French screenwriter"
+                ],
+                "full_text_rephrased": "User is stating facts about The Red Turtle, a 2016 film, and its directors Micha\u00ebl Dudok de Wit and Pascale Ferran."
+            }
+        ],
+        [
+            "Starting in September 2024, false claims spread online saying Haitian immigrants were stealing and eating pets in Springfield, Ohio.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "September 2024",
+                        "type": "DATE"
+                    },
+                    {
+                        "name": "Haitian immigrants",
+                        "type": "GROUP"
+                    },
+                    {
+                        "name": "Springfield, Ohio",
+                        "type": "LOCATION"
+                    },
+                    {
+                        "name": "false claims",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "false claims",
+                    "verb": "spread online",
+                    "object": "saying Haitian immigrants were stealing and eating pets in Springfield, Ohio"
+                },
+                "key_topics": [
+                    "September 2024",
+                    "Haitian immigrants",
+                    "Springfield, Ohio",
+                    "false claims"
+                ],
+                "full_text_rephrased": "In September 2024, false rumors emerged online accusing Haitian immigrants of stealing and eating pets in Springfield, Ohio."
+            }
+        ],
+        [
+            "\"What Makes You Beautiful\" (often abbreviated as WMYB) is the debut single by the British-Irish boy band One Direction.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "What Makes You Beautiful",
+                        "type": "SONG"
+                    },
+                    {
+                        "name": "One Direction",
+                        "type": "BAND"
+                    }
+                ],
+                "relation": {
+                    "subject": "What Makes You Beautiful",
+                    "verb": "is",
+                    "object": "the debut single by One Direction"
+                },
+                "key_topics": [
+                    "What Makes You Beautiful",
+                    "One Direction"
+                ],
+                "full_text_rephrased": "The song 'What Makes You Beautiful' is the debut single of the band One Direction."
+            }
+        ],
+        [
+            "Officer in Beating Case Will Remain on Duty",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Officer",
+                        "type": "PERSON"
+                    }
+                ],
+                "relation": {
+                    "subject": "Officer",
+                    "verb": "will remain",
+                    "object": "on duty"
+                },
+                "key_topics": [
+                    "Officer"
+                ],
+                "full_text_rephrased": "The officer involved in a beating case will continue to perform duties."
+            }
+        ],
+        [
+            "An officer is a person who has a position of authority in a hierarchical organization.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "officer",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "person who has a position of authority",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": {
+                    "subject": "an officer",
+                    "verb": "is",
+                    "object": "a person who has a position of authority"
+                },
+                "key_topics": [
+                    "officer"
+                ],
+                "full_text_rephrased": "An officer is an individual holding a position of authority within a hierarchical organization."
+            }
+        ],
+        [
+            "Faust (Japanese: \u30d5\u30a1\u30a6\u30b9\u30c8) is a character in Arc System Works' Guilty Gear fighting game series.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Faust",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "\u30d5\u30a1\u30a6\u30b9\u30c8",
+                        "type": "TEXT"
+                    },
+                    {
+                        "name": "Arc System Works",
+                        "type": "ORGANIZATION"
+                    },
+                    {
+                        "name": "Guilty Gear",
+                        "type": "PRODUCT"
+                    }
+                ],
+                "relation": {
+                    "subject": "Faust",
+                    "verb": "is",
+                    "object": "a character in Arc System Works' Guilty Gear fighting game series"
+                },
+                "key_topics": [
+                    "Faust",
+                    "Arc System Works",
+                    "Guilty Gear"
+                ],
+                "full_text_rephrased": "User is stating that Faust is a character in the Guilty Gear series by Arc System Works."
+            }
+        ],
+        [
+            "Do-gooder derogation is a phenomenon where a person's morally motivated behavior leads to them being perceived negatively by others.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Do-gooder derogation",
+                        "type": "PHENOMENON"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Do-gooder derogation"
+                ],
+                "full_text_rephrased": "User is stating that Do-gooder derogation is a phenomenon where morally motivated behavior leads to negative perceptions by others."
+            }
+        ],
+        [
+            "The Amazon rainforest is a species-rich biome in which thousands of species live, including animals found nowhere else in the world.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Amazon rainforest",
+                        "type": "LOCATION"
+                    }
+                ],
+                "relation": {
+                    "subject": "The Amazon rainforest",
+                    "verb": "is",
+                    "object": "a species-rich biome",
+                    "properties": {
+                        "species_count": "thousands",
+                        "unique_animals": "including animals found nowhere else in the world"
+                    }
+                },
+                "key_topics": [
+                    "Amazon rainforest"
+                ],
+                "full_text_rephrased": "The Amazon rainforest is a species-rich biome inhabited by thousands of unique animals."
+            }
+        ],
+        [
+            "Hair is a protein filament that grows from follicles found in the dermis.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "hair",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "protein filament",
+                        "type": "DESCRIPTION"
+                    },
+                    {
+                        "name": "follicles",
+                        "type": "ANATOMY"
+                    }
+                ],
+                "relation": {
+                    "subject": "hair",
+                    "verb": "is",
+                    "object": "a protein filament that grows from follicles"
+                },
+                "key_topics": [
+                    "hair"
+                ],
+                "full_text_rephrased": "User is stating that hair is a protein filament that grows from follicles."
+            }
+        ],
+        [
+            "The Curious Incident of the Dog in the Night-Time is a 2003 mystery novel by British writer Mark Haddon.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "The Curious Incident of the Dog in the Night-Time",
+                        "type": "BOOK"
+                    },
+                    {
+                        "name": "2003",
+                        "type": "YEAR"
+                    },
+                    {
+                        "name": "British writer",
+                        "type": "PERSON_ORGANIZATION"
+                    },
+                    {
+                        "name": "Mark Haddon",
+                        "type": "PERSON"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "The Curious Incident of the Dog in the Night-Time",
+                    "2003",
+                    "British writer",
+                    "Mark Haddon"
+                ],
+                "full_text_rephrased": "User is stating that The Curious Incident of the Dog in the Night-Time is a 2003 mystery novel written by British author Mark Haddon."
+            }
+        ],
+        [
+            "The monarch butterfly or simply monarch (Danaus plexippus) is a milkweed butterfly (subfamily Danainae) in the family Nymphalidae.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "monarch butterfly",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "Danaus plexippus",
+                        "type": "SPECIES"
+                    },
+                    {
+                        "name": "milkweed butterfly",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "subfamily Danainae",
+                        "type": "SUBGROUP"
+                    },
+                    {
+                        "name": "family Nymphalidae",
+                        "type": "FAMILY"
+                    }
+                ],
+                "relation": {
+                    "subject": "The monarch butterfly or simply monarch (Danaus plexippus)",
+                    "verb": "is",
+                    "object": "a milkweed butterfly (subfamily Danainae) in the family Nymphalidae."
+                },
+                "key_topics": [
+                    "monarch butterfly",
+                    "Danaus plexippus",
+                    "milkweed butterfly",
+                    "subfamily Danainae",
+                    "family Nymphalidae"
+                ],
+                "full_text_rephrased": "The monarch butterfly, scientifically known as Danaus plexippus, is a milkweed butterfly belonging to the subfamily Danainae and family Nymphalidae."
+            }
+        ],
+        [
+            "Monarch butterfly migration is the phenomenon, mainly across North America, where the monarch subspecies Danaus plexippus plexippus migrates each autumn to overwintering sites near the west coast of California or mountainous sites in central Mexico.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Monarch butterfly migration",
+                        "type": "PHENOMENON"
+                    },
+                    {
+                        "name": "Danaus plexippus plexippus",
+                        "type": "SPECIES"
+                    },
+                    {
+                        "name": "North America",
+                        "type": "CONTINENT"
+                    },
+                    {
+                        "name": "west coast of California",
+                        "type": "LOCATION"
+                    },
+                    {
+                        "name": "central Mexico",
+                        "type": "LOCATION"
+                    }
+                ],
+                "relation": {
+                    "subject": "Monarch butterfly migration",
+                    "verb": "is",
+                    "object": "the phenomenon, mainly across North America, where the monarch subspecies Danaus plexippus plexippus migrates each autumn to overwintering sites near the west coast of California or mountainous sites in central Mexico."
+                },
+                "key_topics": [
+                    "Monarch butterfly migration",
+                    "Danaus plexippus plexippus",
+                    "North America",
+                    "California",
+                    "Mexico"
+                ],
+                "full_text_rephrased": "User is stating that Monarch butterfly migration is the annual journey of Danaus plexippus plexippus subspecies to California or central Mexican sites for overwintering."
+            }
+        ],
+        [
+            "Travels with Charley: In Search of America is a 1962 travelogue written by American author John Steinbeck.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Travels with Charley: In Search of America",
+                        "type": "BOOK"
+                    },
+                    {
+                        "name": "John Steinbeck",
+                        "type": "PERSON"
+                    }
+                ],
+                "relation": {
+                    "subject": "Travels with Charley: In Search of America",
+                    "verb": "is",
+                    "object": "a 1962 travelogue written by American author John Steinbeck"
+                },
+                "key_topics": [
+                    "John Steinbeck",
+                    "Travels with Charley: In Search of America"
+                ],
+                "full_text_rephrased": "User is stating that Travels with Charley: In Search of America is a 1962 travelogue written by John Steinbeck."
+            }
+        ],
+        [
+            "Turtles are reptiles of the order Testudines, characterized by a special shell developed mainly from their ribs.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "turtles",
+                        "type": "ANIMAL"
+                    },
+                    {
+                        "name": "reptiles",
+                        "type": "ANIMAL"
+                    },
+                    {
+                        "name": "order Testudines",
+                        "type": "ORDER"
+                    },
+                    {
+                        "name": "shell",
+                        "type": "STRUCTURE"
+                    }
+                ],
+                "relation": {
+                    "subject": "turtles",
+                    "verb": "are",
+                    "object": "reptiles of the order Testudines"
+                },
+                "key_topics": [
+                    "turtles",
+                    "reptiles",
+                    "order Testudines"
+                ],
+                "full_text_rephrased": "Turtles are a type of reptile belonging to the order Testudines."
+            }
+        ],
+        [
+            "A skill is the learned or innate\nability to act with determined results with good execution often within a given amount of time, energy, or both.\nSkills can often be divided into domain-general and domain-specific skills.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [],
+                "relation": null,
+                "key_topics": [
+                    "skill"
+                ],
+                "full_text_rephrased": "User is stating that a skill is the ability to act effectively and efficiently within a given time and energy frame, and can be categorized as domain-general or domain-specific."
+            }
+        ],
+        [
+            "Digitalis purpurea, the foxglove or common foxglove, is a toxic species of flowering plant in the plantain family Plantaginaceae, native to and widespread throughout most of temperate Europe.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Digitalis purpurea",
+                        "type": "SPECIES"
+                    },
+                    {
+                        "name": "foxglove",
+                        "type": "ALIAS"
+                    },
+                    {
+                        "name": "common foxglove",
+                        "type": "ALIAS"
+                    },
+                    {
+                        "name": "toxic species",
+                        "type": "QUALITY"
+                    },
+                    {
+                        "name": "flowering plant",
+                        "type": "TYPE"
+                    },
+                    {
+                        "name": "Plantaginaceae",
+                        "type": "FAMILY"
+                    },
+                    {
+                        "name": "temperate Europe",
+                        "type": "LOCATION"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Digitalis purpurea",
+                    "foxglove",
+                    "common foxglove",
+                    "toxic species",
+                    "flowering plant",
+                    "Plantaginaceae",
+                    "temperate Europe"
+                ],
+                "full_text_rephrased": "User is stating that Digitalis purpurea, also known as the common foxglove, is a toxic flowering plant belonging to the Plantaginaceae family and native to temperate Europe."
+            }
+        ],
+        [
+            "Mint-made errors occur when coins are made incorrectly at the mint, including anything that happens to the coin up until the completion of the minting process.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [],
+                "relation": {
+                    "subject": "Mint-made errors",
+                    "verb": "occur",
+                    "object": "when coins are made incorrectly at the mint"
+                },
+                "key_topics": [
+                    "Mint-made errors"
+                ],
+                "full_text_rephrased": "User is stating that Mint-made errors occur when coins are produced incorrectly at the mint."
+            }
+        ],
+        [
+            "Rain Joan of Arc Phoenix (n\u00e9e Bottom; born November 21, 1972) is an American actress, musician, and singer.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Rain Joan of Arc",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "American",
+                        "type": "NATIONALITY"
+                    },
+                    {
+                        "name": "actress",
+                        "type": "OCCUPATION"
+                    },
+                    {
+                        "name": "musician",
+                        "type": "OCCUPATION"
+                    },
+                    {
+                        "name": "singer",
+                        "type": "OCCUPATION"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Rain Joan of Arc",
+                    "American",
+                    "actress",
+                    "musician",
+                    "singer"
+                ],
+                "full_text_rephrased": "Rain Joan of Arc is an American actress, musician, and singer (born November 21, 1972)."
+            }
+        ],
+        [
+            "Izabella Blair (born September 22, 2004), known professionally as Sophie Rain, is an American Internet personality.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Izabella Blair",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "Sophie Rain",
+                        "type": "ALIAS"
+                    },
+                    {
+                        "name": "American",
+                        "type": "NATIONALITY"
+                    },
+                    {
+                        "name": "Internet personality",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": {
+                    "subject": "Izabella Blair (born September 22, 2004)",
+                    "verb": "is",
+                    "object": "an American Internet personality",
+                    "properties": {
+                        "effective_date": "2004-09-22",
+                        "alias": "Sophie Rain"
+                    }
+                },
+                "key_topics": [
+                    "Izabella Blair",
+                    "Sophie Rain",
+                    "American",
+                    "Internet personality"
+                ],
+                "full_text_rephrased": "User is stating that Izabella Blair, born on September 22, 2004, is a well-known American Internet personality with the alias Sophie Rain."
+            }
+        ],
+        [
+            "In statistics and natural language processing, a topic model is a type of statistical model for discovering the abstract \"topics\" that occur in a collection of documents.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [],
+                "relation": null,
+                "key_topics": [
+                    "statistics",
+                    "natural language processing",
+                    "topic model"
+                ],
+                "full_text_rephrased": "User is stating that in statistics and natural language processing, a topic model is used to discover abstract topics in a collection of documents."
+            }
+        ],
+        [
+            "This is a list of extant species in the Felidae family, which aims to evaluate their size, ordered by maximum reported weight and size of wild individuals on record.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Felidae family",
+                        "type": "FAMILY"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "extant species in Felidae family",
+                    "size",
+                    "maximum reported weight",
+                    "wild individuals"
+                ],
+                "full_text_rephrased": "User is stating that there is a list of extant species in the Felidae family, which is ordered by their maximum reported size and weight in the wild."
+            }
+        ],
+        [
+            "Whiskers, also known as vibrissae (; sg.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Whiskers",
+                        "type": "ANATOMY"
+                    },
+                    {
+                        "name": "vibrissae",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Whiskers",
+                    "vibrissae"
+                ],
+                "full_text_rephrased": "User is stating that Whiskers are also known as vibrissae."
+            }
+        ],
+        [
+            "Topic was a chocolate bar made by Mars, Incorporated in France and sold throughout Europe.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Topic",
+                        "type": "TOPIC"
+                    },
+                    {
+                        "name": "chocolate bar",
+                        "type": "OBJECT"
+                    },
+                    {
+                        "name": "Mars, Incorporated",
+                        "type": "ORGANIZATION"
+                    },
+                    {
+                        "name": "France",
+                        "type": "COUNTRY"
+                    },
+                    {
+                        "name": "Europe",
+                        "type": "CONTINENT"
+                    }
+                ],
+                "relation": {
+                    "subject": "Topic",
+                    "verb": "was",
+                    "object": "a chocolate bar made by Mars, Incorporated in France and sold throughout Europe"
+                },
+                "key_topics": [
+                    "Topic",
+                    "chocolate bar",
+                    "Mars, Incorporated",
+                    "France",
+                    "Europe"
+                ],
+                "full_text_rephrased": "User is stating that the Topic was a chocolate bar manufactured by Mars, Incorporated in France and distributed across Europe."
+            }
+        ],
+        [
+            "Chocolate is a food made from roasted and ground cocoa beans mixed with fat (e.g.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "chocolate",
+                        "type": "FOOD"
+                    }
+                ],
+                "relation": {
+                    "subject": "chocolate",
+                    "verb": "is",
+                    "object": "a food made from roasted and ground cocoa beans mixed with fat"
+                },
+                "key_topics": [
+                    "chocolate"
+                ],
+                "full_text_rephrased": "User is stating that chocolate is a food made from roasted and ground cocoa beans mixed with fat."
+            }
+        ],
+        [
+            "Chocolate is a food made from roasted and ground cocoa beans that can be a liquid, solid, or paste, either by itself or to flavor other foods.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "chocolate",
+                        "type": "FOOD"
+                    }
+                ],
+                "relation": {
+                    "subject": "chocolate",
+                    "verb": "is",
+                    "object": "a food made from roasted and ground cocoa beans",
+                    "properties": {
+                        "preparation_methods": [
+                            "roasted",
+                            "ground"
+                        ]
+                    }
+                },
+                "key_topics": [
+                    "chocolate"
+                ],
+                "full_text_rephrased": "User is stating that chocolate is a food made from roasted and ground cocoa beans."
+            }
+        ],
+        [
+            "Freezing rain is rain maintained at temperatures below freezing by the ambient air mass that causes freezing on contact with surfaces.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "freezing rain",
+                        "type": "WEATHER_PHENOMENON"
+                    }
+                ],
+                "relation": {
+                    "subject": "Freezing rain",
+                    "verb": "is",
+                    "object": "rain maintained at temperatures below freezing by the ambient air mass that causes freezing on contact with surfaces"
+                },
+                "key_topics": [
+                    "freezing rain"
+                ],
+                "full_text_rephrased": "User is stating that freezing rain is a type of rain that forms when it comes into contact with an air mass below freezing temperatures."
+            }
+        ],
+        [
+            "The principal\u2013agent problem (often abbreviated agency problem) refers to the conflict in interests and priorities that arises when one person or entity (the \"agent\") takes actions on behalf of another person or entity (the \"principal\").",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "principal-agent problem",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "agent",
+                        "type": "PERSON OR ENTITY"
+                    },
+                    {
+                        "name": "principal",
+                        "type": "PERSON OR ENTITY"
+                    }
+                ],
+                "relation": {
+                    "subject": "The principal-agent problem",
+                    "verb": "refers to",
+                    "object": "the conflict in interests and priorities that arises when one person or entity (the 'agent') takes actions on behalf of another person or entity (the 'principal')"
+                },
+                "key_topics": [
+                    "principal-agent problem"
+                ],
+                "full_text_rephrased": "The principal-agent problem is a concept that refers to the conflict in interests and priorities between an agent and a principal."
+            }
+        ],
+        [
+            "Israel Says Its Tanks Responded to Shots Fired From Syrian Side",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Israel",
+                        "type": "COUNTRY"
+                    },
+                    {
+                        "name": "tsanks",
+                        "type": "VEHICLE"
+                    },
+                    {
+                        "name": "Syria",
+                        "type": "COUNTRY"
+                    }
+                ],
+                "relation": {
+                    "subject": "Israel",
+                    "verb": "says",
+                    "object": "its tanks responded to shots fired from Syrian side"
+                },
+                "key_topics": [
+                    "Israel",
+                    "Syria",
+                    "tanks"
+                ],
+                "full_text_rephrased": "Israel states that its tanks reacted to gunfire originating from Syria."
+            }
+        ],
+        [
+            "Agential realism is a theory developed by physicist and philosopher Karen Barad that offers a new approach to metaphysics\u2014the study of what exists and how things come into being.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "agential realism",
+                        "type": "THEORY"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "agential realism"
+                ],
+                "full_text_rephrased": "User is stating that agential realism is a theory in metaphysics developed by Karen Barad."
+            }
+        ],
+        [
+            "Israel, officially the State of Israel, is a country in the Southern Levant region of West Asia.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Israel",
+                        "type": "COUNTRY"
+                    },
+                    {
+                        "name": "State of Israel",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "Southern Levant region",
+                        "type": "REGION"
+                    },
+                    {
+                        "name": "West Asia",
+                        "type": "REGION"
+                    }
+                ],
+                "relation": {
+                    "subject": "Israel (Country)",
+                    "verb": "is",
+                    "object": "a country in the Southern Levant region of West Asia"
+                },
+                "key_topics": [
+                    "Israel"
+                ],
+                "full_text_rephrased": "User is stating that Israel is a country located in the Southern Levant region of West Asia."
+            }
+        ],
+        [
+            "Tornadoes are more common in the United States than in any other country or state.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Tornadoes",
+                        "type": "WEATHER_EVENT"
+                    }
+                ],
+                "relation": {
+                    "subject": "Tornadoes",
+                    "verb": "are",
+                    "object": "more common in the United States than in any other country or state"
+                },
+                "key_topics": [
+                    "Tornadoes",
+                    "United States"
+                ],
+                "full_text_rephrased": "User is stating that tornadoes occur more frequently in the United States than anywhere else."
+            }
+        ],
+        [
+            "Elephants are the largest living land animals.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "elephants",
+                        "type": "ANIMAL"
+                    }
+                ],
+                "relation": {
+                    "subject": "elephants",
+                    "verb": "are",
+                    "object": "the largest living land animals"
+                },
+                "key_topics": [
+                    "elephants"
+                ],
+                "full_text_rephrased": "User is stating that elephants are the largest living land animals."
+            }
+        ],
+        [
+            "Grey (more frequent in British English) or gray (more frequent in American English) is an intermediate color between black and white.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Grey",
+                        "type": "COLOR"
+                    },
+                    {
+                        "name": "gray",
+                        "type": "COLOR"
+                    },
+                    {
+                        "name": "intermediate",
+                        "type": "CONCEPT"
+                    },
+                    {
+                        "name": "black",
+                        "type": "COLOR"
+                    },
+                    {
+                        "name": "white",
+                        "type": "COLOR"
+                    }
+                ],
+                "relation": {
+                    "subject": "Grey or gray",
+                    "verb": "is",
+                    "object": "an intermediate color between black and white"
+                },
+                "key_topics": [
+                    "Grey",
+                    "gray",
+                    "intermediate",
+                    "black",
+                    "white"
+                ],
+                "full_text_rephrased": "User is stating that grey or gray is an intermediate color between black and white."
+            }
+        ],
+        [
+            "Cian Brendan Ducrot (born 30 August 1997) is an Irish singer-songwriter.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Cian Brendan Ducrot",
+                        "type": "PERSON"
+                    },
+                    {
+                        "name": "Irish singer-songwriter",
+                        "type": "ROLE"
+                    }
+                ],
+                "relation": {
+                    "subject": "Cian Brendan Ducrot",
+                    "verb": "is",
+                    "object": "an Irish singer-songwriter"
+                },
+                "key_topics": [
+                    "Cian Brendan Ducrot",
+                    "Irish singer-songwriter"
+                ],
+                "full_text_rephrased": "User is stating that Cian Brendan Ducrot is an Irish singer-songwriter."
+            }
+        ],
+        [
+            "Living by the Kick or Dying by the Kick",
+            {
+                "intent": "statement_of_concept",
+                "entities": [],
+                "relation": null,
+                "key_topics": [
+                    "Living by the Kick or Dying by the Kick"
+                ],
+                "full_text_rephrased": "User is stating a concept: Living by the Kick or Dying by the Kick."
+            }
+        ],
+        [
+            "Bushs Speech on Iraq",
+            {
+                "intent": "question_about_entity",
+                "entities": [
+                    {
+                        "name": "Bush's Speech on Iraq",
+                        "type": "EVENT"
+                    }
+                ],
+                "relation": null,
+                "key_topics": [
+                    "Bush's Speech on Iraq"
+                ],
+                "full_text_rephrased": "User is asking for information about Bush's Speech on Iraq."
+            }
         ]
     ],
     "synthesis": [
