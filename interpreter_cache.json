@@ -822,6 +822,92 @@
                 ],
                 "full_text_rephrased": "User is stating that the blue whale is the largest animal currently alive."
             }
+        ],
+        [
+            "Friendship is a relationship of mutual affection between people.",
+            {
+                "intent": "statement_of_fact",
+                "entities": [],
+                "relation": {
+                    "subject": "friendship",
+                    "verb": "is",
+                    "object": "a relationship of mutual affection between people"
+                },
+                "key_topics": [
+                    "friendship"
+                ],
+                "full_text_rephrased": "User is stating that friendship is a relationship of mutual affection between people."
+            }
+        ],
+        [
+            "In common usage, salt is a mineral composed primarily of sodium chloride (NaCl).",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "salt",
+                        "type": "SUBSTANCE"
+                    },
+                    {
+                        "name": "sodium chloride",
+                        "type": "COMPOUND"
+                    },
+                    {
+                        "name": "NaCl",
+                        "type": "ABBREVIATION"
+                    }
+                ],
+                "relation": {
+                    "subject": "salt",
+                    "verb": "is composed primarily of",
+                    "object": "sodium chloride"
+                },
+                "key_topics": [
+                    "salt",
+                    "sodium chloride"
+                ],
+                "full_text_rephrased": "User is stating that salt is primarily composed of sodium chloride."
+            }
+        ],
+        [
+            "Kangaroos are marsupials from the subfamily Macropodinae (macropods, meaning \"large foot\").",
+            {
+                "intent": "statement_of_fact",
+                "entities": [
+                    {
+                        "name": "Kangaroos",
+                        "type": "ANIMAL"
+                    },
+                    {
+                        "name": "marsupials",
+                        "type": "CLASS"
+                    },
+                    {
+                        "name": "subfamily Macropodinae",
+                        "type": "SUBFAMILY"
+                    },
+                    {
+                        "name": "macropods",
+                        "type": "CONCEPT"
+                    }
+                ],
+                "relation": {
+                    "subject": "Kangaroos",
+                    "verb": "are",
+                    "object": {
+                        "class": "marsupials",
+                        "subfamily": "Macropodinae",
+                        "concept": "macropods"
+                    }
+                },
+                "key_topics": [
+                    "Kangaroos",
+                    "marsupials",
+                    "Macropodinae",
+                    "macropods"
+                ],
+                "full_text_rephrased": "User is stating that Kangaroos are a type of marsupial, specifically belonging to the subfamily Macropodinae and referred to as macropods due to their large feet."
+            }
         ]
     ],
     "synthesis": [

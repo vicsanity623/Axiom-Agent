@@ -8,6 +8,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+interpreter_cache.json
 
 # Ignore the virtual environment folder
 venv/
@@ -57,3 +58,4 @@ notes.txt
 Voicetrain.txt
 *.wav
 *.csv
+interpreter_cache.json
