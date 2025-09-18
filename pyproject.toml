@@ -26,7 +26,8 @@ dev = [
     "mypy>=1.18.1",
     "pytest>=6.0.0",
     "pytest-cov>=6.0.0",
-    "pyngrok", # Moving ngrok here as it's a dev/optional feature
+    # Moving ngrok here as it's a dev/optional feature
+    "pyngrok",
 ]
 
 [project.urls]
@@ -59,6 +60,9 @@ select = [
     "TCH",  # flake8-type-checking
     "UP",   # pyupgrade
     "YTT",  # flake8-2020
+]
+extend-ignore = [
+    "E501",   # line-too-long
 ]
 
 [tool.mypy]

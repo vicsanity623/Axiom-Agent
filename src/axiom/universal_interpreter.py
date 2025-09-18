@@ -1,14 +1,33 @@
-# universal_interpreter.py
+from __future__ import annotations
 
+# universal_interpreter.py
 import json
 import os
 import re
+from typing import Final
 
 from llama_cpp import Llama
 
+DEFAULT_MODEL_PATH: Final = "models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+
+REPHRASING_PROMPT: Final = """
+You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
+1.  **ONLY use the information given in the 'Facts' string.**
+2.  **DO NOT add any extra information, commentary, or meta-analysis.**
+3.  **DO NOT apologize or mention your own limitations.**
+4.  **Your output must be ONLY the rephrased sentence and nothing else.**"""[1:]
+
+
+JSON_STRUCTURE_PROMPT: Final = """
+The JSON object must have the following fields:
+- 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.
+- 'key_topics': A list of the main subjects or topics...
+- 'full_text_rephrased': A neutral, one-sentence rephrasing..."""[1:]
+
 
 class UniversalInterpreter:
-    def __init__(self, model_path="models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"):
+    def __init__(self, model_path: str = DEFAULT_MODEL_PATH) -> None:
         print("Initializing Universal Interpreter (loading Mini LLM)...")
         if not os.path.exists(model_path):
             raise FileNotFoundError(
@@ -29,7 +48,7 @@ class UniversalInterpreter:
 
         print("Universal Interpreter loaded successfully.")
 
-    def _load_cache(self):
+    def _load_cache(self) -> None:
         """Loads the interpretation and synthesis caches from a JSON file."""
         if os.path.exists(self.cache_file):
             try:
@@ -51,7 +70,7 @@ class UniversalInterpreter:
             print("[Cache]: No cache file found. Starting fresh.")
             self.interpretation_cache, self.synthesis_cache = {}, {}
 
-    def _save_cache(self):
+    def _save_cache(self) -> None:
         """Saves the current caches to a JSON file."""
         try:
             with open(self.cache_file, "w") as f:
@@ -91,14 +110,7 @@ class UniversalInterpreter:
             "and convert it into a structured JSON object. Extract factual relationships or commands. "
             "Your output must be a single, valid JSON object and NOTHING else."
         )
-        json_structure_prompt = (
-            "The JSON object must have the following fields:\n"
-            "- 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.\n"
-            "- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. "
-            "If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.\n"
-            "- 'key_topics': A list of the main subjects or topics...\n"
-            "- 'full_text_rephrased': A neutral, one-sentence rephrasing..."
-        )
+        json_structure_prompt = JSON_STRUCTURE_PROMPT
 
         examples_list = [
             'Input: \'show all facts\'\nOutput: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}',
@@ -250,7 +262,7 @@ class UniversalInterpreter:
     def synthesize(
         self,
         structured_facts: str,
-        original_question: str = None,
+        original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
         """
@@ -280,14 +292,7 @@ class UniversalInterpreter:
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
         else:  # Default "statement" mode
-            system_prompt = (
-                "You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. "
-                "You are a fluent parrot. You must follow these rules strictly:\n"
-                "1.  **ONLY use the information given in the 'Facts' string.**\n"
-                "2.  **DO NOT add any extra information, commentary, or meta-analysis.**\n"
-                "3.  **DO NOT apologize or mention your own limitations.**\n"
-                "4.  **Your output must be ONLY the rephrased sentence and nothing else.**"
-            )
+            system_prompt = REPHRASING_PROMPT
             task_prompt = f"Facts to rephrase: '{structured_facts}'"
             if original_question:
                 task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"

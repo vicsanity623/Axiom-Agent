@@ -140,7 +140,7 @@ class ConceptGraph:
         target_node,
         relation_type: str,
         weight: float = 0.5,
-        properties: Any | None = None,
+        properties=None,
     ) -> RelationshipEdge | None:
         if not all([source_node, target_node]):
             return None
