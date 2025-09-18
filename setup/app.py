@@ -1,14 +1,24 @@
-# app.py (original autonomous and chat auto save)
+from __future__ import annotations
+
+import argparse
 import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import threading
 import time
+import traceback
+
+# app.py (original autonomous and chat auto save)
+from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+)
+from pyngrok import ngrok
 
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
@@ -16,12 +26,14 @@ from axiom.knowledge_harvester import KnowledgeHarvester
 app = Flask(__name__)
 
 # --- Global Agent Initialization ---
-axiom_agent = None
+axiom_agent: CognitiveAgent | None = None
 agent_interaction_lock = threading.Lock()
-agent_status = "uninitialized"
+agent_status: str = "uninitialized"
+DEFAULT_BRAIN_FILE = Path("my_agent_brain.json")
+DEFAULT_STATE_FILE = Path("my_agent_state.json")
 
 
-def load_agent():
+def load_agent() -> None:
     """
     Function to load the CognitiveAgent and start the background harvester.
     """
@@ -32,12 +44,10 @@ def load_agent():
             agent_status = "loading"
             try:
                 print("--- Starting Axiom Agent Initialization... ---")
-                brain_file = "my_agent_brain.json"
-                state_file = "my_agent_state.json"
 
                 axiom_agent = CognitiveAgent(
-                    brain_file=brain_file,
-                    state_file=state_file,
+                    brain_file=DEFAULT_BRAIN_FILE,
+                    state_file=DEFAULT_STATE_FILE,
                 )
 
                 harvester = KnowledgeHarvester(
@@ -67,10 +77,9 @@ def load_agent():
 
                 agent_status = "ready"
                 print("--- Axiom Agent is Ready! ---")
-            except Exception as e:
-                agent_status = f"error: {e}"
-                print(f"!!! CRITICAL ERROR INITIALIZING AGENT: {e} !!!")
-                import traceback
+            except Exception as exc:
+                agent_status = f"error: {exc}"
+                print(f"!!! CRITICAL ERROR INITIALIZING AGENT: {exc} !!!")
 
                 traceback.print_exc()
 
@@ -79,23 +88,23 @@ def load_agent():
 
 
 @app.route("/")
-def index():
+def index() -> str:
     """Serves the main chat page."""
     return render_template("index.html")
 
 
 @app.route("/manifest.json")
-def manifest():
+def manifest() -> Response:
     return send_from_directory("static", "manifest.json")
 
 
 @app.route("/sw.js")
-def service_worker():
+def service_worker() -> Response:
     return send_from_directory("static", "sw.js")
 
 
 @app.route("/status")
-def status():
+def status() -> str | Response:
     """An endpoint for the front-end to poll the agent's loading status."""
     global agent_status
     if agent_status == "uninitialized":
@@ -105,7 +114,7 @@ def status():
 
 
 @app.route("/chat", methods=["POST"])
-def chat():
+def chat() -> tuple[Response, int] | Response:
     """
     The main endpoint for handling chat messages from the user.
     """
@@ -116,6 +125,12 @@ def chat():
         if time.time() - start_time > 300:  # 5 minute timeout for loading
             return jsonify({"error": "Agent is taking too long to initialize."}), 503
         time.sleep(1)
+
+    if request.json is None:
+        return jsonify({"error": "Request json attribute is None"}), 503
+
+    if axiom_agent is None:
+        return jsonify({"error": "axiom_agent is None"}), 503
 
     user_message = request.json.get("message")
     if not user_message:
@@ -129,18 +144,12 @@ def chat():
         return jsonify({"response": agent_response})
     except Exception as e:
         print(f"!!! ERROR DURING CHAT PROCESSING: {e} !!!")
-        import traceback
 
         traceback.print_exc()
         return jsonify({"error": f"An internal error occurred: {e}"}), 500
 
 
-if __name__ == "__main__":
-    import argparse
-    import os
-
-    from pyngrok import ngrok
-
+def run() -> None:
     parser = argparse.ArgumentParser(description="Run the Axiom Agent Training App.")
     parser.add_argument(
         "--ngrok",
@@ -162,3 +171,7 @@ if __name__ == "__main__":
         print(f" * ngrok tunnel is active at: {public_url}")
 
     app.run(host="0.0.0.0", port=7500, debug=False)
+
+
+if __name__ == "__main__":
+    run()

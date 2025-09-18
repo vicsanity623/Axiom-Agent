@@ -4,11 +4,17 @@ from __future__ import annotations
 import json
 import os
 import re
-from typing import Final
+from pathlib import Path
+from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict
 
 from llama_cpp import Llama
 
-DEFAULT_MODEL_PATH: Final = "models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+if TYPE_CHECKING:
+    from typing import NotRequired
+
+MODELS_FOLDER: Final = Path("models")
+DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+DEFAULT_CACHE_PATH: Final = "interpreter_cache.json"
 
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
@@ -21,13 +27,50 @@ You are a language rephrasing engine. Your task is to convert the given 'Facts' 
 JSON_STRUCTURE_PROMPT: Final = """
 The JSON object must have the following fields:
 - 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
-- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 0
 - 'key_topics': A list of the main subjects or topics...
 - 'full_text_rephrased': A neutral, one-sentence rephrasing..."""[1:]
 
+Intent: TypeAlias = Literal[
+    "greeting"
+    | "farewell"
+    | "question_about_entity"
+    | "question_about_concept"
+    | "statement_of_fact"
+    | "statement_of_correction"
+    | "gratitude"
+    | "acknowledgment"
+    | "positive_affirmation"
+    | "command"
+    | "unknown"
+]
+
+
+class PropertyData(TypedDict):
+    effective_date: str  # YYYY-MM-DD
+
+
+class RelationData(TypedDict):
+    subject: str
+    verb: str
+    object: str
+    properties: NotRequired[PropertyData]
+
+
+class InterpretData(TypedDict):
+    intent: Intent
+    entities: list[str]
+    relation: RelationData | None
+    key_topics: list[str]
+    full_text_rephrased: str
+
 
 class UniversalInterpreter:
-    def __init__(self, model_path: str = DEFAULT_MODEL_PATH) -> None:
+    def __init__(
+        self,
+        model_path: str | Path = DEFAULT_MODEL_PATH,
+        cache_file: str | Path = DEFAULT_CACHE_PATH,
+    ) -> None:
         print("Initializing Universal Interpreter (loading Mini LLM)...")
         if not os.path.exists(model_path):
             raise FileNotFoundError(
@@ -35,7 +78,7 @@ class UniversalInterpreter:
             )
 
         self.llm = Llama(
-            model_path=model_path,
+            model_path=str(model_path),
             n_gpu_layers=0,
             n_ctx=2048,
             n_threads=0,
@@ -43,32 +86,34 @@ class UniversalInterpreter:
             verbose=False,
         )
 
-        self.cache_file = "interpreter_cache.json"
+        self.interpretation_cache: dict[str, InterpretData] = {}
+        self.synthesis_cache: dict[str, str] = {}
+
+        self.cache_file = cache_file
         self._load_cache()
 
         print("Universal Interpreter loaded successfully.")
 
     def _load_cache(self) -> None:
         """Loads the interpretation and synthesis caches from a JSON file."""
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file) as f:
-                    cache_data = json.load(f)
-                    self.interpretation_cache = dict(
-                        cache_data.get("interpretations", []),
-                    )
-                    self.synthesis_cache = dict(cache_data.get("synthesis", []))
-                print(
-                    f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}.",
-                )
-            except Exception as e:
-                print(
-                    f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}",
-                )
-                self.interpretation_cache, self.synthesis_cache = {}, {}
-        else:
+        if not os.path.exists(self.cache_file):
             print("[Cache]: No cache file found. Starting fresh.")
-            self.interpretation_cache, self.synthesis_cache = {}, {}
+            return
+
+        try:
+            with open(self.cache_file) as f:
+                cache_data = json.load(f)
+                self.interpretation_cache = dict(
+                    cache_data.get("interpretations", []),
+                )
+                self.synthesis_cache = dict(cache_data.get("synthesis", []))
+            print(
+                f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}.",
+            )
+        except Exception as e:
+            print(
+                f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}",
+            )
 
     def _save_cache(self) -> None:
         """Saves the current caches to a JSON file."""
@@ -94,7 +139,7 @@ class UniversalInterpreter:
         json_str = re.sub(r",\s*(\}|\])", r"\1", json_str)
         return re.sub(r'"\s*\n\s*"', '", "', json_str)
 
-    def interpret(self, user_input: str) -> dict:
+    def interpret(self, user_input: str) -> InterpretData:
         """
         Uses the Mini LLM to analyze user input and return a structured JSON.
         This is the core, context-free interpretation method.
@@ -141,16 +186,18 @@ class UniversalInterpreter:
             interpretation = json.loads(cleaned_json_str)
             self.interpretation_cache[cache_key] = interpretation
             self._save_cache()
-            return interpretation
+            return InterpretData(interpretation)
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
-            return {
-                "intent": "unknown",
-                "entities": [],
-                "relation": None,
-                "key_topics": user_input.split(),
-                "full_text_rephrased": f"Could not fully interpret: '{user_input}'",
-            }
+            return InterpretData(
+                {
+                    "intent": "unknown",
+                    "entities": [],
+                    "relation": None,
+                    "key_topics": user_input.split(),
+                    "full_text_rephrased": f"Could not fully interpret: '{user_input}'",
+                },
+            )
 
     def resolve_context(self, history: list[str], new_input: str) -> str:
         print("  [Context Resolver]: Attempting to resolve pronouns...")
@@ -198,7 +245,11 @@ class UniversalInterpreter:
             print(f"  [Context Resolver Error]: Could not resolve context. Error: {e}")
             return new_input
 
-    def interpret_with_context(self, user_input: str, history: list[str]) -> dict:
+    def interpret_with_context(
+        self,
+        user_input: str,
+        history: list[str],
+    ) -> InterpretData:
         contextual_input = user_input
         pronouns = ["it", "its", "they", "them", "their", "he", "she", "his", "her"]
         if history and any(

@@ -28,6 +28,8 @@ dev = [
     "pytest-cov>=6.0.0",
     # Moving ngrok here as it's a dev/optional feature
     "pyngrok",
+    # Typing
+    "types-requests",
 ]
 
 [project.urls]

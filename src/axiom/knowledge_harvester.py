@@ -1,31 +1,43 @@
-# knowledge_harvester.py
+from __future__ import annotations
 
+# knowledge_harvester.py
 import os
 import random
 import re
 import time
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 import requests
 import wikipedia
 
-from .graph_core import RelationshipEdge
+from axiom.graph_core import RelationshipEdge
+
+if TYPE_CHECKING:
+    from threading import Lock
+
+    from axiom.cognitive_agent import CognitiveAgent
+
+wikipedia.set_user_agent("AxiomAgent/1.0 (AxiomAgent@example.com)")
+
+NYT_API_KEY = os.environ.get("NYT_API_KEY")
+
+if not NYT_API_KEY:
+    print(
+        "[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. NYT topic source will be disabled.",
+    )
 
 
 class KnowledgeHarvester:
-    def __init__(self, agent, lock):
+    __slots__ = ("agent", "lock", "rejected_topics", "enable_anticipatory_cache")
+
+    def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
         self.agent = agent
         self.lock = lock
-        self.nyt_api_key = os.environ.get("NYT_API_KEY")
-        if not self.nyt_api_key:
-            print(
-                "[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. NYT topic source will be disabled.",
-            )
 
-        self.rejected_topics = set()
+        self.rejected_topics: set[str] = set()
         self.enable_anticipatory_cache = False
 
-        wikipedia.set_user_agent("AxiomAgent/1.0 (AxiomAgent@example.com)")
         print("[Knowledge Harvester]: Initialized.")
 
     def _pre_filter_headline(self, headline: str) -> str:
@@ -48,34 +60,35 @@ class KnowledgeHarvester:
         try:
             interpretation = self.agent.interpreter.interpret(topic_string)
             entities = interpretation.get("entities", [])
-            if entities:
-                priority_types = [
-                    "PERSON",
-                    "ORGANIZATION",
-                    "LOCATION",
-                    "GPE",
-                    "PRODUCT",
-                    "EVENT",
-                ]
-                for ent_type in priority_types:
-                    for entity in entities:
-                        if entity.get("type") == ent_type:
-                            core_entity = entity.get("name")
-                            print(
-                                f"  [Harvester]: Extracted core entity: '{core_entity}'",
-                            )
-                            return core_entity
-                core_entity = entities[0].get("name")
-                print(
-                    f"  [Harvester]: Extracted core entity (fallback): '{core_entity}'",
-                )
-                return core_entity
+            if not entities:
+                return None
+            priority_types = [
+                "PERSON",
+                "ORGANIZATION",
+                "LOCATION",
+                "GPE",
+                "PRODUCT",
+                "EVENT",
+            ]
+            for ent_type in priority_types:
+                for entity in entities:
+                    if entity.get("type") == ent_type:
+                        core_entity = entity.get("name")
+                        print(
+                            f"  [Harvester]: Extracted core entity: '{core_entity}'",
+                        )
+                        return core_entity
+            core_entity = entities[0].get("name")
+            print(
+                f"  [Harvester]: Extracted core entity (fallback): '{core_entity}'",
+            )
+            return core_entity
         except Exception as e:
             print(f"  [Harvester]: Error during core entity extraction: {e}")
         return None
 
     def get_archival_topic(self) -> str | None:
-        if not self.nyt_api_key:
+        if not NYT_API_KEY:
             return None
         print(
             "  [Discovery]: Attempting to fetch a random topic from New York Times Archives...",
@@ -85,7 +98,7 @@ class KnowledgeHarvester:
             year = random.randint(2000, current_year)
             month = random.randint(1, 12)
             print(f"    - Searching archive for {year}-{month:02d}...")
-            url = f"https://api.nytimes.com/svc/archive/v1/{year}/{month}.json?api-key={self.nyt_api_key}"
+            url = f"https://api.nytimes.com/svc/archive/v1/{year}/{month}.json?api-key={NYT_API_KEY}"
             response = requests.get(url, timeout=15)
             response.raise_for_status()
             data = response.json()
@@ -107,8 +120,8 @@ class KnowledgeHarvester:
     def _is_sentence_simple_enough(
         self,
         sentence: str,
-        max_words=40,
-        max_commas=3,
+        max_words: int = 40,
+        max_commas: int = 3,
     ) -> bool:
         if len(sentence.split()) > max_words:
             print(
@@ -131,7 +144,7 @@ class KnowledgeHarvester:
         print("  [Lock]: Harvester released lock.")
         return learned_successfully
 
-    def discover_new_topic_and_learn(self):
+    def discover_new_topic_and_learn(self) -> None:
         print("\n--- [Discovery Cycle Started] ---")
         initial_topic = None
         with self.lock:
@@ -174,7 +187,7 @@ class KnowledgeHarvester:
         print("--- [Discovery Cycle Finished] ---\n")
         self.agent.log_autonomous_cycle_completion()  # Log completion for reboot logic
 
-    def _find_new_topic(self, max_attempts=10) -> str | None:
+    def _find_new_topic(self, max_attempts: int = 10) -> str | None:
         for i in range(max_attempts):
             print(
                 f"\n[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...",
@@ -182,7 +195,7 @@ class KnowledgeHarvester:
             topic = None
             source_choice = random.choice(["nyt", "wiki", "wiki"])
 
-            if source_choice == "nyt" and self.nyt_api_key:
+            if source_choice == "nyt" and NYT_API_KEY:
                 topic = self.get_archival_topic()
             else:
                 topic = self.get_random_wikipedia_topic()
@@ -253,12 +266,12 @@ class KnowledgeHarvester:
                             "outline of",
                         ]
                     ):
-                        return chosen_page.title
+                        return str(chosen_page.title)
         except Exception as e:
             print(f"  [Discovery]: Error during Wikipedia search: {e}")
         return None
 
-    def study_existing_concept(self):
+    def study_existing_concept(self) -> None:
         print("\n--- [Study Cycle Started] ---")
 
         chosen_edge = None
@@ -409,7 +422,7 @@ class KnowledgeHarvester:
             return None
         return None
 
-    def _anticipate_and_cache(self, topic: str):
+    def _anticipate_and_cache(self, topic: str) -> None:
         print(
             f"\n  [Anticipatory Cache]: Pre-warming caches for the CORRECT topic: '{topic}'",
         )

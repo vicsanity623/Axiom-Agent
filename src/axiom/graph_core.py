@@ -18,7 +18,7 @@ class ConceptNodeData(TypedDict):
     id: str
     name: str
     type: str
-    properties: dict[str, object]
+    properties: dict[str, str]
     value: float
     activation: float
 
@@ -28,10 +28,10 @@ class ConceptNode:
         self,
         name: str,
         node_type: str = "concept",
-        properties=None,
+        properties: dict[str, str] | None = None,
         value: float = 0.5,
         activation: float = 0.0,
-        id_=None,
+        id_: str | None = None,
     ) -> None:
         self.id = id_ or str(uuid.uuid4())
         self.name = name.lower()
@@ -52,27 +52,47 @@ class ConceptNode:
             },
         )
 
-    @staticmethod
-    def from_dict(data: ConceptNodeData) -> Self:
-        return ConceptNode(
-            id=data.get("id"),
-            name=data.get("name"),
-            node_type=data.get("type"),
+    @classmethod
+    def from_dict(cls, data: ConceptNodeData) -> Self:
+        return cls(
+            id_=data.get("id"),
+            name=data["name"],
+            node_type=data["type"],
             properties=data.get("properties", {}),
             value=data.get("value", 0.5),
             activation=data.get("activation", 0.0),
         )
 
 
+class RelationshipEdgeData(TypedDict):
+    id: str
+    source: str
+    target: str
+    type: str
+    weight: float
+    properties: dict[str, str]
+    access_count: int
+
+
 class RelationshipEdge:
+    __slots__ = (
+        "id",
+        "source",
+        "target",
+        "type",
+        "weight",
+        "properties",
+        "access_count",
+    )
+
     def __init__(
         self,
-        source,
-        target,
+        source: str,
+        target: str,
         type: str,
         weight: float = 0.5,
         id: str | None = None,
-        properties=None,
+        properties: dict[str, str] | None = None,
         access_count: int = 0,
     ) -> None:
         self.id = id or str(uuid.uuid4())
@@ -83,24 +103,26 @@ class RelationshipEdge:
         self.properties = properties or {}
         self.access_count = access_count
 
-    def to_dict(self):
-        return {
-            "id": self.id,
-            "source": self.source,
-            "target": self.target,
-            "type": self.type,
-            "weight": self.weight,
-            "properties": self.properties,
-            "access_count": self.access_count,
-        }
+    def to_dict(self) -> RelationshipEdgeData:
+        return RelationshipEdgeData(
+            {
+                "id": self.id,
+                "source": self.source,
+                "target": self.target,
+                "type": self.type,
+                "weight": self.weight,
+                "properties": self.properties,
+                "access_count": self.access_count,
+            },
+        )
 
-    @staticmethod
-    def from_dict(data) -> Self:
-        return RelationshipEdge(
+    @classmethod
+    def from_dict(cls, data: RelationshipEdgeData) -> Self:
+        return cls(
             id=data.get("id"),
-            source=data.get("source"),
-            target=data.get("target"),
-            type=data.get("type"),
+            source=data["source"],
+            target=data["target"],
+            type=data["type"],
             weight=data.get("weight", 0.5),
             properties=data.get("properties", {}),
             access_count=data.get("access_count", 0),
@@ -108,14 +130,16 @@ class RelationshipEdge:
 
 
 class ConceptGraph:
+    __slots__ = ("graph", "name_to_id")
+
     def __init__(self) -> None:
         self.graph = nx.MultiDiGraph()
         # This is the correct name for your lookup dictionary
-        self.name_to_id = {}
+        self.name_to_id: dict[str, str] = {}
 
     def add_node(self, node: ConceptNode) -> ConceptNode:
-        if self.get_node_by_name(node.name):
-            return self.get_node_by_name(node.name)
+        if existing_node := self.get_node_by_name(node.name):
+            return existing_node
 
         self.graph.add_node(node.id, **node.to_dict())
         # Your original code used node.name, which is correct.
@@ -133,14 +157,13 @@ class ConceptGraph:
             return ConceptNode.from_dict(node_data)
         return None
 
-    # Your original add_edge method is robust and good, let's keep it.
     def add_edge(
         self,
-        source_node,
-        target_node,
+        source_node: ConceptNode,
+        target_node: ConceptNode,
         relation_type: str,
         weight: float = 0.5,
-        properties=None,
+        properties: dict[str, str] | None = None,
     ) -> RelationshipEdge | None:
         if not all([source_node, target_node]):
             return None
@@ -176,7 +199,7 @@ class ConceptGraph:
         )
         return new_edge
 
-    def get_edges_from_node(self, node_id):
+    def get_edges_from_node(self, node_id: int) -> list[RelationshipEdge]:
         if not self.graph.has_node(node_id):
             return []
         # Your original from_dict usage was slightly wrong here too.
@@ -189,7 +212,7 @@ class ConceptGraph:
             edges.append(RelationshipEdge.from_dict(full_edge_data))
         return edges
 
-    def get_edges_to_node(self, node_id):
+    def get_edges_to_node(self, node_id: int) -> list[RelationshipEdge]:
         if not self.graph.has_node(node_id):
             return []
         edges = []
@@ -200,7 +223,7 @@ class ConceptGraph:
             edges.append(RelationshipEdge.from_dict(full_edge_data))
         return edges
 
-    def decay_activations(self, decay_rate=0.1):
+    def decay_activations(self, decay_rate: float = 0.1) -> None:
         for node_id in self.graph.nodes:
             current_activation = self.graph.nodes[node_id].get("activation", 0.0)
             self.graph.nodes[node_id]["activation"] = max(
@@ -210,7 +233,7 @@ class ConceptGraph:
 
     # --- SAVING AND LOADING LOGIC ---
 
-    def save_to_file(self, filename):
+    def save_to_file(self, filename: str) -> None:
         # This uses the standard, robust networkx serializer
         graph_data = json_graph.node_link_data(self.graph)
         with open(filename, "w") as f:

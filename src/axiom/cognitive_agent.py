@@ -1,27 +1,40 @@
-# cognitive_agent.py
+from __future__ import annotations
 
+# cognitive_agent.py
 import json
 import os
 import re
 from datetime import datetime
-from functools import lru_cache
+from pathlib import Path
+from typing import Final, TypedDict
 
-from .dictionary_utils import get_word_info_from_wordnet
-from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
-from .knowledge_base import seed_domain_knowledge
-from .universal_interpreter import UniversalInterpreter
+from axiom.dictionary_utils import get_word_info_from_wordnet
+from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
+from axiom.knowledge_base import seed_domain_knowledge
+from axiom.universal_interpreter import UniversalInterpreter
+
+BRAIN_FOLDER: Final = Path("brain")
+DEFAULT_BRAIN_FILE: Final = BRAIN_FOLDER / "my_agent_brain.json"
+DEFAULT_STATE_FILE: Final = BRAIN_FOLDER / "my_agent_state.json"
+
+
+class RelationData(TypedDict):
+    subject: str
+    verb: str
+    object: str
+    properties: dict[str, str]
 
 
 class CognitiveAgent:
     def __init__(
         self,
-        brain_file="brain/my_agent_brain.json",
-        state_file="brain/my_agent_state.json",
-        load_from_file=True,
+        brain_file: Path = DEFAULT_BRAIN_FILE,
+        state_file: Path = DEFAULT_STATE_FILE,
+        load_from_file: bool = True,
         brain_data=None,
         cache_data=None,
-        inference_mode=False,
-    ):
+        inference_mode: bool = False,
+    ) -> None:
         print("Initializing Cognitive Agent...")
         self.brain_file = brain_file
         self.state_file = state_file
@@ -114,7 +127,7 @@ class CognitiveAgent:
         )
 
     # --- NEW METHOD: Cycle Counter ---
-    def log_autonomous_cycle_completion(self):
+    def log_autonomous_cycle_completion(self) -> None:
         """Called by the harvester after each cycle to track interpreter lifetime."""
         self.autonomous_cycle_count += 1
         print(
@@ -124,7 +137,7 @@ class CognitiveAgent:
             self._reboot_interpreter()
             self.autonomous_cycle_count = 0  # Reset the counter
 
-    def _load_agent_state(self):
+    def _load_agent_state(self) -> None:
         if os.path.exists(self.state_file):
             try:
                 with open(self.state_file) as f:
@@ -138,7 +151,7 @@ class CognitiveAgent:
         else:
             self.learning_iterations = 0
 
-    def _save_agent_state(self):
+    def _save_agent_state(self) -> None:
         state_data = {"learning_iterations": self.learning_iterations}
         with open(self.state_file, "w") as f:
             json.dump(state_data, f, indent=4)
@@ -466,8 +479,12 @@ class CognitiveAgent:
 
         return final_response
 
-    @lru_cache(maxsize=256)
-    def _gather_facts_multihop(self, start_node_id: str, max_hops: int) -> tuple:
+    ##    @lru_cache(maxsize=256)
+    def _gather_facts_multihop(
+        self,
+        start_node_id: str,
+        max_hops: int,
+    ) -> tuple[str, tuple[str, str]]:
         print(
             f"  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: {start_node_id}",
         )
@@ -568,7 +585,10 @@ class CognitiveAgent:
             words = words[1:]
         return " ".join(words).strip()
 
-    def _process_statement_for_learning(self, relation: dict) -> tuple[bool, str]:
+    def _process_statement_for_learning(
+        self,
+        relation: RelationData,
+    ) -> tuple[bool, str]:
         if self.inference_mode:
             return (
                 False,
