@@ -11,14 +11,17 @@ import networkx as nx
 from networkx.readwrite import json_graph
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Self
+
+    from axiom.unversal_extractor import PropertyData
 
 
 class ConceptNodeData(TypedDict):
     id: str
     name: str
     type: str
-    properties: dict[str, str]
+    properties: PropertyData
     value: float
     activation: float
 
@@ -28,7 +31,7 @@ class ConceptNode:
         self,
         name: str,
         node_type: str = "concept",
-        properties: dict[str, str] | None = None,
+        properties: PropertyData | None = None,
         value: float = 0.5,
         activation: float = 0.0,
         id_: str | None = None,
@@ -70,7 +73,7 @@ class RelationshipEdgeData(TypedDict):
     target: str
     type: str
     weight: float
-    properties: dict[str, str]
+    properties: PropertyData
     access_count: int
 
 
@@ -92,7 +95,7 @@ class RelationshipEdge:
         type: str,
         weight: float = 0.5,
         id: str | None = None,
-        properties: dict[str, str] | None = None,
+        properties: PropertyData | None = None,
         access_count: int = 0,
     ) -> None:
         self.id = id or str(uuid.uuid4())
@@ -163,7 +166,7 @@ class ConceptGraph:
         target_node: ConceptNode,
         relation_type: str,
         weight: float = 0.5,
-        properties: dict[str, str] | None = None,
+        properties: PropertyData | None = None,
     ) -> RelationshipEdge | None:
         if not all([source_node, target_node]):
             return None
@@ -199,7 +202,7 @@ class ConceptGraph:
         )
         return new_edge
 
-    def get_edges_from_node(self, node_id: int) -> list[RelationshipEdge]:
+    def get_edges_from_node(self, node_id: str) -> list[RelationshipEdge]:
         if not self.graph.has_node(node_id):
             return []
         # Your original from_dict usage was slightly wrong here too.
@@ -212,7 +215,7 @@ class ConceptGraph:
             edges.append(RelationshipEdge.from_dict(full_edge_data))
         return edges
 
-    def get_edges_to_node(self, node_id: int) -> list[RelationshipEdge]:
+    def get_edges_to_node(self, node_id: str) -> list[RelationshipEdge]:
         if not self.graph.has_node(node_id):
             return []
         edges = []
@@ -233,7 +236,7 @@ class ConceptGraph:
 
     # --- SAVING AND LOADING LOGIC ---
 
-    def save_to_file(self, filename: str) -> None:
+    def save_to_file(self, filename: Path | str) -> None:
         # This uses the standard, robust networkx serializer
         graph_data = json_graph.node_link_data(self.graph)
         with open(filename, "w") as f:
@@ -241,7 +244,7 @@ class ConceptGraph:
         print(f"Agent brain saved to {filename}")
 
     @classmethod
-    def load_from_dict(cls, data) -> Self:
+    def load_from_dict(cls, data: dict[str, object]) -> Self:
         """THE NEW, CRITICAL METHOD FOR LOADING FROM .AXM MODELS"""
         instance = cls()
 
@@ -262,7 +265,7 @@ class ConceptGraph:
         return instance
 
     @classmethod
-    def load_from_file(cls, filename: str) -> Self:
+    def load_from_file(cls, filename: Path | str) -> Self:
         """LOADS FROM A .JSON FILE (USED BY THE TRAINER)"""
         if os.path.exists(filename):
             try:

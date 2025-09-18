@@ -1,10 +1,6 @@
+from __future__ import annotations
+
 # autonomous_trainer.py (auto train study and discovery cycle no chat)
-
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import threading
 import time
 

@@ -27,7 +27,8 @@ You are a language rephrasing engine. Your task is to convert the given 'Facts' 
 JSON_STRUCTURE_PROMPT: Final = """
 The JSON object must have the following fields:
 - 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
-- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 0
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object.
+If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.
 - 'key_topics': A list of the main subjects or topics...
 - 'full_text_rephrased': A neutral, one-sentence rephrasing..."""[1:]
 
@@ -57,9 +58,14 @@ class RelationData(TypedDict):
     properties: NotRequired[PropertyData]
 
 
+class Entity(TypedDict):
+    name: str
+    type: Literal["CONCEPT", "PERSON", "ROLE"]
+
+
 class InterpretData(TypedDict):
     intent: Intent
-    entities: list[str]
+    entities: list[Entity]
     relation: RelationData | None
     key_topics: list[str]
     full_text_rephrased: str

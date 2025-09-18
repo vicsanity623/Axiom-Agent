@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 # knowledge_base.py
+from axiom.dictionary_utils import get_word_info_from_wordnet
 
-from .dictionary_utils import get_word_info_from_wordnet
 
-
-def seed_domain_knowledge(agent_instance):
+def seed_domain_knowledge(agent_instance) -> None:
     """
     Adds a large, foundational set of facts and relationships to the graph.
     This gives the agent a significant head start on its knowledge.

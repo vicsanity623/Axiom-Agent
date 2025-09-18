@@ -5,24 +5,26 @@ import json
 import os
 import re
 from datetime import datetime
+from functools import lru_cache
 from pathlib import Path
-from typing import Final, TypedDict
+from typing import Final, NotRequired, TypedDict
 
 from axiom.dictionary_utils import get_word_info_from_wordnet
 from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
 from axiom.knowledge_base import seed_domain_knowledge
-from axiom.universal_interpreter import UniversalInterpreter
+from axiom.universal_interpreter import (
+    RelationData,
+    UniversalInterpreter,
+)
 
 BRAIN_FOLDER: Final = Path("brain")
 DEFAULT_BRAIN_FILE: Final = BRAIN_FOLDER / "my_agent_brain.json"
 DEFAULT_STATE_FILE: Final = BRAIN_FOLDER / "my_agent_state.json"
 
 
-class RelationData(TypedDict):
-    subject: str
-    verb: str
-    object: str
-    properties: dict[str, str]
+class ClarificationContext(TypedDict):
+    subject: NotRequired[str]
+    conflicting_relation: NotRequired[str]
 
 
 class CognitiveAgent:
@@ -90,15 +92,15 @@ class CognitiveAgent:
             raise ValueError("Agent must be initialized with either files or data.")
 
         self.is_awaiting_clarification = False
-        self.clarification_context = {}
-        self.conversation_history = []
+        self.clarification_context: ClarificationContext = ClarificationContext({})
+        self.conversation_history: list[str] = []
         self.enable_contextual_memory = False
         self.autonomous_cycle_count = 0
         self.INTERPRETER_REBOOT_THRESHOLD = 150  # Reboot interpreter every 50 cycles
         # --- END OF REBOOT LOGIC ---
 
     # --- NEW METHOD: Prophylactic Reboot ---
-    def _reboot_interpreter(self):
+    def _reboot_interpreter(self) -> None:
         """
         Destroys and recreates the UniversalInterpreter to prevent long-term
         memory leaks or state corruption in the underlying C++ library.
@@ -203,9 +205,11 @@ class CognitiveAgent:
 
             if entities:
                 correct_answer_name = self._clean_phrase(entities[0]["name"])
-                subject_name = self.clarification_context.get("subject")
+                subject_name: str | None = self.clarification_context.get("subject")
                 relation_type = self.clarification_context.get("conflicting_relation")
-                subject_node = self.graph.get_node_by_name(subject_name)
+                subject_node: ConceptNode | None
+                if subject_name is not None:
+                    subject_node = self.graph.get_node_by_name(subject_name)
 
                 if subject_node and relation_type:
                     self._gather_facts_multihop.cache_clear()
@@ -288,13 +292,13 @@ class CognitiveAgent:
 
         elif intent == "statement_of_correction" and relation:
             print("  [Correction]: Processing user's correction...")
-            subject_name = relation.get("subject")
-            if isinstance(subject_name, dict):
-                subject_name = subject_name.get("name")
+            relation_subject_name = relation.get("subject")
+            if isinstance(relation_subject_name, dict):
+                relation_subject_name = relation_subject_name.get("name")
 
-            if subject_name:
+            if relation_subject_name:
                 subject_node = self.graph.get_node_by_name(
-                    self._clean_phrase(subject_name),
+                    self._clean_phrase(relation_subject_name),
                 )
                 if subject_node:
                     self._gather_facts_multihop.cache_clear()
@@ -305,7 +309,7 @@ class CognitiveAgent:
                     object_name = relation.get("object", "")
                     relation_type = self._get_relation_type(
                         verb,
-                        subject_name,
+                        relation_subject_name,
                         object_name,
                     )
                     for u, v, key, data in list(
@@ -381,7 +385,7 @@ class CognitiveAgent:
                 else:
                     structured_response = "Despite having concepts in my knowledge base, I currently lack high-confidence facts to display."
 
-        elif intent in ["question_about_entity", "question_about_concept"]:
+        elif intent in ("question_about_entity", "question_about_concept"):
             entity_name = entities[0]["name"] if entities else user_input
             clean_entity_name = self._clean_phrase(entity_name)
 
@@ -479,12 +483,12 @@ class CognitiveAgent:
 
         return final_response
 
-    ##    @lru_cache(maxsize=256)
+    @lru_cache(maxsize=256)
     def _gather_facts_multihop(
         self,
         start_node_id: str,
         max_hops: int,
-    ) -> tuple[str, tuple[str, str]]:
+    ) -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...]:
         print(
             f"  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: {start_node_id}",
         )
@@ -549,7 +553,10 @@ class CognitiveAgent:
             for fact_str, edge in all_facts_items
         )
 
-    def _filter_facts_for_temporal_query(self, facts_with_props_tuple: tuple) -> set:
+    def _filter_facts_for_temporal_query(
+        self,
+        facts_with_props_tuple: tuple[tuple[str, tuple[tuple[str, str], ...]], ...],
+    ) -> set[str]:
         print("  [TemporalReasoning]: Filtering facts by date...")
         today = datetime.utcnow().date()
         best_fact = None
@@ -598,11 +605,15 @@ class CognitiveAgent:
         subject = relation.get("subject")
         verb = relation.get("verb")
         object_ = relation.get("object")
-        properties = relation.get("properties", {})
+        properties = relation.get("properties")
         if not all([subject, verb, object_]):
             return (False, "I couldn't understand the structure of that fact.")
 
-        subject_name = subject if isinstance(subject, str) else subject.get("name")
+        if isinstance(subject, str):
+            subject_name = subject
+        elif isinstance(subject, dict):
+            # different format?
+            subject_name = subject.get("name")
         if not subject_name:
             return (False, "Could not determine the subject of the fact.")
 
@@ -631,9 +642,11 @@ class CognitiveAgent:
         self.learning_iterations += 1
         learned_at_least_one = False
 
+        assert verb is not None
+        verb_cleaned = verb.lower().strip()
+        sub_node = self._add_or_update_concept(subject_name)
+
         for object_name in objects_to_process:
-            verb_cleaned = verb.lower().strip()
-            sub_node = self._add_or_update_concept(subject_name)
             relation_type = self._get_relation_type(
                 verb_cleaned,
                 subject_name,
@@ -749,7 +762,11 @@ class CognitiveAgent:
             )
         return False
 
-    def _add_or_update_concept(self, name: str, node_type: str = "concept"):
+    def _add_or_update_concept(
+        self,
+        name: str,
+        node_type: str = "concept",
+    ) -> ConceptNode | None:
         clean_name = self._clean_phrase(name)
         if not clean_name:
             return None
@@ -777,7 +794,7 @@ class CognitiveAgent:
         relation: str,
         concept_name2: str,
         weight: float = 0.5,
-    ):
+    ) -> None:
         node1 = self._add_or_update_concept(concept_name1, node_type=concept_type1)
         node2 = self._add_or_update_concept(concept_name2)
         if node1 and node2:
@@ -786,10 +803,10 @@ class CognitiveAgent:
                 f"Manually added knowledge: {concept_name1} --[{relation}]--> {concept_name2}",
             )
 
-    def save_brain(self):
+    def save_brain(self) -> None:
         if not self.inference_mode:
             self.graph.save_to_file(self.brain_file)
 
-    def save_state(self):
+    def save_state(self) -> None:
         if not self.inference_mode:
             self._save_agent_state()

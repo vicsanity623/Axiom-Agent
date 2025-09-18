@@ -14,7 +14,7 @@ dependencies = [
     "APScheduler",
     "Flask",
     "llama-cpp-python",
-    "networkx",
+    "networkx~=3.5.0",
     "nltk",
     "requests",
     "wikipedia",
@@ -31,6 +31,9 @@ dev = [
     # Typing
     "types-requests",
 ]
+
+[[tool.uv.index]]
+url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
 
 [project.urls]
 "Source" = "https://github.com/vicsanity623/Axiom-Agent"

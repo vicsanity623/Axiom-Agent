@@ -1,12 +1,11 @@
-# chat_app.py (original read only chat)
-
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from __future__ import annotations
 
 import argparse
 import json
+
+# chat_app.py (original read only chat)
+import os
+import sys
 import zipfile
 
 from flask import Flask, jsonify, render_template, request

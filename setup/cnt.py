@@ -1,14 +1,10 @@
+from __future__ import annotations
+
 # app.py (Command-Line Manual Trainer)
-
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from axiom.cognitive_agent import CognitiveAgent
 
 
-def run_training_session():
+def run_training_session() -> None:
     """
     Initializes the agent and starts a command-line interface for training.
     """

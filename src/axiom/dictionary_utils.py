@@ -1,5 +1,7 @@
-# dictionary_utils.py
+from __future__ import annotations
 
+# dictionary_utils.py
+from typing import Final, Literal, TypedDict
 
 import nltk
 from nltk.corpus import wordnet as wn
@@ -9,7 +11,7 @@ from nltk.stem import WordNetLemmatizer
 lemmatizer = WordNetLemmatizer()
 
 # Mapping NLTK POS tags to our ConceptNode types
-pos_map = {
+pos_map: Final = {
     "NN": "noun",
     "NNS": "noun",
     "NNP": "noun",
@@ -49,17 +51,26 @@ pos_map = {
 }
 
 
-def get_word_info_from_wordnet(word):
+class WordInfo(TypedDict):
+    type: Literal["concept" | "noun" | "verb" | "descriptor" | "adverb"]
+    definitions: list[str]
+    hypernyms_raw: list[str]
+    related_words: list[str]
+
+
+def get_word_info_from_wordnet(word: str) -> WordInfo:
     """
     Retrieves basic information (POS, definitions, hypernyms) for a word from WordNet.
     Returns a dict {type, definitions, hypernyms_raw, related_words}.
     """
-    word_info = {
-        "type": "concept",
-        "definitions": [],
-        "hypernyms_raw": [],
-        "related_words": [],
-    }
+    word_info = WordInfo(
+        {
+            "type": "concept",
+            "definitions": [],
+            "hypernyms_raw": [],
+            "related_words": [],
+        },
+    )
 
     synsets = wn.synsets(word.lower())
 
@@ -124,7 +135,7 @@ def get_word_info_from_wordnet(word):
     return word_info
 
 
-def get_pos_tag_simple(word):
+def get_pos_tag_simple(word: str) -> str:
     """
     A simpler POS tagger. Tries NLTK's pos_tag, but falls back to WordNet's primary POS
     or a generic 'concept' if the tagger resource is missing.
@@ -162,16 +173,15 @@ def get_pos_tag_simple(word):
                     return "descriptor"
                 if nltk_pos == "r":
                     return "adverb"
-        return "concept"  # Final fallback if WordNet also doesn't give a specific POS
     except Exception as e:
         print(
             f"An unexpected error occurred in get_pos_tag_simple for '{word}': {e}. Falling back to 'concept'.",
         )
-        return "concept"  # General error fallback
-    return "concept"  # Default if no specific POS found
+    # Default if no specific POS found
+    return "concept"
 
 
-def lemmatize_word(word, pos=None):
+def lemmatize_word(word: str, pos: str | None = None) -> WordNetLemmatizer:
     """Lemmatizes a word."""
     if pos:
         wn_pos = None

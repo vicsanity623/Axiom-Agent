@@ -1,13 +1,12 @@
-# setup/app_model.py
-
-# Add these lines at the very top to handle the new project structure
-import os
-import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from __future__ import annotations
 
 import glob
 import json
+
+# setup/app_model.py
+# Add these lines at the very top to handle the new project structure
+import os
+import sys
 import zipfile
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
