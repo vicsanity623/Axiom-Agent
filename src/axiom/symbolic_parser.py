@@ -6,14 +6,16 @@ from typing import TYPE_CHECKING
 
 # We will reuse the same data structures as the LLM interpreter
 # to make the integration seamless.
-from .universal_interpreter import InterpretData, RelationData
+from axiom.universal_interpreter import InterpretData, RelationData
 
 if TYPE_CHECKING:
-    from .cognitive_agent import CognitiveAgent
+    from axiom.cognitive_agent import CognitiveAgent
 
 
 class SymbolicParser:
-    def __init__(self, agent: CognitiveAgent):
+    __slots__ = ("agent",)
+
+    def __init__(self, agent: CognitiveAgent) -> None:
         self.agent = agent
         print("   - Symbolic Parser initialized.")
 

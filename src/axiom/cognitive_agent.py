@@ -9,19 +9,19 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
-from .dictionary_utils import get_word_info_from_wordnet
-from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
-from .knowledge_base import seed_core_vocabulary, seed_domain_knowledge
-from .lexicon_manager import LexiconManager
-from .symbolic_parser import SymbolicParser
-from .universal_interpreter import (
+from axiom.dictionary_utils import get_word_info_from_wordnet
+from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
+from axiom.knowledge_base import seed_core_vocabulary, seed_domain_knowledge
+from axiom.lexicon_manager import LexiconManager
+from axiom.symbolic_parser import SymbolicParser
+from axiom.universal_interpreter import (
     InterpretData,
     RelationData,
     UniversalInterpreter,
 )
 
 if TYPE_CHECKING:
-    from .universal_interpreter import Entity
+    from axiom.universal_interpreter import Entity
 
 BRAIN_FOLDER: Final = Path("brain")
 DEFAULT_BRAIN_FILE: Final = BRAIN_FOLDER / "my_agent_brain.json"

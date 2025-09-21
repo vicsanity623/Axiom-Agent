@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .cognitive_agent import CognitiveAgent
+    from axiom.cognitive_agent import CognitiveAgent
 
 
 class LexiconManager:
