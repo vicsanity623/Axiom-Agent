@@ -45,7 +45,7 @@ class KnowledgeHarvester:
 
         if goal_resolved:
             print(
-                "--- [Study Cycle Finished]: Successfully resolved a learning goal. ---"
+                "--- [Study Cycle Finished]: Successfully resolved a learning goal. ---",
             )
             self.agent.log_autonomous_cycle_completion()
             return
@@ -74,11 +74,11 @@ class KnowledgeHarvester:
                 if goal not in self.agent.learning_goals:
                     self.agent.learning_goals.append(goal)
                     print(
-                        f"  [Discovery]: Found new topic '{new_topic}'. Added to learning goals."
+                        f"  [Discovery]: Found new topic '{new_topic}'. Added to learning goals.",
                     )
         else:
             print(
-                "[Discovery Cycle]: Could not find any new topics to learn about this cycle."
+                "[Discovery Cycle]: Could not find any new topics to learn about this cycle.",
             )
 
         print("--- [Discovery Cycle Finished] ---\n")
@@ -97,7 +97,7 @@ class KnowledgeHarvester:
         word_to_learn = match.group(1).lower()
 
         print(
-            f"[Study Cycle]: Prioritizing learning goal: To define '{word_to_learn}'."
+            f"[Study Cycle]: Prioritizing learning goal: To define '{word_to_learn}'.",
         )
 
         # Formulate targeted search queries for definitions
@@ -110,7 +110,7 @@ class KnowledgeHarvester:
         definition_found = None
         for query in queries:
             result = self.get_fact_from_wikipedia(
-                query
+                query,
             ) or self.get_fact_from_duckduckgo(query)
             if result:
                 definition_found = result[1]  # result is a tuple (title, sentence)
@@ -119,19 +119,19 @@ class KnowledgeHarvester:
 
         if not definition_found:
             print(
-                f"  [Study Cycle]: Could not find a simple definition for '{word_to_learn}'."
+                f"  [Study Cycle]: Could not find a simple definition for '{word_to_learn}'.",
             )
             return False
 
         # Use Regular Expressions to parse the definition (No NLP/Spacy!)
         pattern = re.compile(
-            rf"(?i)\b{word_to_learn}\b\s+(is|are|refers to)\s+(an?|the)?\s*(\w+)\b(.*)"
+            rf"(?i)\b{word_to_learn}\b\s+(is|are|refers to)\s+(an?|the)?\s*(\w+)\b(.*)",
         )
         def_match = pattern.search(definition_found)
 
         if not def_match:
             print(
-                f"  [Study Cycle]: Found sentence, but could not parse it into a definition: '{definition_found}'"
+                f"  [Study Cycle]: Found sentence, but could not parse it into a definition: '{definition_found}'",
             )
             return False
 
@@ -180,7 +180,7 @@ class KnowledgeHarvester:
             # We will now use the TARGET of the fact as the new research topic
             study_topic = target_node_name
             print(
-                f"[Study Cycle]: Studying connection from '{source_node_name}' to '{study_topic}'."
+                f"[Study Cycle]: Studying connection from '{source_node_name}' to '{study_topic}'.",
             )
 
             # Instead of asking a question, we create an investigation goal
@@ -192,14 +192,14 @@ class KnowledgeHarvester:
                 ):
                     self.agent.learning_goals.append(goal)
                     print(
-                        f"  [Study Cycle]: Curiosity triggered. Added goal to investigate '{study_topic}'."
+                        f"  [Study Cycle]: Curiosity triggered. Added goal to investigate '{study_topic}'.",
                     )
 
     def _find_new_topic(self, max_attempts: int = 5) -> str | None:
         """Finds a new, unknown topic from Wikipedia."""
         for i in range(max_attempts):
             print(
-                f"[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})..."
+                f"[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...",
             )
 
             try:
@@ -216,12 +216,12 @@ class KnowledgeHarvester:
                     return clean_topic
             except Exception as e:
                 print(
-                    f"  [Discovery Error]: Could not fetch random topic from Wikipedia. Error: {e}"
+                    f"  [Discovery Error]: Could not fetch random topic from Wikipedia. Error: {e}",
                 )
                 time.sleep(1)  # Wait before retrying
 
         print(
-            f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts."
+            f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts.",
         )
         return None
 
@@ -240,12 +240,12 @@ class KnowledgeHarvester:
                 first_sentence = page.summary.split(". ")[0].strip() + "."
                 if self._is_sentence_simple_enough(first_sentence):
                     print(
-                        f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'"
+                        f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'",
                     )
                     return page.title, first_sentence
         except wikipedia.exceptions.DisambiguationError:
             print(
-                f"  [Knowledge Source]: Wikipedia search for '{topic}' was ambiguous."
+                f"  [Knowledge Source]: Wikipedia search for '{topic}' was ambiguous.",
             )
         except Exception:
             pass  # Suppress other common wikipedia library errors
@@ -265,7 +265,7 @@ class KnowledgeHarvester:
                 first_sentence = definition.split(". ")[0].strip() + "."
                 if self._is_sentence_simple_enough(first_sentence):
                     print(
-                        f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{first_sentence}'"
+                        f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{first_sentence}'",
                     )
                     return topic, first_sentence
         except Exception:
@@ -273,7 +273,10 @@ class KnowledgeHarvester:
         return None
 
     def _is_sentence_simple_enough(
-        self, sentence: str, max_words: int = 30, max_commas: int = 2
+        self,
+        sentence: str,
+        max_words: int = 30,
+        max_commas: int = 2,
     ) -> bool:
         """A simple filter to reject overly complex sentences."""
         return len(sentence.split()) <= max_words and sentence.count(",") <= max_commas

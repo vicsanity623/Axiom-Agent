@@ -119,7 +119,7 @@ class CognitiveAgent:
         if symbolic_interpretation:
             interpretation = symbolic_interpretation
             print(
-                "  [Cognitive Flow]: Symbolic parsing succeeded. Skipping LLM interpreter."
+                "  [Cognitive Flow]: Symbolic parsing succeeded. Skipping LLM interpreter.",
             )
         else:
             words = normalized_input.lower().split()
@@ -140,7 +140,7 @@ class CognitiveAgent:
                 return f"I'm not familiar with the term '{word_to_learn}'. I'll need to research it before I can understand your sentence."
 
             print(
-                "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter."
+                "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter.",
             )
             if self.enable_contextual_memory:
                 interpretation = self.interpreter.interpret_with_context(
@@ -161,7 +161,10 @@ class CognitiveAgent:
         relation: RelationData | None = interpretation.get("relation")
 
         structured_response = self._process_intent(
-            intent, entities, relation, user_input
+            intent,
+            entities,
+            relation,
+            user_input,
         )
         final_response = self._synthesize_response(structured_response, user_input)
 
@@ -241,7 +244,7 @@ class CognitiveAgent:
         if intent == "statement_of_correction" and relation:
             print("  [Correction]: Processing user's correction...")
             was_learned, response_message = self._process_statement_for_learning(
-                relation
+                relation,
             )
             if was_learned:
                 return "Thank you. I have corrected my knowledge."
@@ -429,19 +432,34 @@ class CognitiveAgent:
 
     def _preprocess_self_reference(self, text: str) -> str:
         processed_text = re.sub(
-            r"\byour name\b", "the agent's name", text, flags=re.IGNORECASE
+            r"\byour name\b",
+            "the agent's name",
+            text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"\bwho are you\b", "what is the agent", processed_text, flags=re.IGNORECASE
+            r"\bwho are you\b",
+            "what is the agent",
+            processed_text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"\byou are\b", "the agent is", processed_text, flags=re.IGNORECASE
+            r"\byou are\b",
+            "the agent is",
+            processed_text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"\byour\b", "the agent's", processed_text, flags=re.IGNORECASE
+            r"\byour\b",
+            "the agent's",
+            processed_text,
+            flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"(?<!thank )\byou\b", "the agent", processed_text, flags=re.IGNORECASE
+            r"(?<!thank )\byou\b",
+            "the agent",
+            processed_text,
+            flags=re.IGNORECASE,
         )
         if processed_text != text:
             print(f"  [Pre-processor]: Normalized input to '{processed_text}'")

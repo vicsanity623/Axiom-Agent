@@ -41,7 +41,7 @@ class SymbolicParser:
         verb_info = self._find_verb(words)
         if not verb_info:
             print(
-                "  [Symbolic Parser]: Failed. Could not identify a single known verb."
+                "  [Symbolic Parser]: Failed. Could not identify a single known verb.",
             )
             return None
 
@@ -60,7 +60,7 @@ class SymbolicParser:
         object_ = self.agent._clean_phrase(object_)
 
         print(
-            f"  [Symbolic Parser]: Successfully parsed S-V-O structure: '{subject}' -> '{verb}' -> '{object_}'."
+            f"  [Symbolic Parser]: Successfully parsed S-V-O structure: '{subject}' -> '{verb}' -> '{object_}'.",
         )
 
         relation = RelationData(subject=subject, verb=verb, object=object_)
