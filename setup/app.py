@@ -59,7 +59,7 @@ def load_agent() -> None:
                 # --- NEW: The Cognitive Scheduler with two independent cycles ---
                 # 1. The "Study" cycle runs frequently to deepen existing knowledge.
                 scheduler.add_job(
-                    harvester.study_existing_concept,
+                    harvester.study_cycle,
                     "interval",
                     minutes=6,
                 )
@@ -67,7 +67,7 @@ def load_agent() -> None:
 
                 # 2. The "Discovery" cycle runs infrequently to find brand new topics.
                 scheduler.add_job(
-                    harvester.discover_new_topic_and_learn,
+                    harvester.discover_cycle,
                     "interval",
                     hours=35,
                 )

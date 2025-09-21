@@ -185,6 +185,7 @@ class UniversalInterpreter:
                 echo=False,
                 temperature=0.0,
             )
+            assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
             cleaned_json_str = self._clean_llm_json_output(response_text)
             if not cleaned_json_str:
@@ -192,7 +193,10 @@ class UniversalInterpreter:
             interpretation = json.loads(cleaned_json_str)
             self.interpretation_cache[cache_key] = interpretation
             self._save_cache()
+            # types: no-any-return error: Returning Any from function declared to return "InterpretData"
+            # types: misc error: Expected keyword arguments, {...}, or dict(...) in TypedDict constructor
             return InterpretData(interpretation)
+        # types:    ^      ^
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
             return InterpretData(
@@ -241,6 +245,7 @@ class UniversalInterpreter:
                 echo=False,
                 temperature=0.0,
             )
+            assert isinstance(output, dict)
             rephrased_input = output["choices"][0]["text"].strip()
             if rephrased_input and rephrased_input.lower() != new_input.lower():
                 print(f"    - Context resolved: '{new_input}' -> '{rephrased_input}'")
@@ -298,6 +303,7 @@ class UniversalInterpreter:
                 echo=False,
                 temperature=0.8,
             )
+            assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
             questions = [
                 q.strip()
@@ -363,6 +369,7 @@ class UniversalInterpreter:
                 echo=False,
                 temperature=0.7 if mode == "clarification_question" else 0.1,
             )
+            assert isinstance(output, dict)
             synthesized_text = output["choices"][0]["text"].strip().replace('"', "")
             phrases_to_remove = [
                 "rephrased sentence:",

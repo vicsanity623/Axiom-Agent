@@ -541,7 +541,7 @@ class CognitiveAgent:
         print("  [TemporalReasoning]: Filtering facts by date...")
         today = datetime.utcnow().date()
         best_fact: str | None = None
-        best_date: datetime.date | None = None
+        best_date: datetime | None = None
 
         facts_list = [
             (fact_str, dict(props_tuple))
@@ -552,7 +552,7 @@ class CognitiveAgent:
             date_str = props.get("effective_date")
             if date_str:
                 try:
-                    fact_date = datetime.fromisoformat(date_str).date()
+                    fact_date = datetime.fromisoformat(date_str)
                     if fact_date <= today:
                         if best_date is None or fact_date > best_date:
                             best_date = fact_date
@@ -594,13 +594,17 @@ class CognitiveAgent:
         if isinstance(subject, str):
             subject_name = subject
         elif isinstance(subject, dict):
+            # types: unreachable error: Statement is unreachable
             subject_name = subject.get("name")
+        # types:    ^
         if not subject_name:
             return (False, "Could not determine the subject of the fact.")
 
         objects_to_process = []
         if isinstance(object_, list):
+            # types: unreachable error: Statement is unreachable
             for item in object_:
+                # types:    ^
                 if isinstance(item, dict):
                     name = item.get("entity") or item.get("name")
                     if name:
@@ -608,7 +612,9 @@ class CognitiveAgent:
                 elif isinstance(item, str):
                     objects_to_process.append(item)
         elif isinstance(object_, dict):
+            # types: unreachable error: Statement is unreachable
             name = object_.get("name")
+            # types:    ^
             if name:
                 objects_to_process.append(name)
         elif isinstance(object_, str):

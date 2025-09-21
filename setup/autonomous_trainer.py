@@ -3,6 +3,7 @@ from __future__ import annotations
 # autonomous_trainer.py (auto train study and discovery cycle no chat)
 import threading
 import time
+from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -23,8 +24,9 @@ def start_autonomous_training() -> None:
     agent_interaction_lock = threading.Lock()
 
     try:
-        brain_file = "brain/my_agent_brain.json"
-        state_file = "brain/my_agent_state.json"
+        brain_path = Path("brain")
+        brain_file = brain_path / "my_agent_brain.json"
+        state_file = brain_path / "my_agent_state.json"
 
         # We pass inference_mode=False to ensure it can learn and save.
         axiom_agent = CognitiveAgent(
@@ -67,8 +69,8 @@ def start_autonomous_training() -> None:
 
     except (KeyboardInterrupt, SystemExit):
         print("\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---")
-    except Exception as e:
-        print(f"!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: {e} !!!")
+    except Exception as exc:
+        print(f"!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: {exc} !!!")
         import traceback
 
         traceback.print_exc()
