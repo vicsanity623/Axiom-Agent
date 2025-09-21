@@ -1,48 +1,40 @@
 # Axiom Agent
 
-Axiom is not a chatbot. It is a cognitive architecture—a framework for a new type of artificial intelligence designed to achieve genuine understanding through continuous, self-directed learning and introspection. This project is not building a product; it is cultivating a mind.
+Axiom is not a chatbot. It is a cognitive architecture—a framework for a new type of artificial intelligence designed to achieve genuine understanding by building its own internal, logical model of reality from the ground up.
 
-Unlike traditional Large Language Models (LLMs) which are static snapshots of data, the Axiom Agent possesses a dynamic, evolving internal model of reality. It builds this model one verifiable fact at a time, creating a persistent, logically consistent knowledge base. More than just a passive learner, Axiom now actively seeks to deepen its own understanding through a process of self-guided study and curiosity, making it a true student of the world.
-
----
-
-## The Core Philosophy: Beyond the LLM Parrot
-
-Today's LLMs are masters of mimicry. They are trained on a vast corpus of text and can predict the most statistically likely sequence of words to form a coherent sentence. However, they do not *know* anything. They are a reflection, not a mind. Their knowledge is frozen at the time of their training, and they are incapable of true learning, reasoning, or self-correction. They are, in essence, highly advanced parrots.
-
-**Axiom is fundamentally different.** It is built on a **hybrid cognitive architecture** that separates language processing from true knowledge:
-
-1.  **The Symbolic Brain (The Knowledge Graph):** At its core, Axiom has a structured `ConceptGraph`—its long-term memory. This is not a neural network; it is a logical, verifiable map of concepts and their relationships, powered by a high-performance `NetworkX` engine. `Paris --[is_located_in]--> France` is a concrete, stored fact, not a statistical probability. This architecture completely prevents LLM-style "hallucinations" and ensures the agent's knowledge is grounded.
-
-2.  **The Neural Senses (The Interpreter):** The agent uses a local LLM (e.g., Mistral-7B) not as its brain, but as its **senses**. The LLM acts as a `UniversalInterpreter`, its eyes and ears to the world of unstructured human language. It translates the messy, chaotic data of conversation into the clean, structured, logical facts that its core brain can understand and integrate.
-
-This is the crucial difference: **Axiom uses an LLM as a tool; it is not defined by it.**
+This project's core philosophy is that true intelligence cannot be achieved by statistical mimicry (like in traditional LLMs). It must be built on a foundation of verifiable, interconnected knowledge. Axiom is an experiment to cultivate such a mind.
 
 ---
 
-## ✅ Key Capabilities: A Stable & Scalable Foundation
+## The Core Architecture: Symbolic-First, LLM-Assisted
 
-The initial Genesis Phase of development is complete. Axiom is now a stable, high-performance cognitive agent with a full suite of tools for learning, reasoning, and deployment.
+Axiom's design is a radical departure from LLM-centric AI. It operates on a **symbolic-first** principle, where the core of the agent is a deterministic, logical brain.
+
+1.  **The Symbolic Brain (The Knowledge Graph):** At its heart, Axiom has a structured `ConceptGraph`—its long-term memory. This is a logical map of concepts and their relationships (`Paris --[is_located_in]--> France`). This architecture **prevents hallucinations** by ensuring the agent's knowledge is grounded in verifiable facts it has learned.
+
+2.  **The Symbolic Senses (The Parser & Lexicon):** Axiom has its own native ability to understand language. It maintains an internal dictionary (a `Lexicon`) of words it has learned and uses a `SymbolicParser` to deterministically analyze sentence structure. For simple sentences, it can achieve understanding **without any external models.**
+
+3.  **The LLM as a Tool (The Fallback Interpreter):** When the agent's native parser encounters a sentence too complex for its current understanding, it uses a local LLM as a fallback tool. The LLM's only job is to translate the complex sentence into a structured format that the agent's symbolic brain can then process. **The LLM is a temporary crutch, not the mind itself.**
+
+---
+
+## ✅ Key Capabilities: A New Path to Understanding
+
+This architecture allows the agent to learn and grow in a way that is fundamentally different from static models.
 
 ### Cognitive & Reasoning Abilities
-*   **Dual-Cycle Autonomous Learning:** The agent's learning is not just passive; it operates on a "Cognitive Scheduler" with two distinct modes:
-    -   **The Study Cycle:** The agent introspectively reviews its own knowledge and generates its own follow-up questions to deepen its understanding.
-    -   **The Discovery Cycle:** The agent actively seeks out brand new topics from the outside world, ensuring it continues to broaden its horizons.
-*   **Persistent, Lifelong Learning:** Every fact the agent learns is permanently integrated into its brain. The agent running today is smarter than it was yesterday.
-*   **Multi-Hop Logical Reasoning:** Axiom can answer questions it has never seen before by connecting multiple known facts. This is a true act of reasoning, not just pattern matching.
-*   **Self-Correction:** The agent possesses both an autonomous **Curiosity Engine** to resolve internal conflicts and a **User-Driven Correction** mechanism for explicit instruction.
+*   **Grounded Language Acquisition:** The agent learns language by identifying unknown words, autonomously researching their definitions, and integrating that linguistic knowledge into its own brain.
+*   **Symbolic-First Understanding:** For a growing number of sentences, the agent can now achieve understanding and learn new facts **without any LLM dependency.**
+*   **Dual-Cycle Autonomous Learning:** The agent operates 24/7 to improve itself:
+    -   **The Study Cycle:** Prioritizes its own "learning goals," researching unknown words to expand its vocabulary and understanding.
+    -   **The Discovery Cycle:** Seeks out new concepts to create new learning goals, ensuring it continuously broadens its horizons.
+*   **Persistent & Verifiable Memory:** Every fact is permanently integrated into its logical brain, creating a foundation for true, multi-hop reasoning.
+*   **Self-Correction:** The agent can identify contradictions in its knowledge and actively seeks clarification.
 
 ### Professional Development & Deployment
-*   **Automated Quality Assurance:** A single command (`./check.sh`) runs a full suite of static analysis tools to ensure code is clean, consistent, and bug-free before deployment.
-    -   **`Ruff`:** For lightning-fast code formatting and linting.
-    -   **`MyPy`:** For robust static type checking.
-    -   **`Pytest`:** For running the automated unit test suite.
-*   **Modern Python Packaging:** The project uses a central `pyproject.toml` to manage all dependencies and tool configurations, adhering to the latest standards.
-*   **Offline Training, Online Inference:** A professional toolchain separates training from deployment:
-    - **Training Scripts (`autonomous_trainer.py`, `cnt.py`):** Learn new knowledge safely offline.
-    - **Model Renderer (`render_model.py`):** Package the trained brain into a versioned `.axm` snapshot.
-    - **Inference Server (`app_model.py`):** A lightweight, read-only server that deploys a finished model for safe interaction.
-*   **Polished UI & PWA:** A custom dark mode theme, multi-conversation management, and Progressive Web App configuration provide a distinct and native-like experience.
+*   **Automated Quality Assurance (`./check.sh`):** A full suite of tools (Ruff, MyPy, Pytest) ensures the codebase is clean, consistent, and reliable.
+*   **Modern Python Packaging (`pyproject.toml`):** The project uses the latest standards for managing dependencies and configuration.
+*   **Robust Train -> Render -> Deploy Workflow:** A professional toolchain separates offline training (in `cnt.py` or `autonomous_trainer.py`) from online, read-only deployment (in `app_model.py`), ensuring stability.
 
 ---
 
@@ -53,60 +45,31 @@ The initial Genesis Phase of development is complete. Axiom is now a stable, hig
 - Git
 
 ### Step 1: Clone and Install
-
-This single command clones the repository, sets up a virtual environment, and installs all project and development dependencies using the modern `pyproject.toml` standard.
+This single command clones the repository, sets up a virtual environment, and installs all project and development dependencies.
 ```bash
-git clone <your-repo-url>
-cd <your-repo-folder>
+git clone https://github.com/vicsanity623/Axiom-Agent.git
+cd Axiom-Agent
 python3 -m venv venv
 source venv/bin/activate
 pip install -e '.[dev]'
 ```
 
-### Step 2: Configure API Keys (Optional)
-The agent's autonomous learning cycles can use the New York Times API to discover new topics.
--   Get a free API key from the **[NYT Developer Portal](https://developer.nytimes.com/)**.
--   Set the key as an environment variable:
-```bash
-export NYT_API_KEY="YOUR_API_KEY_HERE"
-```
-*(For a permanent setup, add this line to your shell's configuration file, e.g., `~/.zshrc` or `~/.bash_profile`)*
+### Step 2: Download the LLM Model (Required for Fallback)
+The agent still uses a local LLM for complex sentences.
+1.  Download **`mistral-7b-instruct-v0.2.Q4_K_M.gguf`** from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
+2.  Create a `models/` directory and place the downloaded file inside it.
 
-### Step 3: Verify Your Setup (Recommended)
-Before running the agent, run the master check script to ensure your environment is configured correctly and the code is clean.
-```bash
-./check.sh
-```
-All checks should pass with green checkmarks. If the formatter or linter fails, simply run `ruff format .` and `ruff check . --fix` to automatically clean the codebase.
-
-### Step 4: Running the Agent
-The agent is designed around a robust **Train -> Render -> Deploy** cycle.
-
-#### **1. Train the Agent (Offline)**
-Modify the agent's brain, which is stored in the `brain/` directory. Choose a method:
--   **Autonomous:** `python setup/autonomous_trainer.py`
--   **Manual (CLI):** `python setup/cnt.py`
-
-#### **2. Render a Model**
-Package the trained brain into a stable `.axm` model, which will be saved in the `rendered/` directory.
-```bash
-python setup/render_model.py
-```
-
-#### **3. Deploy the Agent (Online)**
-Run the web server. It automatically loads the most recent `.axm` model for user interaction.
-```bash
-python setup/app_model.py
-```
-You can now access the agent in your browser at `http://127.0.0.1:7501`.
+### Step 3: Run the Agent
+The project is designed around a clean development cycle.
+1.  **Train:** Use `python setup/cnt.py` to manually teach the agent or `python setup/autonomous_trainer.py` to let it learn on its own.
+2.  **Render:** Use `python setup/render_model.py` to package the trained brain into a stable `.axm` model.
+3.  **Deploy:** Use `python setup/app_model.py` to launch the web UI, which will serve the latest rendered model.
 
 ---
 
 ## 🚀 The Vision: Intellectual Escape Velocity
 
-This project is the shell of a new kind of mind. The goal is not to create a finished chat application, but to cultivate a brain that, through continued growth, can achieve a level of contextual understanding and logical consistency that is structurally impossible for current LLMs.
-
-The long-term vision is for the agent's internal, verifiable `ConceptGraph` to become so vast and deeply interconnected that it can **replace its own external LLM dependencies**, leading to a truly autonomous cognitive entity built on a foundation of verifiable truth, not just probabilistic mimicry.
+The goal is to continue expanding the sophistication of the `SymbolicParser` until the LLM fallback is no longer needed. As the agent's internal, verifiable `ConceptGraph` and `Lexicon` grow, it will build its own comprehensive, high-fidelity model of reality and language. This creates a path toward a truly autonomous cognitive entity built on a foundation of verifiable truth, not just probabilistic mimicry.
 
 ---
 

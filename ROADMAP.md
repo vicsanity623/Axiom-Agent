@@ -1,101 +1,56 @@
 # Axiom Agent: Development Roadmap
 
-This document outlines the current status, planned features, and architectural improvements for the Axiom Agent project.
+This document outlines the current status and future architectural direction for the Axiom Agent project.
 
-## ✅ Genesis Phase: Autonomous Local Agent (Complete & Stable)
+## ✅ Phase 1: The Genesis Engine (Complete & Stable)
 
-This foundational phase is **complete**. The project has successfully evolved from a prototype into a stable, high-performance cognitive agent capable of autonomous learning, logical reasoning, and robust deployment, all on local CPU hardware. This phase serves as the stable bedrock for all future development.
+This foundational phase is **complete**. The project has successfully evolved from a prototype into a stable, high-performance cognitive engine. This phase established a robust foundation for all future development, including a professional toolchain, a scalable knowledge graph, and a complete training-to-deployment workflow running on local CPU hardware.
 
-### ✅ **Core Architecture & Capabilities**
-- **Hybrid Cognitive Architecture:** Combines a symbolic **Knowledge Graph** (NetworkX) with a neural **Universal Interpreter** (LLM) for verifiable memory and flexible understanding.
-- **Multi-Hop Logical Reasoning:** Traverses the knowledge graph to infer conclusions from connected facts.
-- **Dual-Cycle Autonomous Learning:** Employs a "Cognitive Scheduler" for continuous self-improvement:
-    - **Study Cycle:** Introspectively reviews and enriches existing knowledge.
-    - **Discovery Cycle:** Actively seeks out and learns entirely new topics.
-- **Dual-Mode Learning System:** Possesses both an autonomous **Curiosity Engine** for resolving internal conflicts and a **User-Driven Correction** mechanism for explicit instruction.
-- **Resilient Knowledge Harvester:** Uses multiple sources (Wikipedia, DDG) and intelligent filters to acquire new, high-quality knowledge.
-- **Vast Knowledge Base Seeding:** Initializes with a large, pre-seeded set of foundational knowledge.
-
-### ✅ **Scalability & Performance**
-- **Knowledge Graph Engine Upgrade:** The core graph is powered by the battle-tested, C-optimized **`NetworkX`** engine, ensuring scalability.
-- **Multi-Layer Caching System:** Drastically reduces query latency and LLM calls via in-memory **Reasoning Caches** (`lru_cache`) and on-disk **Interpreter/Synthesizer Caches**.
-- **Bombproof Stability:** All critical, show-stopping bugs (segmentation faults, amnesia on restart, autonomous cycle failures) have been identified and **permanently fixed**.
-- **Verified Performance:** Profiling confirms Python-level bottlenecks are eliminated, with cached queries resolving in **under 0.01 seconds**.
-
-### ✅ **Professional Development & Deployment Workflow**
-- **Structured Project Layout:** The codebase has been professionally reorganized into a clean package structure (`axiom/`, `setup/`, `tests/`, etc.) for maintainability and scalability.
-- **Centralized Configuration (`pyproject.toml`):** The project now uses the modern standard for managing dependencies and tool settings, replacing multiple legacy `requirements.txt` files.
-- **Automated Quality Assurance (`check.sh`):** A comprehensive check script automates a full suite of software quality tests with a single command:
-    - **Code Formatting (`Ruff Format`):** Enforces a consistent, professional code style across the entire project.
-    - **Linting (`Ruff Check`):** Statically analyzes code to catch potential bugs, style errors, and anti-patterns before they become runtime issues.
-    - **Static Type Checking (`MyPy`):** Verifies type hints to prevent a whole class of common bugs and improve code reliability.
-    - **Unit Testing (`Pytest`):** Runs an automated test suite to ensure core components function as expected.
-- **Versioned Model Rendering (`.axm`):** A custom "Axiom Mind" format packages the agent's brain and cache into a single, portable snapshot.
-- **Complete Toolchain:** A full suite of scripts enables a professional "Offline Training, Online Inference" workflow:
-    - **`autonomous_trainer.py`:** A headless script for 24/7 autonomous learning.
-    - **`cnt.py`:** A command-line tool for manual, interactive training.
-    - **`render_model.py`:** Packages the trained brain into a new `.axm` model.
-    - **`app_model.py`:** A read-only Flask server that deploys the latest model for safe user interaction.
-
-### ✅ **User Interface & Experience**
-- **Multi-Conversation Management:** A robust UI with persistent chat sessions saved to local storage.
-- **Full PWA (Progressive Web App) Support:** The agent is installable on desktop and mobile for a native-like experience.
-- **Thread-Safe Operation:** A global lock ensures memory integrity during simultaneous user chats and autonomous learning cycles.
+### ✅ **Core Achievements of this Phase:**
+- **Symbolic Knowledge Graph:** A verifiable, persistent memory powered by `NetworkX` that prevents hallucinations.
+- **LLM as a Tool:** A successful proof-of-concept using a local LLM as a fallback "universal interpreter" for language tasks.
+- **Autonomous Learning Cycles:** A stable "Cognitive Scheduler" that enables the agent to learn and study 24/7.
+- **Professional Development Environment:** A full suite of quality assurance tools (`Ruff`, `MyPy`, `Pytest`), a modern `pyproject.toml` configuration, and a clean `src` layout.
+- **Complete Deployment Workflow:** A robust `Train -> Render -> Deploy` cycle with dedicated scripts for each stage.
 
 ---
 
-## 🛑 On Hold / Deprecated Features
+## The Path Forward: Achieving True Understanding
 
-*Features that are architecturally sound but have been temporarily disabled to prioritize core stability and performance. They can be revisited in future development phases.*
+With the core engine stable, the strategic focus now pivots from *using an LLM as a tool* to **systematically replacing it**. The following phases are designed to build a truly **Symbolic-First Architecture**, where the agent develops its own grounded understanding of language from the ground up, moving from a hybrid system to a truly autonomous cognitive entity.
 
-### 1. Dynamic Fact Salience (`access_count`)
-- **Status:** **`On Hold / Partially Deprecated`**. Incompatible with the current high-performance `lru_cache` system.
-- **Path Forward:** Can be re-introduced with a more sophisticated, cache-aware architecture.
-
-### 2. Conversational Context (Short-Term Memory)
-- **Status:** **`On Hold / Disabled`**. The initial LLM-based approach proved unreliable.
-- **Path Forward:** Requires a complete architectural rethink, potentially leveraging a more powerful base model or a different logical framework.
-
----
-
-## Future Development Roadmap (Next 12 Months)
-
-With the local agent now stable and robust, the strategic focus shifts to **overcoming the physical limitations of a single machine**. The next phases will leverage free-tier cloud resources to give the agent a massively scaled memory and enhanced cognitive abilities, all without incurring costs.
-
-### Free Cloud GPU/Resource Strategy
-
-The entire future roadmap is designed to be executed using a suite of powerful, free-tier cloud services. This allows for massive scaling without financial investment.
-- **Primary Tools:** Google Colab, Kaggle Kernels, AWS SageMaker Studio Lab.
-- **Persistent Storage:** Google Drive.
-- **Strategy:** Distribute computationally intensive tasks (large-scale graph queries, model fine-tuning) to these services while keeping the core agent logic portable.
+### **Phase 2: The Symbolic Interpreter (Current Focus)**
+- **Goal:** To methodically replace the probabilistic LLM interpreter with a deterministic, graph-native **Axiom Lexicon & Parser**, enabling the agent to build a truly grounded understanding of language.
+- **Status:** **In Progress.** The foundational components are complete.
+- **Completed Steps & Successes:**
+    1.  **Lexicon Manager:** A dedicated module for managing the agent's internal dictionary of known words is complete and integrated.
+    2.  **"Unknown Word" Reflex:** The agent can now successfully identify words it doesn't know, create an "INVESTIGATE" goal, and defer processing—a primitive form of metacognitive awareness.
+    3.  **Targeted Researcher:** The `KnowledgeHarvester` has been successfully refactored. Its primary mission is now to fulfill "INVESTIGATE" goals by performing targeted web searches for definitions, **without any LLM dependency.**
+    4.  **Symbolic Parser (v1):** The initial version of the parser is complete. It can successfully parse simple `Subject-Verb-Object` sentences and create a structured interpretation, allowing the agent to learn facts **without calling the LLM.**
+- **Next Steps:**
+    1.  **Expand Parser Grammar:** Incrementally add rules to the `SymbolicParser` to handle more complex sentence structures (e.g., prepositional phrases, adjectives, compound sentences).
+    2.  **Develop Question Parsing:** Teach the parser to recognize and deconstruct questions (e.g., "What is a dog?") into a query that can be run against the Knowledge Graph.
+    3.  **Implement Coreference Resolution:** Build a simple, deterministic mechanism to resolve basic pronouns (e.g., "it," "they") by looking at the immediate conversation history.
+- **Success Metrics:** Achieve a measurable reduction in LLM fallback calls. The agent can answer simple questions it has learned the answer to, entirely through its own symbolic logic.
 
 ---
 
-### **Phase 2: The Distributed Mind (Cloud Knowledge Graph Integration)**
-- **Goal:** Overcome local RAM/storage limits by migrating the knowledge graph to a free-tier cloud database, enabling the agent to scale its memory to hundreds of thousands of concepts.
-- **Milestone:** Agent's brain lives in a persistent, scalable cloud database (e.g., Neo4j AuraDB Free, Redis Cloud).
+### **Phase 3: The Distributed Mind (Knowledge Scalability)**
+- **Goal:** Overcome local RAM/storage limits by migrating the knowledge graph to a free-tier cloud database, enabling the agent's memory to scale to hundreds of thousands of concepts.
+- **Milestone:** The agent's brain lives in a persistent, scalable cloud database (e.g., Neo4j AuraDB Free, Redis Cloud), separating the "mind" from the "machine."
 - **Key Steps:**
     1.  **Migrate Graph Storage:** Replace `NetworkX` file I/O in `graph_core.py` with a connector to a cloud graph database.
-    2.  **Refactor Learning Cycles:** Update `knowledge_harvester.py` to perform queries and writes directly against the cloud database.
-    3.  **Implement Efficient Syncing:** Develop a mechanism in `cloud_utils.py` to sync or "cache" relevant sub-graphs from the cloud for fast local reasoning.
-    4.  **Introduce Graph Pruning:** Implement a "salience decay" mechanism to periodically prune old, unused edges from the cloud graph to keep it lean.
-- **Success Metrics:** Agent can successfully read/write to the cloud graph. The local agent can operate with a small memory footprint by only caching active sub-graphs. Graph size can grow beyond local machine limits.
+    2.  **Refactor Harvester:** Update the `KnowledgeHarvester` to perform queries and writes directly against the cloud database.
+    3.  **Implement Efficient Caching:** Develop a mechanism to cache relevant sub-graphs from the cloud for fast local reasoning.
+- **Success Metrics:** The agent's knowledge base can grow beyond the limits of a local machine without performance degradation.
 
-### **Phase 3: The Enlightened Interpreter (LLM Independence & Accuracy)**
-- **Goal:** Reduce reliance on a single, general-purpose LLM for interpretation, leading to higher accuracy, fewer errors, and the ability to process more complex information.
-- **Milestone:** The `UniversalInterpreter` evolves into a hybrid, rule-based/ensemble system.
-- **Key Steps:**
-    1.  **Implement a Hybrid Parser:** Integrate a fast, local NLP library (like `spaCy`) into `universal_interpreter.py` to handle simple, unambiguous sentences without needing an LLM call.
-    2.  **Develop an Ensemble Model:** For complex sentences, query multiple small, efficient models (e.g., Phi-2, Gemma 2B running in a Colab GPU instance) and use a "voting" system to determine the most likely correct interpretation.
-    3.  **Self-Correction via Web Verification:** When the agent detects a knowledge conflict, it will use its cloud-bursting capability to perform a web search to verify the conflicting facts and autonomously correct its own brain.
-    4.  **Fine-Tuning:** Use the history of successful interpretations to generate a dataset for fine-tuning a small, specialized interpretation model in SageMaker Studio Lab.
-- **Success Metrics:** >60% of simple statements are interpreted locally without an LLM call. Interpretation accuracy for complex statements increases to >90%.
+---
 
 ### **Phase 4: The Autonomous Scholar (Advanced Curriculum Learning)**
-- **Goal:** Evolve the agent's learning from random discovery to a strategic, goal-oriented "curriculum."
-- **Milestone:** The agent can autonomously set and pursue learning goals.
+- **Goal:** Evolve the agent's learning from simple goal fulfillment to a strategic, goal-oriented "curriculum" driven by the gaps in its own understanding.
+- **Milestone:** The agent can autonomously set and pursue multi-step learning goals to comprehend complex topics.
 - **Key Steps:**
-    1.  **Develop a Goal System:** Implement a mechanism for the agent to set high-level learning goals (e.g., "Understand quantum physics").
-    2.  **Curriculum Generation:** When a goal is set, the agent will use its tools to generate a curriculum of prerequisite topics (e.g., "First, I must learn what an atom is. Then, what a subatomic particle is.").
-    3.  **Reinforcement Heuristics:** Implement a simple reinforcement system in `rl_heuristics.py` that "rewards" the agent for learning facts related to its current curriculum goal, making it more likely to study related topics.
+    1.  **Develop a Goal System:** Implement a mechanism for the agent to set high-level learning goals (e.g., "Understand photosynthesis").
+    2.  **Curriculum Generation:** When a goal is set, the agent will use its parser and lexicon to generate a curriculum of prerequisite topics. Before it can understand "photosynthesis," it must first create and resolve "INVESTIGATE" goals for "plant," "sunlight," "chlorophyll," etc.
+    3.  **Implement Reinforcement Heuristics:** Create a simple system that "rewards" the agent for learning facts related to its current curriculum goal, guiding its study process.
 - **Success Metrics:** The agent demonstrates the ability to learn a complex topic by systematically exploring its foundational concepts first. The knowledge graph shows dense, interconnected clusters of knowledge around specific domains.

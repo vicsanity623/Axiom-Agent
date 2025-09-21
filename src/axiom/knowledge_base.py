@@ -1306,3 +1306,38 @@ def seed_domain_knowledge(agent_instance) -> None:
                     agent_instance.graph.add_edge(main_node, hypernym_node, "is_a", 0.7)
 
     print("   - Vast domain knowledge seeding complete.")
+
+
+def seed_core_vocabulary(agent_instance) -> None:
+    """Seeds the Lexicon with foundational English words."""
+    print("     - Seeding core vocabulary for Lexicon...")
+    core_vocab = {
+        # Parts of Speech (as concepts)
+        "noun": "concept",
+        "verb": "concept",
+        "adjective": "concept",
+        "article": "concept",
+        "pronoun": "concept",
+        # Articles
+        "a": "article",
+        "an": "article",
+        "the": "article",
+        # Common Verbs
+        "is": "verb",
+        "are": "verb",
+        "was": "verb",
+        "were": "verb",
+        "has": "verb",
+        "have": "verb",
+        "had": "verb",
+        "do": "verb",
+        "lays": "verb",  # Adding this for our 'platypus' test
+        # Pronouns
+        "it": "pronoun",
+        "they": "pronoun",
+        "he": "pronoun",
+        "she": "pronoun",
+    }
+    for word, pos in core_vocab.items():
+        # Using the LexiconManager to add the knowledge correctly
+        agent_instance.lexicon.add_linguistic_knowledge(word, pos)

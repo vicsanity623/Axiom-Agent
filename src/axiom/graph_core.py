@@ -160,6 +160,15 @@ class ConceptGraph:
             return ConceptNode.from_dict(node_data)
         return None
 
+    def get_node_by_id(self, node_id: str) -> ConceptNode | None:
+        """Retrieves a single ConceptNode object from the graph by its ID."""
+        if self.graph.has_node(node_id):
+            node_data = self.graph.nodes[node_id]
+            # We must add the ID back in, as it's not stored in the node's data dict
+            node_data["id"] = node_id
+            return ConceptNode.from_dict(node_data)
+        return None
+
     def add_edge(
         self,
         source_node: ConceptNode,

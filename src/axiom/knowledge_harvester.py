@@ -1,455 +1,279 @@
 from __future__ import annotations
 
 # knowledge_harvester.py
-import os
 import random
 import re
 import time
-from datetime import datetime
 from typing import TYPE_CHECKING
 
 import requests
 import wikipedia
-
-from axiom.graph_core import RelationshipEdge
 
 if TYPE_CHECKING:
     from threading import Lock
 
     from axiom.cognitive_agent import CognitiveAgent
 
-wikipedia.set_user_agent("AxiomAgent/1.0 (AxiomAgent@example.com)")
-
-NYT_API_KEY = os.environ.get("NYT_API_KEY")
-
-if not NYT_API_KEY:
-    print(
-        "[Knowledge Harvester WARNING]: NYT_API_KEY environment variable not set. NYT topic source will be disabled.",
-    )
+# Set a user agent for Wikipedia API requests, which is good practice.
+wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
 
 
 class KnowledgeHarvester:
-    __slots__ = ("agent", "lock", "rejected_topics", "enable_anticipatory_cache")
+    __slots__ = ("agent", "lock", "rejected_topics")
 
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
         self.agent = agent
         self.lock = lock
-
         self.rejected_topics: set[str] = set()
-        self.enable_anticipatory_cache = False
-
         print("[Knowledge Harvester]: Initialized.")
 
-    def _pre_filter_headline(self, headline: str) -> str:
-        print(f"  [Pre-filter]: Sanitizing raw headline: '{headline}'")
-        main_part = re.split(r"[:|]", headline, 1)[0]
-        main_part = re.sub(r"[^a-zA-Z0-9\s-]", "", main_part).strip()
-        print(f"  [Pre-filter]: Simplified headline to '{main_part}' for LLM analysis.")
-        return main_part
+    # --- CORE AUTONOMOUS CYCLES ---
 
-    def _extract_core_entity(self, topic_string: str) -> str | None:
-        if len(topic_string) < 10 or len(topic_string) > 250:
-            print(
-                f"  [Guardrail]: Topic rejected (invalid length). Topic: '{topic_string}'",
-            )
-            return None
-
-        print(
-            f"  [Harvester]: Analyzing topic string for core entity: '{topic_string}'",
-        )
-        try:
-            interpretation = self.agent.interpreter.interpret(topic_string)
-            entities = interpretation.get("entities", [])
-            if not entities:
-                return None
-            priority_types = [
-                "PERSON",
-                "ORGANIZATION",
-                "LOCATION",
-                "GPE",
-                "PRODUCT",
-                "EVENT",
-            ]
-            for ent_type in priority_types:
-                for entity in entities:
-                    if entity.get("type") == ent_type:
-                        core_entity = entity.get("name")
-                        print(
-                            f"  [Harvester]: Extracted core entity: '{core_entity}'",
-                        )
-                        return core_entity
-            core_entity = entities[0].get("name")
-            print(
-                f"  [Harvester]: Extracted core entity (fallback): '{core_entity}'",
-            )
-            return core_entity
-        except Exception as e:
-            print(f"  [Harvester]: Error during core entity extraction: {e}")
-        return None
-
-    def get_archival_topic(self) -> str | None:
-        if not NYT_API_KEY:
-            return None
-        print(
-            "  [Discovery]: Attempting to fetch a random topic from New York Times Archives...",
-        )
-        try:
-            current_year = datetime.now().year
-            year = random.randint(2000, current_year)
-            month = random.randint(1, 12)
-            print(f"    - Searching archive for {year}-{month:02d}...")
-            url = f"https://api.nytimes.com/svc/archive/v1/{year}/{month}.json?api-key={NYT_API_KEY}"
-            response = requests.get(url, timeout=15)
-            response.raise_for_status()
-            data = response.json()
-            docs = data.get("response", {}).get("docs", [])
-            if not docs:
-                return None
-            random.shuffle(docs)
-            for article in docs:
-                headline = article.get("headline", {}).get("main", "")
-                if headline and len(headline.split()) > 3:
-                    safe_topic_string = self._pre_filter_headline(headline)
-                    topic = self._extract_core_entity(safe_topic_string)
-                    if topic:
-                        return topic
-        except requests.RequestException as e:
-            print(f"  [Discovery]: Error fetching NYT Archive API: {e}")
-        return None
-
-    def _is_sentence_simple_enough(
-        self,
-        sentence: str,
-        max_words: int = 40,
-        max_commas: int = 3,
-    ) -> bool:
-        if len(sentence.split()) > max_words:
-            print(
-                f"  [Simplicity Filter]: Sentence rejected (too long: {len(sentence.split())} words).",
-            )
-            return False
-        if sentence.count(",") > max_commas:
-            print(
-                f"  [Simplicity Filter]: Sentence rejected (too complex: {sentence.count(',')} commas).",
-            )
-            return False
-        return True
-
-    def _try_to_learn(self, fact_sentence: str) -> bool:
-        if not fact_sentence:
-            return False
-        with self.lock:
-            print("  [Lock]: Harvester acquired lock.")
-            learned_successfully = self.agent.learn_new_fact_autonomously(fact_sentence)
-        print("  [Lock]: Harvester released lock.")
-        return learned_successfully
-
-    def discover_new_topic_and_learn(self) -> None:
-        print("\n--- [Discovery Cycle Started] ---")
-        initial_topic = None
-        with self.lock:
-            print("  [Lock]: Harvester acquired lock for topic finding.")
-            initial_topic = self._find_new_topic()
-        print("  [Lock]: Harvester released lock after topic finding.")
-
-        if not initial_topic:
-            print(
-                "[Discovery Cycle]: Could not find any new topic to learn about. Ending cycle.",
-            )
-            print("--- [Discovery Cycle Finished] ---\n")
-            self.agent.log_autonomous_cycle_completion()  # Log completion for reboot logic
-            return
-
-        learned_topic = None
-        wiki_result = self.get_fact_from_wikipedia(initial_topic)
-        if wiki_result:
-            final_topic, fact_sentence = wiki_result
-            if self._try_to_learn(fact_sentence):
-                learned_topic = final_topic
-
-        if not learned_topic:
-            time.sleep(1)
-            ddg_result = self.get_fact_from_duckduckgo(initial_topic)
-            if ddg_result:
-                final_topic, fact_sentence = ddg_result
-                if self._try_to_learn(fact_sentence):
-                    learned_topic = final_topic
-
-        if not learned_topic:
-            print(
-                f"[Discovery Cycle]: Could not learn a fact for topic '{initial_topic}'. Rejecting for this session.",
-            )
-            self.rejected_topics.add(self.agent._clean_phrase(initial_topic))
-        else:
-            if self.enable_anticipatory_cache:
-                self._anticipate_and_cache(learned_topic)
-
-        print("--- [Discovery Cycle Finished] ---\n")
-        self.agent.log_autonomous_cycle_completion()  # Log completion for reboot logic
-
-    def _find_new_topic(self, max_attempts: int = 10) -> str | None:
-        for i in range(max_attempts):
-            print(
-                f"\n[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...",
-            )
-            topic = None
-            source_choice = random.choice(["nyt", "wiki", "wiki"])
-
-            if source_choice == "nyt" and NYT_API_KEY:
-                topic = self.get_archival_topic()
-            else:
-                topic = self.get_random_wikipedia_topic()
-
-            if topic:
-                clean_topic = self.agent._clean_phrase(topic)
-                if self.agent.graph.get_node_by_name(clean_topic):
-                    print(
-                        f"  [Discovery]: Agent already knows about '{topic}'. Finding a new topic...",
-                    )
-                    continue
-                if clean_topic in self.rejected_topics:
-                    print(
-                        f"  [Discovery]: Agent has already tried and failed to learn about '{topic}'. Finding a new topic...",
-                    )
-                    continue
-                print(
-                    f"  [Discovery Success]: Found a new, unknown topic: '{topic}'",
-                )
-                return topic
-
-        print(
-            f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts.",
-        )
-        return None
-
-    def get_random_wikipedia_topic(self) -> str | None:
-        import wikipediaapi
-
-        wiki_api = wikipediaapi.Wikipedia(
-            "AxiomAgent/1.0 (AxiomAgent@example.com)",
-            "en",
-        )
-        print(
-            "  [Discovery]: Attempting to find a random topic from Wikipedia categories...",
-        )
-        major_categories = [
-            "History",
-            "Science",
-            "Technology",
-            "Art",
-            "Geography",
-            "Mathematics",
-            "Philosophy",
-            "Culture",
-            "Health",
-            "Nature",
-            "People",
-            "Society",
-            "Learning",
-            "Knowledge",
-            "Curriculum",
-        ]
-        try:
-            category_name = random.choice(major_categories)
-            category_page = wiki_api.page(f"Category:{category_name}")
-            if category_page.exists() and hasattr(category_page, "categorymembers"):
-                members = list(category_page.categorymembers.values())
-                pages = [m for m in members if m.ns == wikipediaapi.Namespace.MAIN]
-                if pages:
-                    chosen_page = random.choice(pages)
-                    if not any(
-                        keyword in chosen_page.title.lower()
-                        for keyword in [
-                            "list of",
-                            "index of",
-                            "timeline of",
-                            "outline of",
-                        ]
-                    ):
-                        return str(chosen_page.title)
-        except Exception as e:
-            print(f"  [Discovery]: Error during Wikipedia search: {e}")
-        return None
-
-    def study_existing_concept(self) -> None:
+    def study_cycle(self) -> None:
+        """
+        The main study cycle. It prioritizes resolving 'INVESTIGATE' learning goals first.
+        If no goals exist, it falls back to studying an existing concept to find new connections.
+        """
         print("\n--- [Study Cycle Started] ---")
 
-        chosen_edge = None
-        source_node = None
-        target_node = None
+        goal_resolved = False
+        if self.agent.learning_goals:
+            # Get the oldest goal first (First-In, First-Out)
+            goal_to_resolve = self.agent.learning_goals[0]
+            if goal_to_resolve.startswith("INVESTIGATE:"):
+                goal_resolved = self._resolve_investigation_goal(goal_to_resolve)
 
-        with self.lock:
-            # --- THIS IS THE FIX ---
-            # We now iterate through (u, v, data) to get the complete edge info.
-            # Then, we build a full dictionary for our from_dict method.
-            all_edges_data = []
-            for u, v, data in self.agent.graph.graph.edges(data=True):
-                full_data = data.copy()  # Start with the existing edge attributes
-                full_data["source"] = u  # Add the source ID
-                full_data["target"] = v  # Add the target ID
-                all_edges_data.append(full_data)
-
-            if not all_edges_data:
-                print("[Study Cycle]: Brain has no facts to study yet.")
-                print("--- [Study Cycle Finished] ---\n")
-                self.agent.log_autonomous_cycle_completion()
-                return
-
-            # Now, we can correctly reconstruct the full RelationshipEdge objects
-            all_edges = [RelationshipEdge.from_dict(d) for d in all_edges_data]
-            chosen_edge = random.choice(all_edges)
-
-            # This logic will now succeed because chosen_edge.source has a valid ID
-            source_node_data = self.agent.graph.graph.nodes.get(chosen_edge.source)
-            target_node_data = self.agent.graph.graph.nodes.get(chosen_edge.target)
-
-            if source_node_data:
-                source_node = self.agent.graph.get_node_by_name(
-                    source_node_data["name"],
-                )
-            if target_node_data:
-                target_node = self.agent.graph.get_node_by_name(
-                    target_node_data["name"],
-                )
-
-        if not source_node or not target_node:
-            # This message should no longer appear, but it's good to keep as a safeguard
+        if goal_resolved:
             print(
-                "[Study Cycle]: Could not retrieve nodes for a chosen fact. Ending cycle.",
+                "--- [Study Cycle Finished]: Successfully resolved a learning goal. ---"
             )
-            print("--- [Study Cycle Finished] ---\n")
             self.agent.log_autonomous_cycle_completion()
             return
 
-        study_topic = source_node.name
-        known_fact = f"{source_node.name} {chosen_edge.type.replace('_', ' ')} {target_node.name}."
-        print(
-            f"[Study Cycle]: Chosen to study '{study_topic}' based on the known fact: '{known_fact}'",
-        )
-
-        questions = self._generate_study_questions(study_topic, known_fact)
-        if not questions:
-            print("[Study Cycle]: Could not generate study questions. Ending cycle.")
-            print("--- [Study Cycle Finished] ---\n")
-            self.agent.log_autonomous_cycle_completion()
-            return
-
-        learned_something_new = False
-        for question in questions:
-            print(
-                f"\n[Study Cycle]: Seeking answer for self-generated question: '{question}'",
-            )
-            # This part of your logic remains the same
-            wiki_result = self.get_fact_from_wikipedia(question)
-            if wiki_result and self._try_to_learn(wiki_result[1]):
-                learned_something_new = True
-                continue
-
-            time.sleep(1)
-            ddg_result = self.get_fact_from_duckduckgo(question)
-            if ddg_result and self._try_to_learn(ddg_result[1]):
-                learned_something_new = True
-
-        if not learned_something_new:
-            print(
-                "[Study Cycle]: Completed study, but did not find any new, simple facts to learn.",
-            )
+        # If no goals were resolved, fall back to the old "study a random fact" logic
+        self._study_random_concept()
 
         print("--- [Study Cycle Finished] ---\n")
         self.agent.log_autonomous_cycle_completion()
 
-    def _generate_study_questions(self, topic: str, known_fact: str) -> list[str]:
+    def discover_cycle(self) -> None:
+        """
+        The discovery cycle. Finds a single, new, unknown topic from a random source
+        and triggers a learning goal for it.
+        """
+        print("\n--- [Discovery Cycle Started] ---")
+
+        # This logic is now much simpler. Its only job is to find a word we don't know.
+        new_topic = self._find_new_topic()
+
+        if new_topic:
+            # Instead of trying to learn a fact, we now create a learning goal
+            # to define the topic itself. This is a more robust approach.
+            goal = f"INVESTIGATE: {new_topic}"
+            with self.lock:
+                if goal not in self.agent.learning_goals:
+                    self.agent.learning_goals.append(goal)
+                    print(
+                        f"  [Discovery]: Found new topic '{new_topic}'. Added to learning goals."
+                    )
+        else:
+            print(
+                "[Discovery Cycle]: Could not find any new topics to learn about this cycle."
+            )
+
+        print("--- [Discovery Cycle Finished] ---\n")
+        self.agent.log_autonomous_cycle_completion()
+
+    # --- NEW: GOAL-DRIVEN RESEARCH METHOD ---
+
+    def _resolve_investigation_goal(self, goal: str) -> bool:
+        """
+        Takes a learning goal (e.g., "INVESTIGATE: platypus") and tries to
+        find and learn its definition from the web using deterministic methods.
+        """
+        match = re.match(r"INVESTIGATE: (\w+)", goal)
+        if not match:
+            return False
+        word_to_learn = match.group(1).lower()
+
         print(
-            f"  [Study Engine]: Generating curious follow-up questions for '{topic}'...",
+            f"[Study Cycle]: Prioritizing learning goal: To define '{word_to_learn}'."
         )
-        try:
-            return self.agent.interpreter.generate_curious_questions(topic, known_fact)
-        except Exception as e:
-            print(f"  [Study Engine]: Error during question generation: {e}")
-            return []
+
+        # Formulate targeted search queries for definitions
+        queries = [
+            f"define {word_to_learn}",
+            f"what is a {word_to_learn}",
+            f"meaning of {word_to_learn}",
+        ]
+
+        definition_found = None
+        for query in queries:
+            result = self.get_fact_from_wikipedia(
+                query
+            ) or self.get_fact_from_duckduckgo(query)
+            if result:
+                definition_found = result[1]  # result is a tuple (title, sentence)
+                break
+            time.sleep(1)
+
+        if not definition_found:
+            print(
+                f"  [Study Cycle]: Could not find a simple definition for '{word_to_learn}'."
+            )
+            return False
+
+        # Use Regular Expressions to parse the definition (No NLP/Spacy!)
+        pattern = re.compile(
+            rf"(?i)\b{word_to_learn}\b\s+(is|are|refers to)\s+(an?|the)?\s*(\w+)\b(.*)"
+        )
+        def_match = pattern.search(definition_found)
+
+        if not def_match:
+            print(
+                f"  [Study Cycle]: Found sentence, but could not parse it into a definition: '{definition_found}'"
+            )
+            return False
+
+        part_of_speech = def_match.group(3).lower()
+        full_definition = (def_match.group(3) + def_match.group(4)).strip()
+
+        print(f"  [Study Cycle]: Successfully parsed definition for '{word_to_learn}'.")
+
+        with self.lock:
+            self.agent.lexicon.add_linguistic_knowledge(
+                word=word_to_learn,
+                part_of_speech=part_of_speech,
+                definition=full_definition,
+            )
+            if goal in self.agent.learning_goals:
+                self.agent.learning_goals.remove(goal)
+            self.agent.save_brain()
+
+        return True
+
+    # --- HELPER & LEGACY METHODS ---
+
+    def _study_random_concept(self) -> None:
+        """
+        Legacy study method. Picks a random fact and tries to find a related one.
+        This no longer uses an LLM to generate questions.
+        """
+        print("[Study Cycle]: No learning goals. Studying a random existing concept.")
+
+        source_node_name, target_node_name = None, None
+        with self.lock:
+            all_edges = list(self.agent.graph.graph.edges(data=True))
+            if not all_edges:
+                print("[Study Cycle]: Brain has no facts to study yet.")
+                return
+
+            # Choose a random fact to start from
+            u, v, _ = random.choice(all_edges)
+            source_node_data = self.agent.graph.graph.nodes.get(u)
+            target_node_data = self.agent.graph.graph.nodes.get(v)
+            if source_node_data and target_node_data:
+                source_node_name = source_node_data["name"]
+                target_node_name = target_node_data["name"]
+
+        if source_node_name and target_node_name:
+            # We will now use the TARGET of the fact as the new research topic
+            study_topic = target_node_name
+            print(
+                f"[Study Cycle]: Studying connection from '{source_node_name}' to '{study_topic}'."
+            )
+
+            # Instead of asking a question, we create an investigation goal
+            goal = f"INVESTIGATE: {study_topic.lower().split()[0]}"  # Use first word of topic
+            with self.lock:
+                if (
+                    goal not in self.agent.learning_goals
+                    and not self.agent.lexicon.is_known_word(study_topic)
+                ):
+                    self.agent.learning_goals.append(goal)
+                    print(
+                        f"  [Study Cycle]: Curiosity triggered. Added goal to investigate '{study_topic}'."
+                    )
+
+    def _find_new_topic(self, max_attempts: int = 5) -> str | None:
+        """Finds a new, unknown topic from Wikipedia."""
+        for i in range(max_attempts):
+            print(
+                f"[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})..."
+            )
+
+            try:
+                # wikipedia.random() is the simplest way to get a new topic
+                topic = wikipedia.random(pages=1)
+                clean_topic = self.agent._clean_phrase(topic)
+
+                # Check if we know it or have rejected it
+                if (
+                    not self.agent.lexicon.is_known_word(clean_topic)
+                    and clean_topic not in self.rejected_topics
+                ):
+                    print(f"  [Discovery Success]: Found new, unknown topic: '{topic}'")
+                    return clean_topic
+            except Exception as e:
+                print(
+                    f"  [Discovery Error]: Could not fetch random topic from Wikipedia. Error: {e}"
+                )
+                time.sleep(1)  # Wait before retrying
+
+        print(
+            f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts."
+        )
+        return None
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
-        print(
-            f"[Knowledge Source]: Performing intelligent search for '{topic}' on Wikipedia...",
-        )
+        """Gets the first simple sentence of a Wikipedia page."""
+        print(f"[Knowledge Source]: Searching Wikipedia for '{topic}'...")
         try:
-            search_results = wikipedia.search(topic, results=5)
+            # Use search to handle ambiguity, then get the top result page
+            search_results = wikipedia.search(topic, results=1)
             if not search_results:
                 return None
 
-            page_title = search_results[0]
-            page = wikipedia.page(page_title, auto_suggest=False, redirect=True)
+            page = wikipedia.page(search_results[0], auto_suggest=False, redirect=True)
 
             if page and page.summary:
-                first_sentence = page.summary.split(". ")[0].strip()
-                if not first_sentence.endswith("."):
-                    first_sentence += "."
-
-                if len(first_sentence.split()) > 5 and self._is_sentence_simple_enough(
-                    first_sentence,
-                ):
+                first_sentence = page.summary.split(". ")[0].strip() + "."
+                if self._is_sentence_simple_enough(first_sentence):
                     print(
-                        f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'",
+                        f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'"
                     )
                     return page.title, first_sentence
+        except wikipedia.exceptions.DisambiguationError:
+            print(
+                f"  [Knowledge Source]: Wikipedia search for '{topic}' was ambiguous."
+            )
         except Exception:
-            return None
+            pass  # Suppress other common wikipedia library errors
         return None
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
-        print(
-            f"[Knowledge Source]: Falling back to DuckDuckGo with query: '{topic}'...",
-        )
+        """Gets a definition from DuckDuckGo's Instant Answer API."""
+        print(f"[Knowledge Source]: Searching DuckDuckGo for '{topic}'...")
         try:
             url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
             response = requests.get(url, timeout=5)
             response.raise_for_status()
             data = response.json()
+
             definition = data.get("AbstractText") or data.get("Definition")
             if definition:
-                fact_sentence = definition.split(". ")[0].strip()
-                if not fact_sentence.endswith("."):
-                    fact_sentence += "."
-                if "is a redirect to" in fact_sentence.lower():
-                    return None
-
-                if self._is_sentence_simple_enough(fact_sentence):
+                first_sentence = definition.split(". ")[0].strip() + "."
+                if self._is_sentence_simple_enough(first_sentence):
                     print(
-                        f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{fact_sentence}'",
+                        f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{first_sentence}'"
                     )
-                    return topic, fact_sentence
+                    return topic, first_sentence
         except Exception:
-            return None
+            pass
         return None
 
-    def _anticipate_and_cache(self, topic: str) -> None:
-        print(
-            f"\n  [Anticipatory Cache]: Pre-warming caches for the CORRECT topic: '{topic}'",
-        )
-        try:
-            simulated_question = f"what is {topic}"
-            response_text = ""
-            with self.lock:
-                print("  [Lock]: Harvester acquired lock for anticipatory caching.")
-                response_text = self.agent.chat(simulated_question)
-            print("  [Lock]: Harvester released lock after caching.")
-            failure_keywords = [
-                "i'm not sure",
-                "i am not sure",
-                "rephrase",
-                "i don't have any information",
-                "i cannot answer",
-                "uncertain",
-            ]
-            if any(keyword in response_text.lower() for keyword in failure_keywords):
-                print(
-                    "  [Anticipatory Cache]: Pre-warming FAILED. Agent could not answer the simulated question.",
-                )
-            else:
-                print(
-                    f"  [Anticipatory Cache]: Caches for '{topic}' have been successfully pre-warmed.",
-                )
-        except Exception as e:
-            print(
-                f"  [Anticipatory Cache Error]: Could not pre-warm cache for '{topic}'. Error: {e}",
-            )
+    def _is_sentence_simple_enough(
+        self, sentence: str, max_words: int = 30, max_commas: int = 2
+    ) -> bool:
+        """A simple filter to reject overly complex sentences."""
+        return len(sentence.split()) <= max_words and sentence.count(",") <= max_commas
