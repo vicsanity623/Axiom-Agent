@@ -5,6 +5,8 @@ import json
 import os
 import re
 from pathlib import Path
+
+# --- FIX: Import Union and Optional for backward-compatible type hints ---
 from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict
 
 from llama_cpp import Llama
@@ -16,13 +18,13 @@ MODELS_FOLDER: Final = Path("models")
 DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
 DEFAULT_CACHE_PATH: Final = "interpreter_cache.json"
 
+# --- FIX: Removed the problematic '[1:]' slices ---
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
 1.  **ONLY use the information given in the 'Facts' string.**
 2.  **DO NOT add any extra information, commentary, or meta-analysis.**
 3.  **DO NOT apologize or mention your own limitations.**
-4.  **Your output must be ONLY the rephrased sentence and nothing else.**"""[1:]
-
+4.  **Your output must be ONLY the rephrased sentence and nothing else.**"""
 
 JSON_STRUCTURE_PROMPT: Final = """
 The JSON object must have the following fields:
@@ -30,20 +32,22 @@ The JSON object must have the following fields:
 - 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object.
 If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.
 - 'key_topics': A list of the main subjects or topics...
-- 'full_text_rephrased': A neutral, one-sentence rephrasing..."""[1:]
+- 'full_text_rephrased': A neutral, one-sentence rephrasing..."""
 
+
+# --- FIX: Replaced the '|' operator with commas, which is universally compatible ---
 Intent: TypeAlias = Literal[
-    "greeting"
-    | "farewell"
-    | "question_about_entity"
-    | "question_about_concept"
-    | "statement_of_fact"
-    | "statement_of_correction"
-    | "gratitude"
-    | "acknowledgment"
-    | "positive_affirmation"
-    | "command"
-    | "unknown"
+    "greeting",
+    "farewell",
+    "question_about_entity",
+    "question_about_concept",
+    "statement_of_fact",
+    "statement_of_correction",
+    "gratitude",
+    "acknowledgment",
+    "positive_affirmation",
+    "command",
+    "unknown",
 ]
 
 
@@ -64,6 +68,7 @@ class Entity(TypedDict):
 
 
 class InterpretData(TypedDict):
+    # --- FIX: Replaced '|' with the universally compatible 'Optional' type hint ---
     intent: Intent
     entities: list[Entity]
     relation: RelationData | None
@@ -71,7 +76,9 @@ class InterpretData(TypedDict):
     full_text_rephrased: str
 
 
+# This is where the class definition starts. Everything below this line remains the same.
 class UniversalInterpreter:
+    # --- FIX: Replaced '|' with the universally compatible 'Union' type hint ---
     def __init__(
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,

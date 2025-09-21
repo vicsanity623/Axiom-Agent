@@ -51,7 +51,6 @@ include = ["*.py", "*.pyi", "**/pyproject.toml"]
 [tool.ruff.lint]
 select = [
     "C4",   # flake8-comprehensions
-    "COM",  # flake8-commas
     "E",    # Error
     "F",    # pyflakes
     "W",    # warnings
@@ -126,3 +125,9 @@ partial_branches = [
     "if .* or not _t.TYPE_CHECKING:",
     "if .* or not t.TYPE_CHECKING:",
 ]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.setuptools.packages.find]
+where = ["src"] 
