@@ -1,21 +1,90 @@
-# universal_interpreter.py
+from __future__ import annotations
 
+# universal_interpreter.py
 import json
 import os
 import re
+from pathlib import Path
+from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict
+
 from llama_cpp import Llama
+
+if TYPE_CHECKING:
+    from typing import NotRequired
+
+MODELS_FOLDER: Final = Path("models")
+DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+DEFAULT_CACHE_PATH: Final = "interpreter_cache.json"
+
+REPHRASING_PROMPT: Final = """
+You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
+1.  **ONLY use the information given in the 'Facts' string.**
+2.  **DO NOT add any extra information, commentary, or meta-analysis.**
+3.  **DO NOT apologize or mention your own limitations.**
+4.  **Your output must be ONLY the rephrased sentence and nothing else.**"""[1:]
+
+JSON_STRUCTURE_PROMPT: Final = """
+The JSON object must have the following fields:
+- 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object.
+If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.
+- 'key_topics': A list of the main subjects or topics...
+- 'full_text_rephrased': A neutral, one-sentence rephrasing..."""[1:]
+
+
+Intent: TypeAlias = Literal[
+    "greeting",
+    "farewell",
+    "question_about_entity",
+    "question_about_concept",
+    "statement_of_fact",
+    "statement_of_correction",
+    "gratitude",
+    "acknowledgment",
+    "positive_affirmation",
+    "command",
+    "unknown",
+]
+
+
+class PropertyData(TypedDict):
+    effective_date: str  # YYYY-MM-DD
+
+
+class RelationData(TypedDict):
+    subject: str
+    verb: str
+    object: str
+    properties: NotRequired[PropertyData]
+
+
+class Entity(TypedDict):
+    name: str
+    type: Literal["CONCEPT", "PERSON", "ROLE"]
+
+
+class InterpretData(TypedDict):
+    intent: Intent
+    entities: list[Entity]
+    relation: RelationData | None
+    key_topics: list[str]
+    full_text_rephrased: str
 
 
 class UniversalInterpreter:
-    def __init__(self, model_path="models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"):
+    def __init__(
+        self,
+        model_path: str | Path = DEFAULT_MODEL_PATH,
+        cache_file: str | Path = DEFAULT_CACHE_PATH,
+    ) -> None:
         print("Initializing Universal Interpreter (loading Mini LLM)...")
         if not os.path.exists(model_path):
             raise FileNotFoundError(
-                f"Interpreter model not found at {model_path}. Please download it."
+                f"Interpreter model not found at {model_path}. Please download it.",
             )
 
         self.llm = Llama(
-            model_path=model_path,
+            model_path=str(model_path),
             n_gpu_layers=0,
             n_ctx=2048,
             n_threads=0,
@@ -23,34 +92,36 @@ class UniversalInterpreter:
             verbose=False,
         )
 
-        self.cache_file = "interpreter_cache.json"
+        self.interpretation_cache: dict[str, InterpretData] = {}
+        self.synthesis_cache: dict[str, str] = {}
+
+        self.cache_file = cache_file
         self._load_cache()
 
         print("Universal Interpreter loaded successfully.")
 
-    def _load_cache(self):
+    def _load_cache(self) -> None:
         """Loads the interpretation and synthesis caches from a JSON file."""
-        if os.path.exists(self.cache_file):
-            try:
-                with open(self.cache_file, "r") as f:
-                    cache_data = json.load(f)
-                    self.interpretation_cache = dict(
-                        cache_data.get("interpretations", [])
-                    )
-                    self.synthesis_cache = dict(cache_data.get("synthesis", []))
-                print(
-                    f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}."
-                )
-            except Exception as e:
-                print(
-                    f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}"
-                )
-                self.interpretation_cache, self.synthesis_cache = {}, {}
-        else:
+        if not os.path.exists(self.cache_file):
             print("[Cache]: No cache file found. Starting fresh.")
-            self.interpretation_cache, self.synthesis_cache = {}, {}
+            return
 
-    def _save_cache(self):
+        try:
+            with open(self.cache_file) as f:
+                cache_data = json.load(f)
+                self.interpretation_cache = dict(
+                    cache_data.get("interpretations", []),
+                )
+                self.synthesis_cache = dict(cache_data.get("synthesis", []))
+            print(
+                f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}.",
+            )
+        except Exception as e:
+            print(
+                f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}",
+            )
+
+    def _save_cache(self) -> None:
         """Saves the current caches to a JSON file."""
         try:
             with open(self.cache_file, "w") as f:
@@ -61,7 +132,7 @@ class UniversalInterpreter:
                 json.dump(cache_data, f, indent=4)
         except Exception as e:
             print(
-                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {e}"
+                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {e}",
             )
 
     def _clean_llm_json_output(self, raw_text: str) -> str:
@@ -72,10 +143,9 @@ class UniversalInterpreter:
             return ""
         json_str = raw_text[start_brace : end_brace + 1]
         json_str = re.sub(r",\s*(\}|\])", r"\1", json_str)
-        json_str = re.sub(r'"\s*\n\s*"', '", "', json_str)
-        return json_str
+        return re.sub(r'"\s*\n\s*"', '", "', json_str)
 
-    def interpret(self, user_input: str) -> dict:
+    def interpret(self, user_input: str) -> InterpretData:
         """
         Uses the Mini LLM to analyze user input and return a structured JSON.
         This is the core, context-free interpretation method.
@@ -91,14 +161,7 @@ class UniversalInterpreter:
             "and convert it into a structured JSON object. Extract factual relationships or commands. "
             "Your output must be a single, valid JSON object and NOTHING else."
         )
-        json_structure_prompt = (
-            "The JSON object must have the following fields:\n"
-            "- 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.\n"
-            "- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object. "
-            "If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.\n"
-            "- 'key_topics': A list of the main subjects or topics...\n"
-            "- 'full_text_rephrased': A neutral, one-sentence rephrasing..."
-        )
+        json_structure_prompt = JSON_STRUCTURE_PROMPT
 
         examples_list = [
             'Input: \'show all facts\'\nOutput: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}',
@@ -116,8 +179,13 @@ class UniversalInterpreter:
         )
         try:
             output = self.llm(
-                full_prompt, max_tokens=512, stop=["</s>"], echo=False, temperature=0.0
+                full_prompt,
+                max_tokens=512,
+                stop=["</s>"],
+                echo=False,
+                temperature=0.0,
             )
+            assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
             cleaned_json_str = self._clean_llm_json_output(response_text)
             if not cleaned_json_str:
@@ -125,16 +193,21 @@ class UniversalInterpreter:
             interpretation = json.loads(cleaned_json_str)
             self.interpretation_cache[cache_key] = interpretation
             self._save_cache()
-            return interpretation
+            # types: no-any-return error: Returning Any from function declared to return "InterpretData"
+            # types: misc error: Expected keyword arguments, {...}, or dict(...) in TypedDict constructor
+            return InterpretData(interpretation)
+        # types:    ^      ^
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
-            return {
-                "intent": "unknown",
-                "entities": [],
-                "relation": None,
-                "key_topics": user_input.split(),
-                "full_text_rephrased": f"Could not fully interpret: '{user_input}'",
-            }
+            return InterpretData(
+                {
+                    "intent": "unknown",
+                    "entities": [],
+                    "relation": None,
+                    "key_topics": user_input.split(),
+                    "full_text_rephrased": f"Could not fully interpret: '{user_input}'",
+                },
+            )
 
     def resolve_context(self, history: list[str], new_input: str) -> str:
         print("  [Context Resolver]: Attempting to resolve pronouns...")
@@ -172,18 +245,22 @@ class UniversalInterpreter:
                 echo=False,
                 temperature=0.0,
             )
+            assert isinstance(output, dict)
             rephrased_input = output["choices"][0]["text"].strip()
             if rephrased_input and rephrased_input.lower() != new_input.lower():
                 print(f"    - Context resolved: '{new_input}' -> '{rephrased_input}'")
                 return rephrased_input
-            else:
-                print("    - No context to resolve, using original input.")
-                return new_input
+            print("    - No context to resolve, using original input.")
+            return new_input
         except Exception as e:
             print(f"  [Context Resolver Error]: Could not resolve context. Error: {e}")
             return new_input
 
-    def interpret_with_context(self, user_input: str, history: list[str]) -> dict:
+    def interpret_with_context(
+        self,
+        user_input: str,
+        history: list[str],
+    ) -> InterpretData:
         contextual_input = user_input
         pronouns = ["it", "its", "they", "them", "their", "he", "she", "his", "her"]
         if history and any(
@@ -220,8 +297,13 @@ class UniversalInterpreter:
         )
         try:
             output = self.llm(
-                full_prompt, max_tokens=128, stop=["</s>"], echo=False, temperature=0.8
+                full_prompt,
+                max_tokens=128,
+                stop=["</s>"],
+                echo=False,
+                temperature=0.8,
             )
+            assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
             questions = [
                 q.strip()
@@ -235,7 +317,7 @@ class UniversalInterpreter:
             return []
         except Exception as e:
             print(
-                f"  [Question Generation Error]: Could not generate questions. Error: {e}"
+                f"  [Question Generation Error]: Could not generate questions. Error: {e}",
             )
             return []
 
@@ -243,7 +325,7 @@ class UniversalInterpreter:
     def synthesize(
         self,
         structured_facts: str,
-        original_question: str = None,
+        original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
         """
@@ -259,7 +341,7 @@ class UniversalInterpreter:
             return self.synthesis_cache[cache_key]
 
         print(
-            f"  [Synthesizer Cache]: Miss. Running LLM for synthesis in '{mode}' mode."
+            f"  [Synthesizer Cache]: Miss. Running LLM for synthesis in '{mode}' mode.",
         )
 
         system_prompt = ""
@@ -273,14 +355,7 @@ class UniversalInterpreter:
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
         else:  # Default "statement" mode
-            system_prompt = (
-                "You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. "
-                "You are a fluent parrot. You must follow these rules strictly:\n"
-                "1.  **ONLY use the information given in the 'Facts' string.**\n"
-                "2.  **DO NOT add any extra information, commentary, or meta-analysis.**\n"
-                "3.  **DO NOT apologize or mention your own limitations.**\n"
-                "4.  **Your output must be ONLY the rephrased sentence and nothing else.**"
-            )
+            system_prompt = REPHRASING_PROMPT
             task_prompt = f"Facts to rephrase: '{structured_facts}'"
             if original_question:
                 task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
@@ -294,6 +369,7 @@ class UniversalInterpreter:
                 echo=False,
                 temperature=0.7 if mode == "clarification_question" else 0.1,
             )
+            assert isinstance(output, dict)
             synthesized_text = output["choices"][0]["text"].strip().replace('"', "")
             phrases_to_remove = [
                 "rephrased sentence:",

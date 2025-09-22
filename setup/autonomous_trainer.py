@@ -1,18 +1,17 @@
+from __future__ import annotations
+
 # autonomous_trainer.py (auto train study and discovery cycle no chat)
-
-import sys
-import os
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import threading
 import time
+from pathlib import Path
+
 from apscheduler.schedulers.background import BackgroundScheduler
+
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
 
 
-def start_autonomous_training():
+def start_autonomous_training() -> None:
     """
     Initializes the CognitiveAgent and starts the background harvester cycles
     for continuous, unattended learning.
@@ -21,16 +20,19 @@ def start_autonomous_training():
 
     # --- Global Agent Initialization ---
     # In a script, these can be local variables passed around.
-    axiom_agent = None
+    axiom_agent: CognitiveAgent | None = None
     agent_interaction_lock = threading.Lock()
 
     try:
-        brain_file = "brain/my_agent_brain.json"
-        state_file = "brain/my_agent_state.json"
+        brain_path = Path("brain")
+        brain_file = brain_path / "my_agent_brain.json"
+        state_file = brain_path / "my_agent_state.json"
 
         # We pass inference_mode=False to ensure it can learn and save.
         axiom_agent = CognitiveAgent(
-            brain_file=brain_file, state_file=state_file, inference_mode=False
+            brain_file=brain_file,
+            state_file=state_file,
+            inference_mode=False,
         )
 
         harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
@@ -38,15 +40,21 @@ def start_autonomous_training():
 
         # --- The Cognitive Scheduler with two independent cycles ---
         # 1. The "Study" cycle runs frequently to deepen existing knowledge.
-        scheduler.add_job(harvester.study_existing_concept, "interval", minutes=6)
+        scheduler.add_job(
+            harvester.study_cycle,
+            "interval",
+            minutes=6,
+        )
         print("--- [SCHEDULER]: Study Cycle is scheduled to run every 6 minutes. ---")
 
         # 2. The "Discovery" cycle runs infrequently to find brand new topics.
         scheduler.add_job(
-            harvester.discover_new_topic_and_learn, "interval", minutes=35
+            harvester.discover_cycle,
+            "interval",
+            minutes=35,
         )
         print(
-            "--- [SCHEDULER]: Discovery Cycle is scheduled to run every 35 minutes. ---"
+            "--- [SCHEDULER]: Discovery Cycle is scheduled to run every 35 minutes. ---",
         )
 
         scheduler.start()
@@ -61,8 +69,8 @@ def start_autonomous_training():
 
     except (KeyboardInterrupt, SystemExit):
         print("\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---")
-    except Exception as e:
-        print(f"!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: {e} !!!")
+    except Exception as exc:
+        print(f"!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: {exc} !!!")
         import traceback
 
         traceback.print_exc()

@@ -1,9 +1,10 @@
 # profiler.py
 
 import cProfile
-import pstats
 import io
+import pstats
 from threading import Lock
+
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
 
@@ -16,7 +17,9 @@ def run_profiling():
     print("--- [Profiler Started] ---")
 
     # 1. Initialize the agent and its components, just like in app.py
-    # We create a dummy lock because we are not running in a multi-threaded web server context.
+
+    # We create a dummy lock because we are not running in a
+    # multi-threaded web server context.
     dummy_lock = Lock()
     print("Initializing agent for profiling...")
     agent = CognitiveAgent(load_from_file=True)

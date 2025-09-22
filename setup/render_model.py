@@ -1,11 +1,9 @@
-# render_model.py
-
-import sys
-import os
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from __future__ import annotations
 
 import json
+
+# render_model.py
+import os
 import zipfile
 from datetime import datetime
 
@@ -31,7 +29,7 @@ def render_axiom_model():
         if not os.path.exists(f):
             print(f"❌ CRITICAL ERROR: Source file '{f}' not found.")
             print(
-                "Please ensure the agent has been run at least once to generate its brain."
+                "Please ensure the agent has been run at least once to generate its brain.",
             )
             return
 

@@ -1,14 +1,10 @@
+from __future__ import annotations
+
 # app.py (Command-Line Manual Trainer)
-
-import sys
-import os
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from axiom.cognitive_agent import CognitiveAgent
 
 
-def run_training_session():
+def run_training_session() -> None:
     """
     Initializes the agent and starts a command-line interface for training.
     """
@@ -33,7 +29,7 @@ def run_training_session():
             user_input = input("You: ")
             if user_input.lower() in ["quit", "exit"]:
                 print(
-                    "\n--- [TRAINER]: Exiting training session. All knowledge has been saved. ---"
+                    "\n--- [TRAINER]: Exiting training session. All knowledge has been saved. ---",
                 )
                 break
 

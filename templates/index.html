@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    
+
     <!-- PWA and iOS Fullscreen Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -98,23 +98,23 @@
         function fallbackCopyTextToClipboard(text, successCallback) {
             const textArea = document.createElement("textarea");
             textArea.value = text;
-            
+
             // Avoid scrolling to bottom
             textArea.style.top = "0";
             textArea.style.left = "0";
             textArea.style.position = "fixed";
-            
+
             document.body.appendChild(textArea);
             textArea.focus();
             textArea.select();
-            
+
             try {
                 const successful = document.execCommand('copy');
                 if (successful && successCallback) successCallback();
             } catch (err) {
                 console.error('Fallback copy command was unsuccessful', err);
             }
-            
+
             document.body.removeChild(textArea);
         }
 
@@ -160,7 +160,7 @@
                     dropdown.classList.toggle('show');
                 });
             }
-            
+
             messageElement.appendChild(contentElement);
             chatMessages.appendChild(messageElement);
             if (isNew) { scrollToBottom(); }
@@ -200,7 +200,7 @@
             if (save) { saveConversations(); }
             loadChat(newId);
         }
-        
+
         function updateChatHistoryList() {
             chatHistoryList.innerHTML = '';
             const sortedChats = Object.values(conversations).sort((a, b) => b.timestamp - a.timestamp);
@@ -292,7 +292,7 @@
                     userInput.placeholder = "Message Axiom Agent...";
                     userInput.disabled = false;
                     sendButton.disabled = false;
-                    
+
                     const lastMessage = conversations[currentChatId].messages.slice(-1)[0];
                     if (!lastMessage || !lastMessage.text.includes("initialization complete")) {
                         const readyMessage = { id: generateId(), sender: 'system', text: "Agent initialization complete. You can now chat."};
