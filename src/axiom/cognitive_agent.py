@@ -531,10 +531,10 @@ class CognitiveAgent:
         )
 
     def log_autonomous_cycle_completion(self) -> None:
-        """ "Increment the autonomous cycle counter and trigger an interpreter reboot if needed.
+        """Increment the autonomous cycle counter and trigger an interpreter reboot if needed.
 
-        This method is called by the KnowledgeHarvester after every Study
-        or Discovery cycle. It serves as a heartbeat to track the
+        This method is called by the KnowledgeHarvester after every
+        Study or Discovery cycle. It serves as a heartbeat to track the
         interpreter's operational lifetime and trigger a prophylactic
         reboot when a threshold is reached.
         """
