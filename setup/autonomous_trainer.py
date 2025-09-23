@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# autonomous_trainer.py (auto train study and discovery cycle no chat)
+# autonomous_trainer.py
 import threading
 import time
 from pathlib import Path
@@ -18,8 +18,6 @@ def start_autonomous_training() -> None:
     """
     print("--- [AUTONOMOUS TRAINER]: Starting Axiom Agent Initialization... ---")
 
-    # --- Global Agent Initialization ---
-    # In a script, these can be local variables passed around.
     axiom_agent: CognitiveAgent | None = None
     agent_interaction_lock = threading.Lock()
 
@@ -28,7 +26,6 @@ def start_autonomous_training() -> None:
         brain_file = brain_path / "my_agent_brain.json"
         state_file = brain_path / "my_agent_state.json"
 
-        # We pass inference_mode=False to ensure it can learn and save.
         axiom_agent = CognitiveAgent(
             brain_file=brain_file,
             state_file=state_file,
@@ -38,8 +35,6 @@ def start_autonomous_training() -> None:
         harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
         scheduler = BackgroundScheduler(daemon=True)
 
-        # --- The Cognitive Scheduler with two independent cycles ---
-        # 1. The "Study" cycle runs frequently to deepen existing knowledge.
         scheduler.add_job(
             harvester.study_cycle,
             "interval",
@@ -47,7 +42,6 @@ def start_autonomous_training() -> None:
         )
         print("--- [SCHEDULER]: Study Cycle is scheduled to run every 6 minutes. ---")
 
-        # 2. The "Discovery" cycle runs infrequently to find brand new topics.
         scheduler.add_job(
             harvester.discover_cycle,
             "interval",
@@ -62,8 +56,6 @@ def start_autonomous_training() -> None:
         print("\n--- [AUTONOMOUS TRAINER]: Agent is running in headless mode. ---")
         print("--- Knowledge Harvester is active. Press CTRL+C to stop. ---")
 
-        # This is the main loop to keep the script alive.
-        # The actual work is being done by the scheduler in background threads.
         while True:
             time.sleep(1)
 
@@ -75,7 +67,6 @@ def start_autonomous_training() -> None:
 
         traceback.print_exc()
     finally:
-        # In a real daemon, you might add cleanup here.
         print("--- [AUTONOMOUS TRAINER]: Process terminated. ---")
 
 

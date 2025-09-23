@@ -137,7 +137,6 @@ class ConceptGraph:
 
     def __init__(self) -> None:
         self.graph = nx.MultiDiGraph()
-        # This is the correct name for your lookup dictionary
         self.name_to_id: dict[str, str] = {}
 
     def add_node(self, node: ConceptNode) -> ConceptNode:
@@ -145,17 +144,13 @@ class ConceptGraph:
             return existing_node
 
         self.graph.add_node(node.id, **node.to_dict())
-        # Your original code used node.name, which is correct.
         self.name_to_id[node.name] = node.id
         return node
 
     def get_node_by_name(self, name: str) -> ConceptNode | None:
-        # Your original code correctly used .lower() for case-insensitivity
         node_id = self.name_to_id.get(name.lower())
         if node_id and self.graph.has_node(node_id):
-            # Your original `from_dict` usage was slightly wrong, it needs the full data dict
             node_data = self.graph.nodes[node_id]
-            # We also need to pass the ID back in since it's not in the to_dict() payload
             node_data["id"] = node_id
             return ConceptNode.from_dict(node_data)
         return None
@@ -164,7 +159,6 @@ class ConceptGraph:
         """Retrieves a single ConceptNode object from the graph by its ID."""
         if self.graph.has_node(node_id):
             node_data = self.graph.nodes[node_id]
-            # We must add the ID back in, as it's not stored in the node's data dict
             node_data["id"] = node_id
             return ConceptNode.from_dict(node_data)
         return None
@@ -180,7 +174,6 @@ class ConceptGraph:
         if not all([source_node, target_node]):
             return None
 
-        # Check for existing edges to reinforce them
         if self.graph.has_edge(source_node.id, target_node.id):
             for key, data in self.graph.get_edge_data(
                 source_node.id,
@@ -190,7 +183,6 @@ class ConceptGraph:
                     data["weight"] = max(data["weight"], weight)
                     if properties:
                         data["properties"].update(properties)
-                    # We need to reconstruct the full edge object to return it
                     full_edge_data = data.copy()
                     full_edge_data["source"] = source_node.id
                     full_edge_data["target"] = target_node.id
@@ -214,8 +206,6 @@ class ConceptGraph:
     def get_edges_from_node(self, node_id: str) -> list[RelationshipEdge]:
         if not self.graph.has_node(node_id):
             return []
-        # Your original from_dict usage was slightly wrong here too.
-        # The edge data from networkx doesn't include source/target, so we must add it back.
         edges = []
         for u, v, data in self.graph.out_edges(node_id, data=True):
             full_edge_data = data.copy()
@@ -243,10 +233,8 @@ class ConceptGraph:
                 current_activation - decay_rate,
             )
 
-    # --- SAVING AND LOADING LOGIC ---
 
     def save_to_file(self, filename: Path | str) -> None:
-        # This uses the standard, robust networkx serializer
         graph_data = json_graph.node_link_data(self.graph)
         with open(filename, "w") as f:
             json.dump(graph_data, f, indent=4)
@@ -257,12 +245,8 @@ class ConceptGraph:
         """THE NEW, CRITICAL METHOD FOR LOADING FROM .AXM MODELS"""
         instance = cls()
 
-        # --- THIS IS THE FIX ---
-        # Before: instance.graph = json_graph.node_link_graph(data)
-        # After:
         instance.graph = json_graph.node_link_graph(data, edges="links")
 
-        # Rebuild the name_to_id lookup cache after loading
         instance.name_to_id = {
             data["name"].lower(): node_id
             for node_id, data in instance.graph.nodes(data=True)
@@ -280,13 +264,12 @@ class ConceptGraph:
             try:
                 with open(filename) as f:
                     graph_data = json.load(f)
-                # We simply delegate to the robust load_from_dict method
                 return cls.load_from_dict(graph_data)
             except Exception as e:
                 print(
                     f"Error loading brain from {filename}: {e}. Creating a fresh brain.",
                 )
-                return cls()  # Return a fresh instance on error
+                return cls()
         else:
             print(f"No saved brain found at {filename}. Creating a fresh brain.")
-            return cls()  # Return a fresh instance if no file
+            return cls()

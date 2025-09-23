@@ -5,7 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict, cast
 
 from llama_cpp import Llama
 
@@ -60,7 +60,7 @@ class RelationData(TypedDict):
 
 class Entity(TypedDict):
     name: str
-    type: Literal["CONCEPT", "PERSON", "ROLE"]
+    type: Literal["CONCEPT", "PERSON", "ROLE", "PROPERTY"]
 
 
 class InterpretData(TypedDict):
@@ -178,25 +178,28 @@ class UniversalInterpreter:
             f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
         )
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=512,
-                stop=["</s>"],
-                echo=False,
-                temperature=0.0,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=512,
+                    stop=["</s>"],
+                    echo=False,
+                    temperature=0.0,
+                ),
             )
             assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
             cleaned_json_str = self._clean_llm_json_output(response_text)
             if not cleaned_json_str:
                 raise json.JSONDecodeError("No JSON object found", response_text, 0)
-            interpretation = json.loads(cleaned_json_str)
+            raw_interpretation = json.loads(cleaned_json_str)
+
+            interpretation = cast("InterpretData", raw_interpretation)
+
             self.interpretation_cache[cache_key] = interpretation
             self._save_cache()
-            # types: no-any-return error: Returning Any from function declared to return "InterpretData"
-            # types: misc error: Expected keyword arguments, {...}, or dict(...) in TypedDict constructor
-            return InterpretData(interpretation)
-        # types:    ^      ^
+            return interpretation
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
             return InterpretData(
@@ -238,18 +241,21 @@ class UniversalInterpreter:
             f"New Input: {new_input}\nOutput:[/INST]"
         )
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=128,
-                stop=["</s>", "\n"],
-                echo=False,
-                temperature=0.0,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=128,
+                    stop=["</s>", "\n"],
+                    echo=False,
+                    temperature=0.0,
+                ),
             )
             assert isinstance(output, dict)
             rephrased_input = output["choices"][0]["text"].strip()
             if rephrased_input and rephrased_input.lower() != new_input.lower():
                 print(f"    - Context resolved: '{new_input}' -> '{rephrased_input}'")
-                return rephrased_input
+                return cast("str", rephrased_input)
             print("    - No context to resolve, using original input.")
             return new_input
         except Exception as e:
@@ -296,12 +302,15 @@ class UniversalInterpreter:
             f"Output:[/INST]"
         )
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=128,
-                stop=["</s>"],
-                echo=False,
-                temperature=0.8,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=128,
+                    stop=["</s>"],
+                    echo=False,
+                    temperature=0.8,
+                ),
             )
             assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
@@ -321,7 +330,6 @@ class UniversalInterpreter:
             )
             return []
 
-    # --- METHOD UPDATED WITH FULL CACHING LOGIC ---
     def synthesize(
         self,
         structured_facts: str,
@@ -332,8 +340,6 @@ class UniversalInterpreter:
         Uses the Mini LLM to convert structured facts into natural language.
         Results are cached to avoid repeated LLM calls for the same synthesis task.
         """
-        # --- CACHING FIX: Use a more robust cache key ---
-        # The original question makes the context unique, so it must be part of the key.
         cache_key = f"{mode}|{original_question}|{structured_facts}"
 
         if cache_key in self.synthesis_cache:
@@ -354,7 +360,7 @@ class UniversalInterpreter:
                 "Do not state the facts directly. Your output must be ONLY the question."
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
-        else:  # Default "statement" mode
+        else:
             system_prompt = REPHRASING_PROMPT
             task_prompt = f"Facts to rephrase: '{structured_facts}'"
             if original_question:
@@ -362,12 +368,15 @@ class UniversalInterpreter:
 
         full_prompt = f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=256,
-                stop=["</s>", "\n"],
-                echo=False,
-                temperature=0.7 if mode == "clarification_question" else 0.1,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=256,
+                    stop=["</s>", "\n"],
+                    echo=False,
+                    temperature=0.7 if mode == "clarification_question" else 0.1,
+                ),
             )
             assert isinstance(output, dict)
             synthesized_text = output["choices"][0]["text"].strip().replace('"', "")
@@ -385,11 +394,10 @@ class UniversalInterpreter:
             if "(" in synthesized_text:
                 synthesized_text = synthesized_text.split("(")[0].strip()
 
-            # --- CACHING FIX: Save the result to the cache before returning ---
             self.synthesis_cache[cache_key] = synthesized_text
             self._save_cache()
 
-            return synthesized_text
+            return cast("str", synthesized_text)
         except Exception as e:
             print(f"  [Synthesizer Error]: Could not generate fluent text. Error: {e}")
             return structured_facts

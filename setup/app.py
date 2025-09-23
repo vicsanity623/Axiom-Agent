@@ -6,7 +6,6 @@ import threading
 import time
 import traceback
 
-# app.py (original autonomous and chat auto save)
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -25,7 +24,6 @@ from axiom.knowledge_harvester import KnowledgeHarvester
 
 app = Flask(__name__)
 
-# --- Global Agent Initialization ---
 axiom_agent: CognitiveAgent | None = None
 agent_interaction_lock = threading.Lock()
 agent_status: str = "uninitialized"
@@ -56,8 +54,6 @@ def load_agent() -> None:
                 )
                 scheduler = BackgroundScheduler(daemon=True)
 
-                # --- NEW: The Cognitive Scheduler with two independent cycles ---
-                # 1. The "Study" cycle runs frequently to deepen existing knowledge.
                 scheduler.add_job(
                     harvester.study_cycle,
                     "interval",
@@ -65,7 +61,6 @@ def load_agent() -> None:
                 )
                 print("--- Study Cycle is scheduled to run every 6 minutes. ---")
 
-                # 2. The "Discovery" cycle runs infrequently to find brand new topics.
                 scheduler.add_job(
                     harvester.discover_cycle,
                     "interval",
@@ -84,7 +79,6 @@ def load_agent() -> None:
                 traceback.print_exc()
 
 
-# --- Flask Routes ---
 
 
 @app.route("/")
@@ -122,7 +116,7 @@ def chat() -> tuple[Response, int] | Response:
     while agent_status != "ready":
         if agent_status.startswith("error"):
             return jsonify({"error": f"Agent failed to load: {agent_status}"}), 500
-        if time.time() - start_time > 300:  # 5 minute timeout for loading
+        if time.time() - start_time > 300:
             return jsonify({"error": "Agent is taking too long to initialize."}), 503
         time.sleep(1)
 

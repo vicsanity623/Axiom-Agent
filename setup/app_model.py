@@ -4,7 +4,6 @@ import glob
 import json
 
 # setup/app_model.py
-# Add these lines at the very top to handle the new project structure
 import os
 import sys
 import zipfile
@@ -13,13 +12,8 @@ from flask import Flask, jsonify, render_template, request, send_from_directory
 
 from axiom.cognitive_agent import CognitiveAgent
 
-# --- Global variable for our loaded agent ---
 axiom_agent = None
 
-# --- THIS IS THE CRITICAL FLASK CONFIGURATION ---
-# We must tell Flask where to find the templates and static files relative
-# to this script's location (which is inside 'setup/').
-# '..' means "go up one directory".
 STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
 TEMPLATE_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "templates"),
@@ -45,7 +39,6 @@ def find_latest_model(directory="rendered"):
 
 
 def load_axiom_model(axm_filepath):
-    # This function is correct and needs no changes
     if not os.path.exists(axm_filepath):
         return None
     try:
@@ -64,28 +57,21 @@ def load_axiom_model(axm_filepath):
         return None
 
 
-# --- Flask Routes ---
-
-
 @app.route("/")
 def index():
     return render_template("index.html")
 
 
-# --- THESE ROUTES ARE NOW CORRECTED ---
 @app.route("/manifest.json")
 def manifest():
-    # We now serve from the absolute path we defined earlier
     return send_from_directory(STATIC_DIR, "manifest.json")
 
 
 @app.route("/sw.js")
 def service_worker():
-    # We now serve from the absolute path we defined earlier
     return send_from_directory(STATIC_DIR, "sw.js")
 
 
-# The chat and status routes need no changes as they don't serve files
 @app.route("/chat", methods=["POST"])
 def chat():
     if not axiom_agent:
@@ -109,7 +95,6 @@ def status():
     return jsonify({"status": "ready" if axiom_agent else "loading_model"})
 
 
-# The main block needs no changes
 if __name__ == "__main__":
     latest_model_path = find_latest_model()
     if not latest_model_path:

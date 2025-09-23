@@ -4,24 +4,24 @@ from __future__ import annotations
 import json
 import os
 import re
-from datetime import datetime
+from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
 
-from axiom.dictionary_utils import get_word_info_from_wordnet
-from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
-from axiom.knowledge_base import seed_core_vocabulary, seed_domain_knowledge
-from axiom.lexicon_manager import LexiconManager
-from axiom.symbolic_parser import SymbolicParser
-from axiom.universal_interpreter import (
+from .dictionary_utils import get_word_info_from_wordnet
+from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
+from .knowledge_base import seed_core_vocabulary, seed_domain_knowledge
+from .lexicon_manager import LexiconManager
+from .symbolic_parser import SymbolicParser
+from .universal_interpreter import (
     InterpretData,
     RelationData,
     UniversalInterpreter,
 )
 
 if TYPE_CHECKING:
-    from axiom.universal_interpreter import Entity
+    from .universal_interpreter import Entity
 
 BRAIN_FOLDER: Final = Path("brain")
 DEFAULT_BRAIN_FILE: Final = BRAIN_FOLDER / "my_agent_brain.json"
@@ -541,7 +541,7 @@ class CognitiveAgent:
         print("  [TemporalReasoning]: Filtering facts by date...")
         today = datetime.utcnow().date()
         best_fact: str | None = None
-        best_date: datetime | None = None
+        best_date: date | None = None
 
         facts_list = [
             (fact_str, dict(props_tuple))
@@ -552,7 +552,7 @@ class CognitiveAgent:
             date_str = props.get("effective_date")
             if date_str:
                 try:
-                    fact_date = datetime.fromisoformat(date_str)
+                    fact_date = datetime.fromisoformat(date_str).date()
                     if fact_date <= today:
                         if best_date is None or fact_date > best_date:
                             best_date = fact_date
@@ -568,9 +568,21 @@ class CognitiveAgent:
         }
 
     def _clean_phrase(self, phrase: str) -> str:
-        words = phrase.lower().split()
+        """
+        Cleans and normalizes a phrase for use as a concept in the graph.
+        - Converts to lowercase.
+        - Removes leading articles ('a', 'an', 'the').
+        - Removes common punctuation from the end of the phrase.
+        """
+        clean_phrase = phrase.lower().strip()
+
+        clean_phrase = re.sub(r"[.,!?;]+$", "", clean_phrase)
+
+        words = clean_phrase.split()
+
         if words and words[0] in ["a", "an", "the"]:
             words = words[1:]
+
         return " ".join(words).strip()
 
     def _process_statement_for_learning(
@@ -594,17 +606,13 @@ class CognitiveAgent:
         if isinstance(subject, str):
             subject_name = subject
         elif isinstance(subject, dict):
-            # types: unreachable error: Statement is unreachable
             subject_name = subject.get("name")
-        # types:    ^
         if not subject_name:
             return (False, "Could not determine the subject of the fact.")
 
         objects_to_process = []
         if isinstance(object_, list):
-            # types: unreachable error: Statement is unreachable
             for item in object_:
-                # types:    ^
                 if isinstance(item, dict):
                     name = item.get("entity") or item.get("name")
                     if name:
@@ -612,9 +620,7 @@ class CognitiveAgent:
                 elif isinstance(item, str):
                     objects_to_process.append(item)
         elif isinstance(object_, dict):
-            # types: unreachable error: Statement is unreachable
             name = object_.get("name")
-            # types:    ^
             if name:
                 objects_to_process.append(name)
         elif isinstance(object_, str):
@@ -656,7 +662,7 @@ class CognitiveAgent:
                                 f"Fact 1: {sub_node.name} {edge.type.replace('_', ' ')} {existing_target_data.get('name')}. "
                                 f"Fact 2: {sub_node.name} {relation_type.replace('_', ' ')} {object_name}."
                             )
-                            question = self.interpreter.synthesize(
+                            _ = self.interpreter.synthesize(
                                 conflicting_facts_str,
                                 mode="clarification_question",
                             )
@@ -665,7 +671,6 @@ class CognitiveAgent:
                                 "subject": sub_node.name,
                                 "conflicting_relation": relation_type,
                             }
-                            return (False, question)
 
             obj_node = self._add_or_update_concept(object_name)
             if sub_node and obj_node:
@@ -676,7 +681,6 @@ class CognitiveAgent:
                             f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
                         )
                         fact_already_exists = True
-                        break
 
                 if not fact_already_exists:
                     self.graph.add_edge(

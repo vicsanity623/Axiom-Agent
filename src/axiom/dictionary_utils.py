@@ -7,10 +7,8 @@ import nltk
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 
-# Initialize the lemmatizer
 lemmatizer = WordNetLemmatizer()
 
-# Mapping NLTK POS tags to our ConceptNode types
 pos_map: Final = {
     "NN": "noun",
     "NNS": "noun",
@@ -86,7 +84,7 @@ def get_word_info_from_wordnet(word: str) -> WordInfo:
             best_synset = ss
         elif (
             ss.pos() == "a" or ss.pos() == "s" and not best_synset
-        ):  # 's' is adjective satellite
+        ):
             best_synset = ss
 
     if not best_synset and synsets:
@@ -148,7 +146,6 @@ def get_pos_tag_simple(word: str) -> str:
         print(
             f"WARNING: NLTK pos_tagger resource missing for '{word}'. Falling back to WordNet primary POS.",
         )
-        # Fallback: Use WordNet's primary POS for the word if pos_tagger fails
         synsets = wn.synsets(word.lower())
         if synsets:
             best_synset = None
@@ -177,7 +174,6 @@ def get_pos_tag_simple(word: str) -> str:
         print(
             f"An unexpected error occurred in get_pos_tag_simple for '{word}': {e}. Falling back to 'concept'.",
         )
-    # Default if no specific POS found
     return "concept"
 
 

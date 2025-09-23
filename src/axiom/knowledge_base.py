@@ -11,9 +11,6 @@ def seed_domain_knowledge(agent_instance) -> None:
     """
     print("   - Seeding a vast initial world knowledge base...")
 
-    # =================================================================================
-    # --- 1. Agent's Core Identity & Purpose (Standardized) ---
-    # =================================================================================
     print("     - Seeding self-identity...")
     agent_instance.manual_add_knowledge(
         "agent",
@@ -290,11 +287,7 @@ def seed_domain_knowledge(agent_instance) -> None:
         weight=0.7,
     )
 
-    # =================================================================================
-    # --- 2. Foundational World Knowledge (Standardized) ---
-    # =================================================================================
     print("     - Seeding world knowledge...")
-    # Basic Physics & Nature
     agent_instance.manual_add_knowledge(
         "sky",
         "concept",
@@ -999,7 +992,6 @@ def seed_domain_knowledge(agent_instance) -> None:
         weight=0.9,
     )
 
-    # Common Foods
     agent_instance.manual_add_knowledge("apple", "fruit", "is_a", "food", weight=0.9)
     agent_instance.manual_add_knowledge("banana", "fruit", "is_a", "food", weight=0.9)
     agent_instance.manual_add_knowledge(
@@ -1202,11 +1194,7 @@ def seed_domain_knowledge(agent_instance) -> None:
         weight=0.9,
     )
 
-    # =================================================================================
-    # --- 3. Abstract Concepts & Relationships (Standardized) ---
-    # =================================================================================
     print("     - Seeding abstract concepts...")
-    # Colors
     color_node = agent_instance._add_or_update_concept("color", "attribute")
     colors = [
         "red",
@@ -1245,7 +1233,6 @@ def seed_domain_knowledge(agent_instance) -> None:
         node = agent_instance._add_or_update_concept(color_name, "descriptor")
         agent_instance.graph.add_edge(node, color_node, "is_a", 0.9)
 
-    # Sentiments
     sentiment_node = agent_instance._add_or_update_concept("sentiment", "attribute")
     sentiments = [
         "happy",
@@ -1284,10 +1271,8 @@ def seed_domain_knowledge(agent_instance) -> None:
         node = agent_instance._add_or_update_concept(sentiment_name, "descriptor")
         agent_instance.graph.add_edge(node, sentiment_node, "is_a", 0.8)
 
-    # Enrich seeded concepts with high-quality WordNet hypernyms
     print("     - Integrating WordNet definitions for seeded concepts...")
 
-    # Use the new NetworkX way to get node names
     seeded_words = {
         data["name"] for _, data in agent_instance.graph.graph.nodes(data=True)
     }
@@ -1312,32 +1297,109 @@ def seed_core_vocabulary(agent_instance) -> None:
     """Seeds the Lexicon with foundational English words."""
     print("     - Seeding core vocabulary for Lexicon...")
     core_vocab = {
-        # Parts of Speech (as concepts)
         "noun": "concept",
         "verb": "concept",
         "adjective": "concept",
-        "article": "concept",
+        "adverb": "concept",
         "pronoun": "concept",
-        # Articles
+        "preposition": "concept",
+        "conjunction": "concept",
+        "determiner": "concept",
+        "article": "concept",
         "a": "article",
         "an": "article",
         "the": "article",
-        # Common Verbs
+        "this": "determiner",
+        "that": "determiner",
+        "these": "determiner",
+        "those": "determiner",
         "is": "verb",
         "are": "verb",
         "was": "verb",
         "were": "verb",
+        "be": "verb",
+        "being": "verb",
+        "been": "verb",
         "has": "verb",
         "have": "verb",
         "had": "verb",
+        "having": "verb",
         "do": "verb",
-        "lays": "verb",  # Adding this for our 'platypus' test
-        # Pronouns
-        "it": "pronoun",
-        "they": "pronoun",
+        "does": "verb",
+        "did": "verb",
+        "say": "verb",
+        "says": "verb",
+        "said": "verb",
+        "go": "verb",
+        "goes": "verb",
+        "went": "verb",
+        "get": "verb",
+        "gets": "verb",
+        "got": "verb",
+        "make": "verb",
+        "makes": "verb",
+        "made": "verb",
+        "know": "verb",
+        "knows": "verb",
+        "knew": "verb",
+        "think": "verb",
+        "thinks": "verb",
+        "thought": "verb",
+        "see": "verb",
+        "sees": "verb",
+        "saw": "verb",
+        "come": "verb",
+        "comes": "verb",
+        "came": "verb",
+        "take": "verb",
+        "takes": "verb",
+        "took": "verb",
+        "lays": "verb",
+        "i": "pronoun",
+        "you": "pronoun",
         "he": "pronoun",
         "she": "pronoun",
+        "it": "pronoun",
+        "we": "pronoun",
+        "they": "pronoun",
+        "me": "pronoun",
+        "him": "pronoun",
+        "her": "pronoun",
+        "us": "pronoun",
+        "them": "pronoun",
+        "of": "preposition",
+        "in": "preposition",
+        "to": "preposition",
+        "for": "preposition",
+        "with": "preposition",
+        "on": "preposition",
+        "at": "preposition",
+        "from": "preposition",
+        "by": "preposition",
+        "about": "preposition",
+        "as": "preposition",
+        "into": "preposition",
+        "like": "preposition",
+        "through": "preposition",
+        "after": "preposition",
+        "over": "preposition",
+        "between": "preposition",
+        "out": "preposition",
+        "against": "preposition",
+        "during": "preposition",
+        "without": "preposition",
+        "before": "preposition",
+        "under": "preposition",
+        "around": "preposition",
+        "among": "preposition",
+        "and": "conjunction",
+        "but": "conjunction",
+        "or": "conjunction",
+        "so": "conjunction",
+        "if": "conjunction",
+        "while": "conjunction",
+        "because": "conjunction",
     }
+
     for word, pos in core_vocab.items():
-        # Using the LexiconManager to add the knowledge correctly
         agent_instance.lexicon.add_linguistic_knowledge(word, pos)

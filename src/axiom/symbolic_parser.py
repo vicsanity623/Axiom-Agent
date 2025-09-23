@@ -1,21 +1,15 @@
-# src/axiom/symbolic_parser.py
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-# We will reuse the same data structures as the LLM interpreter
-# to make the integration seamless.
-from axiom.universal_interpreter import InterpretData, RelationData
+from .universal_interpreter import InterpretData, RelationData
 
 if TYPE_CHECKING:
-    from axiom.cognitive_agent import CognitiveAgent
+    from .cognitive_agent import CognitiveAgent
 
 
 class SymbolicParser:
-    __slots__ = ("agent",)
-
-    def __init__(self, agent: CognitiveAgent) -> None:
+    def __init__(self, agent: CognitiveAgent):
         self.agent = agent
         print("   - Symbolic Parser initialized.")
 
@@ -27,8 +21,22 @@ class SymbolicParser:
         print("  [Symbolic Parser]: Attempting to parse sentence...")
 
         words = text.lower().split()
+        if not words:
+            return None
 
-        # --- Rule 1: Handle simple commands ---
+        question_words = {"what", "who", "where", "when", "why", "how", "is", "are"}
+        if words[0] in question_words:
+            print("  [Symbolic Parser]: Successfully parsed a question.")
+            entity_name = " ".join(words[2:]) if len(words) > 2 else " ".join(words[1:])
+            entity_name = entity_name.replace("?", "").strip()
+            return InterpretData(
+                intent="question_about_entity",
+                entities=[{"name": entity_name, "type": "CONCEPT"}],
+                relation=None,
+                key_topics=[entity_name],
+                full_text_rephrased=text,
+            )
+
         if text.lower() == "show all facts":
             print("  [Symbolic Parser]: Successfully parsed 'show all facts' command.")
             return InterpretData(
@@ -39,7 +47,6 @@ class SymbolicParser:
                 full_text_rephrased="User issued a command to show all facts.",
             )
 
-        # --- Rule 2: Find a single, known verb ---
         verb_info = self._find_verb(words)
         if not verb_info:
             print(
@@ -49,34 +56,56 @@ class SymbolicParser:
 
         verb, verb_index = verb_info
 
-        # --- Rule 3: Identify Subject and Object ---
-        if verb_index == 0 or verb_index == len(words) - 1:
-            print("  [Symbolic Parser]: Failed. Verb is at start/end of sentence.")
-            return None
+        if len(words) > verb_index + 1:
+            potential_adjective = words[verb_index + 1]
+            if self._is_part_of_speech(potential_adjective, "adjective"):
+                subject = " ".join(words[:verb_index])
+                subject = self.agent._clean_phrase(subject)
 
-        subject = " ".join(words[:verb_index])
-        object_ = " ".join(words[verb_index + 1 :])
+                print(
+                    f"  [Symbolic Parser]: Successfully parsed S-V-Adjective structure: '{subject}' has property '{potential_adjective}'.",
+                )
 
-        # Clean up articles for cleaner concepts
-        subject = self.agent._clean_phrase(subject)
-        object_ = self.agent._clean_phrase(object_)
+                relation = RelationData(
+                    subject=subject,
+                    verb="has_property",
+                    object=potential_adjective,
+                )
+                return InterpretData(
+                    intent="statement_of_fact",
+                    entities=[
+                        {"name": subject, "type": "CONCEPT"},
+                        {"name": potential_adjective, "type": "PROPERTY"},
+                    ],
+                    relation=relation,
+                    key_topics=[subject, potential_adjective],
+                    full_text_rephrased=text,
+                )
 
-        print(
-            f"  [Symbolic Parser]: Successfully parsed S-V-O structure: '{subject}' -> '{verb}' -> '{object_}'.",
-        )
+        if verb_index > 0 and verb_index < len(words) - 1:
+            subject = " ".join(words[:verb_index])
+            object_ = " ".join(words[verb_index + 1 :])
+            subject = self.agent._clean_phrase(subject)
+            object_ = self.agent._clean_phrase(object_)
 
-        relation = RelationData(subject=subject, verb=verb, object=object_)
+            print(
+                f"  [Symbolic Parser]: Successfully parsed S-V-O structure: '{subject}' -> '{verb}' -> '{object_}'.",
+            )
 
-        return InterpretData(
-            intent="statement_of_fact",
-            entities=[
-                {"name": subject, "type": "CONCEPT"},
-                {"name": object_, "type": "CONCEPT"},
-            ],
-            relation=relation,
-            key_topics=[subject, object_],
-            full_text_rephrased=text,
-        )
+            relation = RelationData(subject=subject, verb=verb, object=object_)
+            return InterpretData(
+                intent="statement_of_fact",
+                entities=[
+                    {"name": subject, "type": "CONCEPT"},
+                    {"name": object_, "type": "CONCEPT"},
+                ],
+                relation=relation,
+                key_topics=[subject, object_],
+                full_text_rephrased=text,
+            )
+
+        print("  [Symbolic Parser]: Failed. Sentence structure not recognized.")
+        return None
 
     def _find_verb(self, words: list[str]) -> tuple[str, int] | None:
         """Scans a list of words to find a single, known verb."""
@@ -84,20 +113,28 @@ class SymbolicParser:
         for i, word in enumerate(words):
             word_node = self.agent.graph.get_node_by_name(word)
             if word_node:
-                is_a_edges = [
-                    edge
-                    for edge in self.agent.graph.get_edges_from_node(word_node.id)
-                    if edge.type == "is_a"
-                ]
-
-                for edge in is_a_edges:
-                    target_node = self.agent.graph.get_node_by_id(edge.target)
-
-                    if target_node and target_node.name == "verb":
-                        found_verbs.append((word, i))
-                        break
+                if self._is_part_of_speech(word, "verb"):
+                    found_verbs.append((word, i))
 
         if len(found_verbs) == 1:
             return found_verbs[0]
 
         return None
+
+    def _is_part_of_speech(self, word: str, pos: str) -> bool:
+        """Checks if a word has a specific part of speech in the Lexicon."""
+        word_node = self.agent.graph.get_node_by_name(word)
+        if not word_node:
+            return False
+
+        is_a_edges = [
+            edge
+            for edge in self.agent.graph.get_edges_from_node(word_node.id)
+            if edge.type == "is_a"
+        ]
+
+        for edge in is_a_edges:
+            target_node = self.agent.graph.get_node_by_id(edge.target)
+            if target_node and target_node.name == pos:
+                return True
+        return False
