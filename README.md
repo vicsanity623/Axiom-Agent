@@ -12,7 +12,7 @@ Axiom's design is a radical departure from LLM-centric AI. It operates on a **sy
 
 1.  **The Symbolic Brain (The Knowledge Graph):** At its heart, Axiom has a structured `ConceptGraph`—its long-term memory. This is a logical map of concepts and their relationships (`Paris --[is_located_in]--> France`). This architecture **prevents hallucinations** by ensuring the agent's knowledge is grounded in verifiable facts it has learned.
 
-2.  **The Symbolic Senses (The Parser & Lexicon):** Axiom has its own native ability to understand language. It maintains an internal dictionary (a `Lexicon`) of words it has learned and uses a `SymbolicParser` to deterministically analyze sentence structure. For simple sentences, it can achieve understanding **without any external models.**
+2.  **The Symbolic Senses (The Parser & Lexicon):** Axiom has its own native ability to understand language. It maintains an internal dictionary (a `Lexicon`) of words it has learned and uses a `SymbolicParser` to deterministically analyze sentence structure. For a growing number of sentences, it can achieve understanding **without any external models.**
 
 3.  **The LLM as a Tool (The Fallback Interpreter):** When the agent's native parser encounters a sentence too complex for its current understanding, it uses a local LLM as a fallback tool. The LLM's only job is to translate the complex sentence into a structured format that the agent's symbolic brain can then process. **The LLM is a temporary crutch, not the mind itself.**
 
@@ -23,13 +23,14 @@ Axiom's design is a radical departure from LLM-centric AI. It operates on a **sy
 This architecture allows the agent to learn and grow in a way that is fundamentally different from static models.
 
 ### Cognitive & Reasoning Abilities
-*   **Grounded Language Acquisition:** The agent learns language by identifying unknown words, autonomously researching their definitions, and integrating that linguistic knowledge into its own brain.
-*   **Symbolic-First Understanding:** For a growing number of sentences, the agent can now achieve understanding and learn new facts **without any LLM dependency.**
-*   **Dual-Cycle Autonomous Learning:** The agent operates 24/7 to improve itself:
-    -   **The Study Cycle:** Prioritizes its own "learning goals," researching unknown words to expand its vocabulary and understanding.
-    -   **The Discovery Cycle:** Seeks out new concepts to create new learning goals, ensuring it continuously broadens its horizons.
+*   **Grounded Language Acquisition:** The agent learns language by identifying unknown words, autonomously researching their definitions using a high-precision **Dictionary API**, and integrating that linguistic knowledge into its own brain.
+*   **Symbolic-First Understanding:** For a growing number of sentences, the agent can now understand and learn new facts **without any LLM dependency.**
+*   **Dual-Cycle Autonomous Learning:** The agent operates 24/7 with two intelligent, self-improving cycles:
+    -   **The Focused Discovery Cycle:** Explores curated subjects (like "Physics" or "History") and uses a **popularity heuristic** to find relevant new topics to learn about.
+    -   **The Goal-Driven Study Cycle:** Prioritizes researching unknown words from its learning queue. When the queue is empty, it proactively **deepens its knowledge** by researching concepts it already knows to find new, related facts.
 *   **Persistent & Verifiable Memory:** Every fact is permanently integrated into its logical brain, creating a foundation for true, multi-hop reasoning.
-*   **Self-Correction:** The agent can identify contradictions in its knowledge and actively seeks clarification.
+
+<br/>
 
 ### Professional Development & Deployment
 *   **Automated Quality Assurance (`./check.sh`):** A full suite of tools (Ruff, MyPy, Pytest) ensures the codebase is clean, consistent, and reliable.
@@ -58,6 +59,13 @@ pip install -e '.[dev]'
 The agent still uses a local LLM for complex sentences.
 1.  Download **`mistral-7b-instruct-v0.2.Q4_K_M.gguf`** from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
 2.  Create a `models/` directory and place the downloaded file inside it.
+
+<br/>
+
+*(Optional)* **Note on the `STOP_WORDS` Guardrail:**
+Inside `src/axiom/knowledge_harvester.py`, there is a `stop_words` set within the `_deepen_knowledge_of_random_concept` method. By default, this prevents the agent from wasting time studying common words like "is" or "the." You can add or remove words from this set to customize its study behavior.
+
+<br/>
 
 ### Step 3: Run the Agent
 The project is designed around a clean development cycle.

@@ -5,7 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict, cast
 
 from llama_cpp import Llama
 
@@ -60,7 +60,7 @@ class RelationData(TypedDict):
 
 class Entity(TypedDict):
     name: str
-    type: Literal["CONCEPT", "PERSON", "ROLE"]
+    type: Literal["CONCEPT", "PERSON", "ROLE", "PROPERTY"]
 
 
 class InterpretData(TypedDict):
@@ -72,11 +72,27 @@ class InterpretData(TypedDict):
 
 
 class UniversalInterpreter:
+    """Provides an LLM-based interface for complex language tasks.
+
+    This class acts as the agent's fallback "senses" for understanding
+    language that is too complex for the `SymbolicParser`. It wraps a
+    local LLM (via `llama-cpp-python`) and uses carefully crafted prompts
+    to perform structured interpretation, context resolution, and natural
+    language synthesis.
+    """
+
     def __init__(
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,
         cache_file: str | Path = DEFAULT_CACHE_PATH,
     ) -> None:
+        """Initialize the UniversalInterpreter and load the LLM into memory.
+
+        Args:
+            model_path: The file path to the GGUF-formatted LLM model.
+            cache_file: The file path for the interpretation and synthesis
+                caches.
+        """
         print("Initializing Universal Interpreter (loading Mini LLM)...")
         if not os.path.exists(model_path):
             raise FileNotFoundError(
@@ -101,7 +117,7 @@ class UniversalInterpreter:
         print("Universal Interpreter loaded successfully.")
 
     def _load_cache(self) -> None:
-        """Loads the interpretation and synthesis caches from a JSON file."""
+        """Load the interpretation and synthesis caches from a JSON file."""
         if not os.path.exists(self.cache_file):
             print("[Cache]: No cache file found. Starting fresh.")
             return
@@ -122,7 +138,7 @@ class UniversalInterpreter:
             )
 
     def _save_cache(self) -> None:
-        """Saves the current caches to a JSON file."""
+        """Save the current interpretation and synthesis caches to a JSON file."""
         try:
             with open(self.cache_file, "w") as f:
                 cache_data = {
@@ -136,7 +152,19 @@ class UniversalInterpreter:
             )
 
     def _clean_llm_json_output(self, raw_text: str) -> str:
-        """More robustly cleans the LLM's output to extract a valid JSON object."""
+        """Clean and extract a JSON object from the raw output of an LLM.
+
+        This utility handles common LLM output issues, such as extraneous
+        text before or after the JSON object and trailing commas that
+        would cause parsing errors.
+
+        Args:
+            raw_text: The raw string response from the LLM.
+
+        Returns:
+            A string containing only the cleaned JSON object, or an empty
+            string if no JSON object could be found.
+        """
         start_brace = raw_text.find("{")
         end_brace = raw_text.rfind("}")
         if start_brace == -1 or end_brace == -1:
@@ -146,9 +174,20 @@ class UniversalInterpreter:
         return re.sub(r'"\s*\n\s*"', '", "', json_str)
 
     def interpret(self, user_input: str) -> InterpretData:
-        """
-        Uses the Mini LLM to analyze user input and return a structured JSON.
-        This is the core, context-free interpretation method.
+        """Analyze user input with the LLM and return a structured interpretation.
+
+        This is the core, context-free interpretation method. It constructs
+        a detailed prompt with examples and instructions, sends it to the
+        LLM, and parses the resulting JSON output into a `InterpretData`
+        TypedDict. Results are cached for performance.
+
+        Args:
+            user_input: The raw user message to be interpreted.
+
+        Returns:
+            A `InterpretData` object representing the structured
+            understanding of the input. Returns a default 'unknown'
+            intent on failure.
         """
         cache_key = user_input
         if cache_key in self.interpretation_cache:
@@ -178,25 +217,28 @@ class UniversalInterpreter:
             f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
         )
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=512,
-                stop=["</s>"],
-                echo=False,
-                temperature=0.0,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=512,
+                    stop=["</s>"],
+                    echo=False,
+                    temperature=0.0,
+                ),
             )
             assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
             cleaned_json_str = self._clean_llm_json_output(response_text)
             if not cleaned_json_str:
                 raise json.JSONDecodeError("No JSON object found", response_text, 0)
-            interpretation = json.loads(cleaned_json_str)
+            raw_interpretation = json.loads(cleaned_json_str)
+
+            interpretation = cast("InterpretData", raw_interpretation)
+
             self.interpretation_cache[cache_key] = interpretation
             self._save_cache()
-            # types: no-any-return error: Returning Any from function declared to return "InterpretData"
-            # types: misc error: Expected keyword arguments, {...}, or dict(...) in TypedDict constructor
-            return InterpretData(interpretation)
-        # types:    ^      ^
+            return interpretation
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
             return InterpretData(
@@ -210,6 +252,22 @@ class UniversalInterpreter:
             )
 
     def resolve_context(self, history: list[str], new_input: str) -> str:
+        """Use the LLM to perform coreference resolution on the user's input.
+
+        This method attempts to replace pronouns in the user's latest
+        message (e.g., "it", "they") with the specific nouns they refer
+        to from the preceding conversation history. This creates a
+        context-aware input for the main `interpret` method.
+
+        Args:
+            history: A list of the previous turns in the conversation.
+            new_input: The user's latest message, potentially containing
+                pronouns.
+
+        Returns:
+            The rephrased input string with pronouns resolved, or the
+            original input if no changes were needed.
+        """
         print("  [Context Resolver]: Attempting to resolve pronouns...")
         formatted_history = "\n".join(history)
         system_prompt = (
@@ -238,18 +296,21 @@ class UniversalInterpreter:
             f"New Input: {new_input}\nOutput:[/INST]"
         )
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=128,
-                stop=["</s>", "\n"],
-                echo=False,
-                temperature=0.0,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=128,
+                    stop=["</s>", "\n"],
+                    echo=False,
+                    temperature=0.0,
+                ),
             )
             assert isinstance(output, dict)
             rephrased_input = output["choices"][0]["text"].strip()
             if rephrased_input and rephrased_input.lower() != new_input.lower():
                 print(f"    - Context resolved: '{new_input}' -> '{rephrased_input}'")
-                return rephrased_input
+                return cast("str", rephrased_input)
             print("    - No context to resolve, using original input.")
             return new_input
         except Exception as e:
@@ -261,6 +322,21 @@ class UniversalInterpreter:
         user_input: str,
         history: list[str],
     ) -> InterpretData:
+        """Interpret user input after first attempting to resolve context.
+
+        This is a wrapper method that orchestrates contextual interpretation.
+        It first checks if the input contains pronouns and, if so, calls
+        the `resolve_context` method before passing the potentially
+        rephrased input to the main `interpret` method.
+
+        Args:
+            user_input: The raw message from the user.
+            history: The preceding conversation history.
+
+        Returns:
+            A `InterpretData` object representing the structured
+            understanding of the contextualized input.
+        """
         contextual_input = user_input
         pronouns = ["it", "its", "they", "them", "their", "he", "she", "his", "her"]
         if history and any(
@@ -270,8 +346,19 @@ class UniversalInterpreter:
         return self.interpret(contextual_input)
 
     def generate_curious_questions(self, topic: str, known_fact: str) -> list[str]:
-        """
-        Uses the Mini LLM in a creative mode to generate follow-up questions.
+        """Generate simple, fundamental follow-up questions about a topic.
+
+        This method uses the LLM in a more creative mode to simulate
+        curiosity. Given a known fact, it generates two simple questions
+        that a child might ask to learn more, which can then be used by
+        the `KnowledgeHarvester` to guide its study process.
+
+        Args:
+            topic: The high-level topic being studied.
+            known_fact: A single, declarative fact that is already known.
+
+        Returns:
+            A list of two generated question strings, or an empty list on failure.
         """
         system_prompt = (
             "You are a creative, inquisitive assistant that thinks like a curious child. "
@@ -296,12 +383,15 @@ class UniversalInterpreter:
             f"Output:[/INST]"
         )
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=128,
-                stop=["</s>"],
-                echo=False,
-                temperature=0.8,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=128,
+                    stop=["</s>"],
+                    echo=False,
+                    temperature=0.8,
+                ),
             )
             assert isinstance(output, dict)
             response_text = output["choices"][0]["text"].strip()
@@ -321,19 +411,28 @@ class UniversalInterpreter:
             )
             return []
 
-    # --- METHOD UPDATED WITH FULL CACHING LOGIC ---
     def synthesize(
         self,
         structured_facts: str,
         original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
+        """Convert a structured, internal representation into natural language.
+
+        This is the "voice" of the agent. It takes a structured string of
+        facts or an internal state and uses the LLM to generate a fluent,
+        conversational sentence. It can operate in different modes, such
+        as generating a statement or a clarification question. Results
+        are cached for performance.
+
+        Args:
+            structured_facts: The internal data to be verbalized.
+            original_question: The user's question, used for context.
+            mode: The synthesis mode ('statement' or 'clarification_question').
+
+        Returns:
+            A natural language string representing the synthesized response.
         """
-        Uses the Mini LLM to convert structured facts into natural language.
-        Results are cached to avoid repeated LLM calls for the same synthesis task.
-        """
-        # --- CACHING FIX: Use a more robust cache key ---
-        # The original question makes the context unique, so it must be part of the key.
         cache_key = f"{mode}|{original_question}|{structured_facts}"
 
         if cache_key in self.synthesis_cache:
@@ -354,7 +453,7 @@ class UniversalInterpreter:
                 "Do not state the facts directly. Your output must be ONLY the question."
             )
             task_prompt = f"Conflicting Facts: '{structured_facts}'"
-        else:  # Default "statement" mode
+        else:
             system_prompt = REPHRASING_PROMPT
             task_prompt = f"Facts to rephrase: '{structured_facts}'"
             if original_question:
@@ -362,12 +461,15 @@ class UniversalInterpreter:
 
         full_prompt = f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
-            output = self.llm(
-                full_prompt,
-                max_tokens=256,
-                stop=["</s>", "\n"],
-                echo=False,
-                temperature=0.7 if mode == "clarification_question" else 0.1,
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=256,
+                    stop=["</s>", "\n"],
+                    echo=False,
+                    temperature=0.7 if mode == "clarification_question" else 0.1,
+                ),
             )
             assert isinstance(output, dict)
             synthesized_text = output["choices"][0]["text"].strip().replace('"', "")
@@ -385,11 +487,10 @@ class UniversalInterpreter:
             if "(" in synthesized_text:
                 synthesized_text = synthesized_text.split("(")[0].strip()
 
-            # --- CACHING FIX: Save the result to the cache before returning ---
             self.synthesis_cache[cache_key] = synthesized_text
             self._save_cache()
 
-            return synthesized_text
+            return cast("str", synthesized_text)
         except Exception as e:
             print(f"  [Synthesizer Error]: Could not generate fluent text. Error: {e}")
             return structured_facts

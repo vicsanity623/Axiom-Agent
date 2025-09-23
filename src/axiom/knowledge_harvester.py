@@ -4,7 +4,9 @@ from __future__ import annotations
 import random
 import re
 import time
+from datetime import datetime
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 import requests
 import wikipedia
@@ -14,61 +16,45 @@ if TYPE_CHECKING:
 
     from axiom.cognitive_agent import CognitiveAgent
 
-# Set a user agent for Wikipedia API requests, which is good practice.
 wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
+
+
+class LogColors:
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    WHITE = "\033[97m"
+    RESET = "\033[0m"
 
 
 class KnowledgeHarvester:
     __slots__ = ("agent", "lock", "rejected_topics")
 
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
+        """Initialize the KnowledgeHarvester.
+
+        Args:
+            agent: The instance of the CognitiveAgent this harvester will serve.
+            lock: A threading lock to ensure thread-safe operations on the agent.
+        """
         self.agent = agent
         self.lock = lock
         self.rejected_topics: set[str] = set()
         print("[Knowledge Harvester]: Initialized.")
 
-    # --- CORE AUTONOMOUS CYCLES ---
-
-    def study_cycle(self) -> None:
-        """
-        The main study cycle. It prioritizes resolving 'INVESTIGATE' learning goals first.
-        If no goals exist, it falls back to studying an existing concept to find new connections.
-        """
-        print("\n--- [Study Cycle Started] ---")
-
-        goal_resolved = False
-        if self.agent.learning_goals:
-            # Get the oldest goal first (First-In, First-Out)
-            goal_to_resolve = self.agent.learning_goals[0]
-            if goal_to_resolve.startswith("INVESTIGATE:"):
-                goal_resolved = self._resolve_investigation_goal(goal_to_resolve)
-
-        if goal_resolved:
-            print(
-                "--- [Study Cycle Finished]: Successfully resolved a learning goal. ---",
-            )
-            self.agent.log_autonomous_cycle_completion()
-            return
-
-        # If no goals were resolved, fall back to the old "study a random fact" logic
-        self._study_random_concept()
-
-        print("--- [Study Cycle Finished] ---\n")
-        self.agent.log_autonomous_cycle_completion()
-
     def discover_cycle(self) -> None:
-        """
-        The discovery cycle. Finds a single, new, unknown topic from a random source
-        and triggers a learning goal for it.
-        """
-        print("\n--- [Discovery Cycle Started] ---")
+        """Run one full discovery cycle to find a new topic to learn.
 
-        # This logic is now much simpler. Its only job is to find a word we don't know.
+        This cycle uses an intelligent search strategy to find a new,
+        relevant, and popular topic that is not already in the agent's
+        lexicon. If a suitable topic is found, it creates a new
+        "INVESTIGATE" goal and adds it to the agent's learning queue.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n--- [Discovery Cycle Started at {timestamp}] ---")
+
         new_topic = self._find_new_topic()
 
         if new_topic:
-            # Instead of trying to learn a fact, we now create a learning goal
-            # to define the topic itself. This is a more robust approach.
             goal = f"INVESTIGATE: {new_topic}"
             with self.lock:
                 if goal not in self.agent.learning_goals:
@@ -78,20 +64,30 @@ class KnowledgeHarvester:
                     )
         else:
             print(
-                "[Discovery Cycle]: Could not find any new topics to learn about this cycle.",
+                f"[Discovery Cycle]: {LogColors.YELLOW}Could not find any new topics to learn about this cycle.{LogColors.RESET}",
             )
 
         print("--- [Discovery Cycle Finished] ---\n")
         self.agent.log_autonomous_cycle_completion()
 
-    # --- NEW: GOAL-DRIVEN RESEARCH METHOD ---
-
     def _resolve_investigation_goal(self, goal: str) -> bool:
+        """Resolve an "INVESTIGATE" goal by finding a word's definition.
+
+        This is the primary research function for expanding the agent's
+        vocabulary. It prioritizes using a precise dictionary API. If that
+        fails, it falls back to a general web search and attempts to parse
+        the result with a regex pattern.
+
+        If successful, it adds the new linguistic knowledge to the agent's
+        lexicon and removes the goal from the queue.
+
+        Args:
+            goal: The learning goal string (e.g., "INVESTIGATE: platypus").
+
+        Returns:
+            True if the goal was successfully resolved, False otherwise.
         """
-        Takes a learning goal (e.g., "INVESTIGATE: platypus") and tries to
-        find and learn its definition from the web using deterministic methods.
-        """
-        match = re.match(r"INVESTIGATE: (\w+)", goal)
+        match = re.match(r"INVESTIGATE: (.*)", goal)
         if not match:
             return False
         word_to_learn = match.group(1).lower()
@@ -100,45 +96,55 @@ class KnowledgeHarvester:
             f"[Study Cycle]: Prioritizing learning goal: To define '{word_to_learn}'.",
         )
 
-        # Formulate targeted search queries for definitions
-        queries = [
-            f"define {word_to_learn}",
-            f"what is a {word_to_learn}",
-            f"meaning of {word_to_learn}",
-        ]
+        api_result = self.get_definition_from_api(word_to_learn)
 
+        if api_result:
+            part_of_speech, definition = api_result
+            with self.lock:
+                self.agent.lexicon.add_linguistic_knowledge(
+                    word=word_to_learn,
+                    part_of_speech=part_of_speech,
+                    definition=definition,
+                )
+                if goal in self.agent.learning_goals:
+                    self.agent.learning_goals.remove(goal)
+                self.agent.save_brain()
+            return True
+
+        print(
+            f"  [Study Cycle]: Dictionary API failed for '{word_to_learn}'. Falling back to web search.",
+        )
+
+        queries = [f"define {word_to_learn}", f"what is a {word_to_learn}"]
         definition_found = None
         for query in queries:
             result = self.get_fact_from_wikipedia(
                 query,
             ) or self.get_fact_from_duckduckgo(query)
             if result:
-                definition_found = result[1]  # result is a tuple (title, sentence)
+                definition_found = result[1]
                 break
             time.sleep(1)
 
         if not definition_found:
-            print(
-                f"  [Study Cycle]: Could not find a simple definition for '{word_to_learn}'.",
-            )
+            print(f"  [Study Cycle]: Web search also failed for '{word_to_learn}'.")
             return False
 
-        # Use Regular Expressions to parse the definition (No NLP/Spacy!)
         pattern = re.compile(
-            rf"(?i)\b{word_to_learn}\b\s+(is|are|refers to)\s+(an?|the)?\s*(\w+)\b(.*)",
+            rf"(?i)\b{re.escape(word_to_learn)}\b\s*(\(.*\))?\s+(is|are|refers to)\s+((an?|the)?\s*([\w\s-]+))\b(.*)",
         )
         def_match = pattern.search(definition_found)
-
         if not def_match:
             print(
-                f"  [Study Cycle]: Found sentence, but could not parse it into a definition: '{definition_found}'",
+                f"  [Study Cycle]: Could not parse web search result: '{definition_found}'",
             )
             return False
 
-        part_of_speech = def_match.group(3).lower()
-        full_definition = (def_match.group(3) + def_match.group(4)).strip()
+        part_of_speech = def_match.group(5).strip().lower()
+        full_definition = (def_match.group(3) + def_match.group(6)).strip()
 
-        print(f"  [Study Cycle]: Successfully parsed definition for '{word_to_learn}'.")
+        if part_of_speech.isdigit() or part_of_speech in ["a", "an", "the"]:
+            return False
 
         with self.lock:
             self.agent.lexicon.add_linguistic_knowledge(
@@ -149,87 +155,327 @@ class KnowledgeHarvester:
             if goal in self.agent.learning_goals:
                 self.agent.learning_goals.remove(goal)
             self.agent.save_brain()
-
         return True
 
-    # --- HELPER & LEGACY METHODS ---
+    def study_cycle(self) -> None:
+        """Run one full study cycle.
 
-    def _study_random_concept(self) -> None:
+        This cycle has two main priorities:
+        1.  **Resolve Goals:** It first checks for any pending "INVESTIGATE"
+            goals in the agent's learning queue and attempts to resolve them.
+        2.  **Deepen Knowledge:** If the queue is empty, it falls back to the
+            `_deepen_knowledge_of_random_concept` routine to proactively
+            enrich the agent's existing knowledge.
         """
-        Legacy study method. Picks a random fact and tries to find a related one.
-        This no longer uses an LLM to generate questions.
-        """
-        print("[Study Cycle]: No learning goals. Studying a random existing concept.")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n--- [Study Cycle Started at {timestamp}] ---")
 
-        source_node_name, target_node_name = None, None
-        with self.lock:
-            all_edges = list(self.agent.graph.graph.edges(data=True))
-            if not all_edges:
-                print("[Study Cycle]: Brain has no facts to study yet.")
+        if self.agent.learning_goals:
+            goal_to_resolve = self.agent.learning_goals[0]
+            if goal_to_resolve.startswith("INVESTIGATE:"):
+                goal_resolved = self._resolve_investigation_goal(goal_to_resolve)
+                if not goal_resolved:
+                    print(
+                        f"  [Study Cycle]: {LogColors.YELLOW}Failed to resolve goal '{goal_to_resolve}'. Removing from queue.{LogColors.RESET}",
+                    )
+                    with self.lock:
+                        if goal_to_resolve in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(goal_to_resolve)
+
+                print(
+                    f"{LogColors.GREEN}--- [Study Cycle Finished]: Completed a learning goal task. ---{LogColors.RESET}",
+                )
+                self.agent.log_autonomous_cycle_completion()
                 return
 
-            # Choose a random fact to start from
-            u, v, _ = random.choice(all_edges)
-            source_node_data = self.agent.graph.graph.nodes.get(u)
-            target_node_data = self.agent.graph.graph.nodes.get(v)
-            if source_node_data and target_node_data:
-                source_node_name = source_node_data["name"]
-                target_node_name = target_node_data["name"]
+        print(
+            "[Study Cycle]: No learning goals. Attempting to deepen existing knowledge.",
+        )
+        self._deepen_knowledge_of_random_concept()
 
-        if source_node_name and target_node_name:
-            # We will now use the TARGET of the fact as the new research topic
-            study_topic = target_node_name
+        print(f"{LogColors.GREEN}--- [Study Cycle Finished] ---\n{LogColors.RESET}")
+        self.agent.log_autonomous_cycle_completion()
+
+    def _deepen_knowledge_of_random_concept(self) -> None:
+        """Pick a random known concept and try to learn a new related fact.
+
+        This method serves as the productive fallback for the study cycle
+        when no explicit learning goals are present.
+
+        It selects a random, non-trivial concept from the agent's brain,
+        searches the web for new information about it, and then feeds any
+        newly found factual sentence back into the agent's main `chat`
+        method to be learned.
+        """
+        stop_words = {
+            "is",
+            "are",
+            "was",
+            "were",
+            "has",
+            "have",
+            "had",
+            "do",
+            "a",
+            "an",
+            "the",
+            "it",
+            "they",
+            "he",
+            "she",
+            "noun",
+            "verb",
+            "adjective",
+            "article",
+            "pronoun",
+            "concept",
+            "property",
+        }
+
+        random_node_name = None
+        with self.lock:
+            all_nodes = list(self.agent.graph.graph.nodes(data=True))
+            if len(all_nodes) < 2:
+                print(
+                    "[Deepen Knowledge]: Not enough concepts in the brain to study yet.",
+                )
+                return
+
+            _, node_data = random.choice(all_nodes)
+            random_node_name = node_data.get("name")
+
+        if not random_node_name or random_node_name in stop_words:
+            if random_node_name:
+                print(
+                    f"[Deepen Knowledge]: Skipping study of common concept: '{random_node_name}'",
+                )
+            return
+
+        print(f"[Deepen Knowledge]: Chosen to study the concept: '{random_node_name}'")
+
+        result = self.get_fact_from_wikipedia(
+            random_node_name,
+        ) or self.get_fact_from_duckduckgo(random_node_name)
+
+        if result:
+            _title, fact_sentence = result
+
+            with self.lock:
+                print(
+                    f"  [Deepen Knowledge]: {LogColors.GREEN}Attempting to learn new fact: '{fact_sentence}'{LogColors.RESET}",
+                )
+                self.agent.chat(fact_sentence)
+        else:
             print(
-                f"[Study Cycle]: Studying connection from '{source_node_name}' to '{study_topic}'.",
+                f"[Deepen Knowledge]: Could not find any new facts about '{random_node_name}'.",
             )
 
-            # Instead of asking a question, we create an investigation goal
-            goal = f"INVESTIGATE: {study_topic.lower().split()[0]}"  # Use first word of topic
-            with self.lock:
-                if (
-                    goal not in self.agent.learning_goals
-                    and not self.agent.lexicon.is_known_word(study_topic)
-                ):
-                    self.agent.learning_goals.append(goal)
-                    print(
-                        f"  [Study Cycle]: Curiosity triggered. Added goal to investigate '{study_topic}'.",
-                    )
-
     def _find_new_topic(self, max_attempts: int = 5) -> str | None:
-        """Finds a new, unknown topic from Wikipedia."""
+        """Find a new, focused, and unknown topic using a heuristic-driven search.
+
+        This method guides the agent's curiosity. It first selects a broad,
+        curated subject (e.g., "Physics"), finds related topics on Wikipedia,
+        and then applies a series of heuristics to filter for high-quality
+        candidates.
+
+        Heuristics include rejecting meta-pages (e.g., "List of...") and
+        unpopular/obscure topics by scraping search result counts.
+
+        Args:
+            max_attempts: The maximum number of times to try finding a topic.
+
+        Returns:
+            A string name of a suitable new topic, or None if none were found.
+        """
+        core_subjects = [
+            "Physics",
+            "Chemistry",
+            "Biology",
+            "Mathematics",
+            "Computer science",
+            "History",
+            "Geography",
+            "Art",
+            "Music",
+            "Literature",
+            "Philosophy",
+            "Economics",
+            "Psychology",
+            "Sociology",
+            "Astronomy",
+            "Geology",
+            "Common household items",
+            "Types of animals",
+            "Types of plants",
+        ]
+
         for i in range(max_attempts):
             print(
                 f"[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...",
             )
-
             try:
-                # wikipedia.random() is the simplest way to get a new topic
-                topic = wikipedia.random(pages=1)
-                clean_topic = self.agent._clean_phrase(topic)
+                subject = random.choice(core_subjects)
+                print(f"  [Discovery]: Exploring the core subject: '{subject}'")
 
-                # Check if we know it or have rejected it
+                related_topics = wikipedia.search(subject, results=10)
+                if not related_topics:
+                    continue
+
+                topic = random.choice(related_topics)
+
+                reject_keywords = ["list of", "timeline of", "index of", "outline of"]
+                if any(keyword in topic.lower() for keyword in reject_keywords):
+                    print(
+                        f"  [Discovery Heuristic]: Rejecting meta-page topic: '{topic}'",
+                    )
+                    continue
+
+                search_popularity = self._get_search_result_count(topic)
+                minimum_popularity = 10000
+
+                if (
+                    search_popularity is not None
+                    and search_popularity < minimum_popularity
+                ):
+                    print(
+                        f"  [Discovery Heuristic]: Rejecting obscure topic '{topic}' (popularity: {search_popularity})",
+                    )
+                    continue
+
+                clean_topic = self.agent._clean_phrase(topic)
                 if (
                     not self.agent.lexicon.is_known_word(clean_topic)
                     and clean_topic not in self.rejected_topics
                 ):
-                    print(f"  [Discovery Success]: Found new, unknown topic: '{topic}'")
+                    print(f"  [Discovery Success]: Found new, popular topic: '{topic}'")
                     return clean_topic
+
             except Exception as e:
                 print(
-                    f"  [Discovery Error]: Could not fetch random topic from Wikipedia. Error: {e}",
+                    f"  [Discovery Error]: An error occurred during topic finding. Error: {e}",
                 )
-                time.sleep(1)  # Wait before retrying
+                time.sleep(1)
 
         print(
-            f"[Discovery Warning]: Could not find a new, unknown topic after {max_attempts} attempts.",
+            f"[Discovery Warning]: Could not find a new, suitable topic after {max_attempts} attempts.",
         )
         return None
 
+    def _get_search_result_count(self, query: str) -> int | None:
+        """Scrape DuckDuckGo to get an approximate search result count for a query.
+
+        This function serves as a heuristic for determining the "popularity"
+        or "commonness" of a topic. It scrapes the HTML results page and
+        parses the result count.
+
+        Args:
+            query: The search term to look up.
+
+        Returns:
+            An integer of the approximate number of search results, or None
+            if the scrape fails.
+        """
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+            }
+            url = f"https://duckduckgo.com/html/?q={quote(query)}"
+
+            response = requests.get(url, headers=headers, timeout=5)
+            response.raise_for_status()
+
+            match = re.search(r"([0-9,]+) results", response.text)
+            if match:
+                count_str = match.group(1).replace(",", "")
+                return int(count_str)
+        except Exception:
+            return None
+        return None
+
+    def get_definition_from_api(self, word: str) -> tuple[str, str] | None:
+        """Retrieve a precise definition and part of speech from a dictionary API.
+
+        This is the primary, high-precision tool for resolving "INVESTIGATE"
+        goals. It queries a free public dictionary API for a specific word.
+
+        On success, it extracts the primary part of speech and the first
+        definition, which is a much more reliable source of linguistic
+        knowledge than general web scraping.
+
+        Args:
+            word: The single word to define.
+
+        Returns:
+            A tuple containing the part of speech and the definition string,
+            or None if the word is not found or the API call fails.
+        """
+        print(f"[Knowledge Source]: Querying Dictionary API for '{word}'...")
+        try:
+            url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
+            response = requests.get(url, timeout=5)
+
+            if response.status_code != 200:
+                print(f"  [Dictionary API]: Word '{word}' not found.")
+                return None
+
+            data = response.json()
+
+            if not data or not isinstance(data, list):
+                return None
+
+            word_entry = data[0]
+            if "meanings" in word_entry and word_entry["meanings"]:
+                first_meaning = word_entry["meanings"][0]
+                part_of_speech = first_meaning.get("partOfSpeech")
+
+                if "definitions" in first_meaning and first_meaning["definitions"]:
+                    first_definition = first_meaning["definitions"][0].get("definition")
+
+                    if part_of_speech and first_definition:
+                        article = (
+                            "an"
+                            if part_of_speech.lower().startswith(
+                                ("a", "e", "i", "o", "u"),
+                            )
+                            else "a"
+                        )
+                        definition_sentence = f"{word} is {article} {part_of_speech}."
+
+                        print(
+                            f"  [Dictionary API]: Found definition: '{first_definition}'",
+                        )
+                        print(
+                            f"  [Dictionary API]: Constructed fact: '{definition_sentence}'",
+                        )
+
+                        return (part_of_speech, first_definition)
+
+        except requests.RequestException as e:
+            print(f"  [Dictionary API]: An error occurred: {e}")
+        except Exception:
+            print(f"  [Dictionary API]: Failed to parse response for '{word}'.")
+
+        return None
+
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
-        """Gets the first simple sentence of a Wikipedia page."""
+        """Retrieve the first sentence of a Wikipedia article for a given topic.
+
+        This function acts as a general-purpose information source. It
+        searches Wikipedia for a topic, gets the summary of the top result,
+        and extracts the first sentence.
+
+        It uses a simplicity filter to reject sentences that are too long
+        or complex for the agent's current parsing abilities.
+
+        Args:
+            topic: The search topic.
+
+        Returns:
+            A tuple containing the actual page title and the extracted
+            sentence, or None on failure.
+        """
         print(f"[Knowledge Source]: Searching Wikipedia for '{topic}'...")
         try:
-            # Use search to handle ambiguity, then get the top result page
             search_results = wikipedia.search(topic, results=1)
             if not search_results:
                 return None
@@ -248,11 +494,24 @@ class KnowledgeHarvester:
                 f"  [Knowledge Source]: Wikipedia search for '{topic}' was ambiguous.",
             )
         except Exception:
-            pass  # Suppress other common wikipedia library errors
+            pass
         return None
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
-        """Gets a definition from DuckDuckGo's Instant Answer API."""
+        """Retrieve a definition from DuckDuckGo's Instant Answer API.
+
+        This function serves as a fast, reliable source for simple facts
+        and definitions, acting as a fallback to the Wikipedia search.
+        It extracts the first sentence from the 'AbstractText' or
+        'Definition' field of the API response.
+
+        Args:
+            topic: The search topic.
+
+        Returns:
+            A tuple containing the original topic and the extracted
+            sentence, or None on failure.
+        """
         print(f"[Knowledge Source]: Searching DuckDuckGo for '{topic}'...")
         try:
             url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
@@ -278,5 +537,20 @@ class KnowledgeHarvester:
         max_words: int = 30,
         max_commas: int = 2,
     ) -> bool:
-        """A simple filter to reject overly complex sentences."""
+        """Evaluate if a sentence is simple enough for the parser to handle.
+
+        This is a crucial guardrail for the agent's learning process. It
+        uses simple heuristics (word count and comma count) to reject
+        sentences that are likely too grammatically complex for the current
+        Symbolic Parser, preventing the agent from trying to learn from
+        low-quality or un-parsable data.
+
+        Args:
+            sentence: The sentence to evaluate.
+            max_words: The maximum allowed number of words.
+            max_commas: The maximum allowed number of commas.
+
+        Returns:
+            True if the sentence is simple enough, False otherwise.
+        """
         return len(sentence.split()) <= max_words and sentence.count(",") <= max_commas

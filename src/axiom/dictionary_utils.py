@@ -7,10 +7,8 @@ import nltk
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 
-# Initialize the lemmatizer
 lemmatizer = WordNetLemmatizer()
 
-# Mapping NLTK POS tags to our ConceptNode types
 pos_map: Final = {
     "NN": "noun",
     "NNS": "noun",
@@ -59,9 +57,23 @@ class WordInfo(TypedDict):
 
 
 def get_word_info_from_wordnet(word: str) -> WordInfo:
-    """
-    Retrieves basic information (POS, definitions, hypernyms) for a word from WordNet.
-    Returns a dict {type, definitions, hypernyms_raw, related_words}.
+    """Retrieve detailed linguistic information for a word from WordNet.
+
+    This function queries WordNet for a given word and attempts to find
+    its most likely part of speech, definitions, and hypernyms (more
+    general concepts, e.g., 'dog' -> 'canine'). It also extracts related
+    words from the definitions and lemmas.
+
+    It prioritizes nouns, then verbs, then adjectives when selecting the
+    primary "synset" (sense of the word) to analyze.
+
+    Args:
+        word: The single word to look up.
+
+    Returns:
+        A `WordInfo` TypedDict containing the extracted type, definitions,
+        hypernyms, and related words. Returns a default 'concept' type
+        if the word is not found.
     """
     word_info = WordInfo(
         {
@@ -84,9 +96,7 @@ def get_word_info_from_wordnet(word: str) -> WordInfo:
             break
         if ss.pos() == "v" and not best_synset:
             best_synset = ss
-        elif (
-            ss.pos() == "a" or ss.pos() == "s" and not best_synset
-        ):  # 's' is adjective satellite
+        elif ss.pos() == "a" or ss.pos() == "s" and not best_synset:
             best_synset = ss
 
     if not best_synset and synsets:
@@ -136,9 +146,20 @@ def get_word_info_from_wordnet(word: str) -> WordInfo:
 
 
 def get_pos_tag_simple(word: str) -> str:
-    """
-    A simpler POS tagger. Tries NLTK's pos_tag, but falls back to WordNet's primary POS
-    or a generic 'concept' if the tagger resource is missing.
+    """Determine the part of speech for a word using a fallback strategy.
+
+    This function first attempts to use NLTK's fast `pos_tag` function.
+    If the required NLTK resource is not downloaded, it gracefully falls
+    back to querying WordNet for the word's primary part of speech.
+
+    If both methods fail, it returns the generic type 'concept'.
+
+    Args:
+        word: The single word to tag.
+
+    Returns:
+        A string representing the determined part of speech (e.g., 'noun',
+        'verb', 'concept').
     """
     try:
         tagged_word = nltk.pos_tag([word])
@@ -148,7 +169,6 @@ def get_pos_tag_simple(word: str) -> str:
         print(
             f"WARNING: NLTK pos_tagger resource missing for '{word}'. Falling back to WordNet primary POS.",
         )
-        # Fallback: Use WordNet's primary POS for the word if pos_tagger fails
         synsets = wn.synsets(word.lower())
         if synsets:
             best_synset = None
@@ -177,12 +197,23 @@ def get_pos_tag_simple(word: str) -> str:
         print(
             f"An unexpected error occurred in get_pos_tag_simple for '{word}': {e}. Falling back to 'concept'.",
         )
-    # Default if no specific POS found
     return "concept"
 
 
 def lemmatize_word(word: str, pos: str | None = None) -> WordNetLemmatizer:
-    """Lemmatizes a word."""
+    """Reduce a word to its base or dictionary form (lemma).
+
+    Uses the WordNetLemmatizer to convert a word to its root form.
+    For example, 'running' becomes 'run', and 'cats' becomes 'cat'.
+    Providing the part of speech (POS) can improve accuracy.
+
+    Args:
+        word: The word to lemmatize.
+        pos: An optional part-of-speech tag (e.g., 'n', 'v', 'a', 'r').
+
+    Returns:
+        The lemmatized form of the word as a string.
+    """
     if pos:
         wn_pos = None
         if pos.startswith("n"):
