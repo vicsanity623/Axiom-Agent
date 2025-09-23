@@ -855,7 +855,9 @@ class CognitiveAgent:
 
         for object_name in objects_to_process:
             relation_type = self._get_relation_type(
-                verb_cleaned, subject_name, object_name,
+                verb_cleaned,
+                subject_name,
+                object_name,
             )
             exclusive_relations = ["has_name", "is_capital_of", "is_located_in"]
             if relation_type in exclusive_relations and sub_node:
@@ -873,7 +875,8 @@ class CognitiveAgent:
                                 f"Fact 2: {sub_node.name} {relation_type.replace('_', ' ')} {object_name}."
                             )
                             question = self.interpreter.synthesize(
-                                conflicting_facts_str, mode="clarification_question",
+                                conflicting_facts_str,
+                                mode="clarification_question",
                             )
                             self.is_awaiting_clarification = True
                             self.clarification_context = {
@@ -885,7 +888,9 @@ class CognitiveAgent:
         learned_at_least_one = False
         for object_name in objects_to_process:
             relation_type = self._get_relation_type(
-                verb_cleaned, subject_name, object_name,
+                verb_cleaned,
+                subject_name,
+                object_name,
             )
             obj_node = self._add_or_update_concept(object_name)
             if sub_node and obj_node:
@@ -896,7 +901,11 @@ class CognitiveAgent:
 
                 if not edge_exists:
                     self.graph.add_edge(
-                        sub_node, obj_node, relation_type, 0.9, properties=properties,
+                        sub_node,
+                        obj_node,
+                        relation_type,
+                        0.9,
+                        properties=properties,
                     )
                     print(
                         f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}",
