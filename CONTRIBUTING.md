@@ -68,17 +68,17 @@ rm -f brain/*
 
 ## How to Contribute
 
-We are thrilled that you want to help build this new kind of mind. The current focus of the project is on **Phase 2: The Symbolic Interpreter**. Our goal is to expand the agent's native language understanding to reduce and eventually eliminate its dependency on the LLM.
+We are thrilled that you want to help build this new kind of mind. The current focus of the project is on **Phase 3: Advanced Symbolic Reasoning**. Our goal is to expand the agent's native language understanding to handle more complex grammar and reduce its reliance on the LLM.
 
 ### Your First Contribution: Expanding the Parser's Grammar
 
-The best way to get started is to help teach the agent new grammar. The `SymbolicParser` can currently only understand simple `Subject-Verb-Object` sentences. A great first task would be to teach it to understand **adjectives**.
+The best way to get started is to help teach the agent a new, fundamental part of English grammar: **prepositional phrases**.
 
 **The Challenge:**
-1.  Fork the repository and create a new branch (e.g., `feature/parser-adjectives`).
-2.  Modify the `SymbolicParser` in `src/axiom/symbolic_parser.py` to correctly parse a sentence like **"the dog is brown"**.
-3.  The parser should recognize that "brown" is an adjective and create a relationship like `dog --[has_property]--> brown`.
-4.  You will likely need to update the `LexiconManager` and `KnowledgeHarvester` to allow the agent to learn what an "adjective" is.
+1.  Fork the repository and create a new branch (e.g., `feature/parser-prepositions`).
+2.  Modify the `SymbolicParser` in `src/axiom/symbolic_parser.py` to correctly parse a sentence like **"Paris is in France"**.
+3.  The parser should recognize "in" as a preposition and create a semantic relationship like `Paris --[is_located_in]--> France`. This will likely require creating a mapping from common prepositions to relationship types (e.g., "in" -> "is_located_in", "on" -> "is_on_top_of", "of" -> "is_part_of").
+4.  You will need to update the `knowledge_base.py` to seed the agent with knowledge of common prepositions.
 5.  Add a test case to the `tests/` directory to verify your new functionality.
 6.  Ensure all checks in `./check.sh` are passing.
 7.  Submit a Pull Request!

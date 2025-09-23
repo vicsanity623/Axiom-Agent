@@ -8,10 +8,13 @@ import zipfile
 from datetime import datetime
 
 
-def render_axiom_model():
-    """
-    Finds the current agent state files and packages them into a uniquely named .axm model file
-    based on the current date and time.
+def render_axiom_model() -> None:
+    """Package the agent's current brain and cache into a versioned model.
+
+    This script creates a distributable, read-only snapshot of the agent's
+    current state. It finds the `my_agent_brain.json` file, optionally
+    finds the `interpreter_cache.json` file, and bundles them into a
+    single, timestamped `.axm` archive in the `rendered/` directory.
     """
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
@@ -20,17 +23,14 @@ def render_axiom_model():
     brain_file = "brain/my_agent_brain.json"
     cache_file = "brain/interpreter_cache.json"
 
-    source_files = [brain_file, cache_file]
+    if not os.path.exists(brain_file):
+        print(f"❌ CRITICAL ERROR: Source file '{brain_file}' not found.")
+        print(
+            "Please ensure the agent has been run at least once to generate its brain.",
+        )
+        return
 
-    for f in source_files:
-        if not os.path.exists(f):
-            print(f"❌ CRITICAL ERROR: Source file '{f}' not found.")
-            print(
-                "Please ensure the agent has been run at least once to generate its brain.",
-            )
-            return
-
-    print("✅ Found all required source files.")
+    print("✅ Found required source files.")
 
     version_data = {
         "model_format": "AxiomMind",
@@ -49,8 +49,13 @@ def render_axiom_model():
             zf.write(brain_file, arcname="brain.json")
             print(f"   - Compressing {brain_file}...")
 
-            zf.write(cache_file, arcname="cache.json")
-            print(f"   - Compressing {cache_file}...")
+            if os.path.exists(cache_file):
+                zf.write(cache_file, arcname="cache.json")
+                print(f"   - Compressing {cache_file}...")
+            else:
+                empty_cache = {"interpretations": [], "synthesis": []}
+                zf.writestr("cache.json", json.dumps(empty_cache))
+                print("   - Cache file not found. Packaging an empty cache.")
 
             zf.write(version_filename, arcname="version.json")
             print(f"   - Compressing {version_filename}...")

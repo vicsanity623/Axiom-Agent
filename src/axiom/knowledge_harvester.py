@@ -30,15 +30,24 @@ class KnowledgeHarvester:
     __slots__ = ("agent", "lock", "rejected_topics")
 
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
+        """Initialize the KnowledgeHarvester.
+
+        Args:
+            agent: The instance of the CognitiveAgent this harvester will serve.
+            lock: A threading lock to ensure thread-safe operations on the agent.
+        """
         self.agent = agent
         self.lock = lock
         self.rejected_topics: set[str] = set()
         print("[Knowledge Harvester]: Initialized.")
 
     def discover_cycle(self) -> None:
-        """
-        The discovery cycle. Finds a single, new, unknown topic from a random source
-        and triggers a learning goal for it.
+        """Run one full discovery cycle to find a new topic to learn.
+
+        This cycle uses an intelligent search strategy to find a new,
+        relevant, and popular topic that is not already in the agent's
+        lexicon. If a suitable topic is found, it creates a new
+        "INVESTIGATE" goal and adds it to the agent's learning queue.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n--- [Discovery Cycle Started at {timestamp}] ---")
@@ -62,9 +71,21 @@ class KnowledgeHarvester:
         self.agent.log_autonomous_cycle_completion()
 
     def _resolve_investigation_goal(self, goal: str) -> bool:
-        """
-        Takes a learning goal and tries to find and learn its definition,
-        prioritizing the Dictionary API.
+        """Resolve an "INVESTIGATE" goal by finding a word's definition.
+
+        This is the primary research function for expanding the agent's
+        vocabulary. It prioritizes using a precise dictionary API. If that
+        fails, it falls back to a general web search and attempts to parse
+        the result with a regex pattern.
+
+        If successful, it adds the new linguistic knowledge to the agent's
+        lexicon and removes the goal from the queue.
+
+        Args:
+            goal: The learning goal string (e.g., "INVESTIGATE: platypus").
+
+        Returns:
+            True if the goal was successfully resolved, False otherwise.
         """
         match = re.match(r"INVESTIGATE: (.*)", goal)
         if not match:
@@ -137,8 +158,14 @@ class KnowledgeHarvester:
         return True
 
     def study_cycle(self) -> None:
-        """
-        The main study cycle. Prioritizes learning goals, then deepens existing knowledge.
+        """Run one full study cycle.
+
+        This cycle has two main priorities:
+        1.  **Resolve Goals:** It first checks for any pending "INVESTIGATE"
+            goals in the agent's learning queue and attempts to resolve them.
+        2.  **Deepen Knowledge:** If the queue is empty, it falls back to the
+            `_deepen_knowledge_of_random_concept` routine to proactively
+            enrich the agent's existing knowledge.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n--- [Study Cycle Started at {timestamp}] ---")
@@ -170,9 +197,15 @@ class KnowledgeHarvester:
         self.agent.log_autonomous_cycle_completion()
 
     def _deepen_knowledge_of_random_concept(self) -> None:
-        """
-        Picks a random node from the graph and tries to learn a new, related fact about it.
-        This is the new, productive fallback for the study cycle.
+        """Pick a random known concept and try to learn a new related fact.
+
+        This method serves as the productive fallback for the study cycle
+        when no explicit learning goals are present.
+
+        It selects a random, non-trivial concept from the agent's brain,
+        searches the web for new information about it, and then feeds any
+        newly found factual sentence back into the agent's main `chat`
+        method to be learned.
         """
         stop_words = {
             "is",
@@ -238,9 +271,21 @@ class KnowledgeHarvester:
             )
 
     def _find_new_topic(self, max_attempts: int = 5) -> str | None:
-        """
-        Finds a new, more focused, unknown topic using a curated list of subjects
-        and a search result popularity heuristic.
+        """Find a new, focused, and unknown topic using a heuristic-driven search.
+
+        This method guides the agent's curiosity. It first selects a broad,
+        curated subject (e.g., "Physics"), finds related topics on Wikipedia,
+        and then applies a series of heuristics to filter for high-quality
+        candidates.
+
+        Heuristics include rejecting meta-pages (e.g., "List of...") and
+        unpopular/obscure topics by scraping search result counts.
+
+        Args:
+            max_attempts: The maximum number of times to try finding a topic.
+
+        Returns:
+            A string name of a suitable new topic, or None if none were found.
         """
         core_subjects = [
             "Physics",
@@ -317,9 +362,18 @@ class KnowledgeHarvester:
         return None
 
     def _get_search_result_count(self, query: str) -> int | None:
-        """
-        Performs a DuckDuckGo search and scrapes the approximate result count.
-        This is a heuristic for topic "popularity" or "commonness".
+        """Scrape DuckDuckGo to get an approximate search result count for a query.
+
+        This function serves as a heuristic for determining the "popularity"
+        or "commonness" of a topic. It scrapes the HTML results page and
+        parses the result count.
+
+        Args:
+            query: The search term to look up.
+
+        Returns:
+            An integer of the approximate number of search results, or None
+            if the scrape fails.
         """
         try:
             headers = {
@@ -339,10 +393,21 @@ class KnowledgeHarvester:
         return None
 
     def get_definition_from_api(self, word: str) -> tuple[str, str] | None:
-        """
-        Uses a free dictionary API to get a precise definition for a word.
-        This is now the primary source for resolving 'INVESTIGATE' goals.
-        Returns a tuple of (part_of_speech, definition_sentence).
+        """Retrieve a precise definition and part of speech from a dictionary API.
+
+        This is the primary, high-precision tool for resolving "INVESTIGATE"
+        goals. It queries a free public dictionary API for a specific word.
+
+        On success, it extracts the primary part of speech and the first
+        definition, which is a much more reliable source of linguistic
+        knowledge than general web scraping.
+
+        Args:
+            word: The single word to define.
+
+        Returns:
+            A tuple containing the part of speech and the definition string,
+            or None if the word is not found or the API call fails.
         """
         print(f"[Knowledge Source]: Querying Dictionary API for '{word}'...")
         try:
@@ -393,7 +458,22 @@ class KnowledgeHarvester:
         return None
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
-        """Gets the first simple sentence of a Wikipedia page."""
+        """Retrieve the first sentence of a Wikipedia article for a given topic.
+
+        This function acts as a general-purpose information source. It
+        searches Wikipedia for a topic, gets the summary of the top result,
+        and extracts the first sentence.
+
+        It uses a simplicity filter to reject sentences that are too long
+        or complex for the agent's current parsing abilities.
+
+        Args:
+            topic: The search topic.
+
+        Returns:
+            A tuple containing the actual page title and the extracted
+            sentence, or None on failure.
+        """
         print(f"[Knowledge Source]: Searching Wikipedia for '{topic}'...")
         try:
             search_results = wikipedia.search(topic, results=1)
@@ -418,7 +498,20 @@ class KnowledgeHarvester:
         return None
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
-        """Gets a definition from DuckDuckGo's Instant Answer API."""
+        """Retrieve a definition from DuckDuckGo's Instant Answer API.
+
+        This function serves as a fast, reliable source for simple facts
+        and definitions, acting as a fallback to the Wikipedia search.
+        It extracts the first sentence from the 'AbstractText' or
+        'Definition' field of the API response.
+
+        Args:
+            topic: The search topic.
+
+        Returns:
+            A tuple containing the original topic and the extracted
+            sentence, or None on failure.
+        """
         print(f"[Knowledge Source]: Searching DuckDuckGo for '{topic}'...")
         try:
             url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
@@ -444,5 +537,20 @@ class KnowledgeHarvester:
         max_words: int = 30,
         max_commas: int = 2,
     ) -> bool:
-        """A simple filter to reject overly complex sentences."""
+        """Evaluate if a sentence is simple enough for the parser to handle.
+
+        This is a crucial guardrail for the agent's learning process. It
+        uses simple heuristics (word count and comma count) to reject
+        sentences that are likely too grammatically complex for the current
+        Symbolic Parser, preventing the agent from trying to learn from
+        low-quality or un-parsable data.
+
+        Args:
+            sentence: The sentence to evaluate.
+            max_words: The maximum allowed number of words.
+            max_commas: The maximum allowed number of commas.
+
+        Returns:
+            True if the sentence is simple enough, False otherwise.
+        """
         return len(sentence.split()) <= max_words and sentence.count(",") <= max_commas

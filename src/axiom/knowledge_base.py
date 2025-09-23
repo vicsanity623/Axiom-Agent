@@ -1,13 +1,30 @@
 from __future__ import annotations
 
 # knowledge_base.py
+from typing import TYPE_CHECKING
+
 from axiom.dictionary_utils import get_word_info_from_wordnet
 
+if TYPE_CHECKING:
+    from .cognitive_agent import CognitiveAgent
 
-def seed_domain_knowledge(agent_instance) -> None:
-    """
-    Adds a large, foundational set of facts and relationships to the graph.
-    This gives the agent a significant head start on its knowledge.
+
+def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
+    """Seed the agent's brain with a large, foundational set of facts.
+
+    This function populates a new knowledge graph with a wide range of
+    pre-defined knowledge, giving the agent a significant head start.
+    It is called only when the agent detects it is starting with a fresh,
+    empty brain.
+
+    The seeded knowledge includes:
+    - The agent's own identity and purpose.
+    - Foundational world knowledge (physics, geography, biology).
+    - Abstract concepts (colors, sentiments).
+    - Integration with WordNet to enrich seeded concepts with hypernyms.
+
+    Args:
+        agent_instance: The instance of the CognitiveAgent to be seeded.
     """
     print("   - Seeding a vast initial world knowledge base...")
 
@@ -1293,8 +1310,20 @@ def seed_domain_knowledge(agent_instance) -> None:
     print("   - Vast domain knowledge seeding complete.")
 
 
-def seed_core_vocabulary(agent_instance) -> None:
-    """Seeds the Lexicon with foundational English words."""
+def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
+    """Seed the agent's Lexicon with a foundational English vocabulary.
+
+    This function teaches the agent the basic building blocks of English
+    grammar. It populates the knowledge graph with nodes for common parts
+    of speech, articles, verbs, prepositions, and conjunctions.
+
+    This foundational knowledge is essential for the `SymbolicParser` to
+    function and for the "Unknown Word" reflex to correctly identify
+    substantive new words to learn.
+
+    Args:
+        agent_instance: The instance of the CognitiveAgent to be seeded.
+    """
     print("     - Seeding core vocabulary for Lexicon...")
     core_vocab = {
         "noun": "concept",

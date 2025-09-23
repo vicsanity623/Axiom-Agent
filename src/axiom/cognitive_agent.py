@@ -43,6 +43,27 @@ class CognitiveAgent:
         cache_data: dict | None = None,
         inference_mode: bool = False,
     ) -> None:
+        """Initialize a new instance of the CognitiveAgent.
+
+        This constructor sets up the agent's core components, including its
+        interpreters, knowledge graph, and state. It can be initialized
+        in one of two ways:
+        1. From disk (`load_from_file=True`): Loads the brain and state
+           from the specified JSON files. Performs a health check and
+           re-seeds the brain if core identity is missing.
+        2. From data (`load_from_file=False`): Loads the brain and cache
+           directly from dictionaries, typically from an unpacked .axm model.
+
+        Args:
+            brain_file: Path to the agent's main knowledge graph file.
+            state_file: Path to the agent's state file (e.g., counters).
+            load_from_file: If True, load from files. If False, requires
+                brain_data and cache_data.
+            brain_data: A dictionary representing the knowledge graph.
+            cache_data: A dictionary representing the interpreter cache.
+            inference_mode: If True, disables all learning and saving
+                functionality.
+        """
         print("Initializing Cognitive Agent...")
         self.brain_file = brain_file
         self.state_file = state_file
@@ -104,6 +125,30 @@ class CognitiveAgent:
         self.INTERPRETER_REBOOT_THRESHOLD = 150
 
     def chat(self, user_input: str) -> str:
+        """Process a single user input and return the agent's response.
+
+        This method orchestrates the agent's entire thought process for a
+        single conversational turn. It follows a symbolic-first cognitive
+        flow:
+
+        1.  **Symbolic Parse:** Attempts to understand the input using the
+            deterministic `SymbolicParser`.
+        2.  **Cognitive Reflex:** If parsing fails, it checks for unknown
+            words. If found, it creates a learning goal and returns a
+            message stating its lack of knowledge.
+        3.  **LLM Fallback:** If all words are known but the sentence is too
+            complex, it falls back to the `UniversalInterpreter` (LLM).
+        4.  **Intent Processing:** The structured interpretation (from either
+            parser) is processed to learn, reason, or answer.
+        5.  **Response Synthesis:** A final, natural language response is
+            generated and returned.
+
+        Args:
+            user_input: The raw text message from the user.
+
+        Returns:
+            A natural language string representing the agent's final response.
+        """
         print(f"\nUser: {user_input}")
         self.graph.decay_activations()
 
@@ -177,6 +222,23 @@ class CognitiveAgent:
         return final_response
 
     def _handle_clarification(self, user_input: str) -> str:
+        """Handle the user's response after a contradiction was detected.
+
+        This method is triggered when the agent is in a special state,
+        `is_awaiting_clarification`, which occurs after it has identified
+        conflicting facts and asked the user for help.
+
+        It interprets the user's input to determine the correct fact,
+        then reinforces the correct relationship in the knowledge graph
+        while punishing the incorrect ones by reducing their weights.
+
+        Args:
+            user_input: The user's message, expected to be the correct
+                answer to the clarification question.
+
+        Returns:
+            A confirmation message to the user.
+        """
         print("  [Curiosity]: Processing user's clarification...")
         interpretation = self.interpreter.interpret(user_input)
         entities = interpretation.get("entities", [])
@@ -227,7 +289,24 @@ class CognitiveAgent:
         relation: RelationData | None,
         user_input: str,
     ) -> str:
-        """Processes the interpreted intent and returns a structured response."""
+        """Route the interpreted user input to the appropriate cognitive function.
+
+        This method acts as a central switchboard, taking the structured
+        output from an interpreter (either symbolic or LLM) and deciding
+        which specialized method to call. It handles routing for greetings,
+        learning new facts, answering questions, and processing commands.
+
+        Args:
+            intent: The classified intent of the user's message.
+            entities: A list of named entities extracted from the message.
+            relation: The structured factual relationship, if one was found.
+            user_input: The original raw text from the user.
+
+        Returns:
+            A structured, non-natural language string representing the
+            result of the cognitive process. This is then passed to the
+            synthesizer.
+        """
         if intent == "greeting":
             return "Hello User."
         if intent == "farewell":
@@ -260,7 +339,20 @@ class CognitiveAgent:
         return "I'm not sure how to process that. Could you rephrase?"
 
     def _get_all_facts_as_string(self) -> str:
-        """Retrieves and formats all high-confidence facts from the graph."""
+        """Retrieve, filter, and format all facts from the knowledge graph.
+
+        This function queries the entire knowledge graph to extract all
+        relationships. It then filters out low-confidence facts (weight < 0.8)
+        and sorts the remaining high-confidence facts from strongest to
+        weakest.
+
+        The final output is a single, formatted string ready for display
+        to the user.
+
+        Returns:
+            A formatted string of all high-confidence facts, or a message
+            indicating that the knowledge base is empty or lacks strong facts.
+        """
         all_facts = []
         reconstructed_edges = []
         for u, v, data in self.graph.graph.edges(data=True):
@@ -303,7 +395,24 @@ class CognitiveAgent:
         return "Despite having concepts in my knowledge base, I currently lack high-confidence facts to display."
 
     def _answer_question_about(self, entity_name: str, user_input: str) -> str:
-        """Answers a question about a specific entity."""
+        """Find and return known facts related to a specific entity.
+
+        This is the core reasoning function. It takes a named entity, finds
+        it in the knowledge graph, and performs a multi-hop traversal to
+        gather all related, high-confidence facts.
+
+        It also handles special cases, such as questions about the agent
+        itself, and can filter facts based on temporal queries (e.g.,
+        questions containing "now" or "currently").
+
+        Args:
+            entity_name: The primary subject of the user's question.
+            user_input: The original, full text of the user's question.
+
+        Returns:
+            A structured string summarizing the known facts, or a message
+            indicating that no information is available.
+        """
         clean_entity_name = self._clean_phrase(entity_name)
 
         if "agent" in clean_entity_name and "name" in user_input.lower():
@@ -349,7 +458,24 @@ class CognitiveAgent:
         return ". ".join(sorted(facts)) + "."
 
     def _synthesize_response(self, structured_response: str, user_input: str) -> str:
-        """Determines if synthesis is needed and returns the final response string."""
+        """Convert a structured, internal response into natural language.
+
+        This method acts as the final step before replying to the user.
+        It checks if the structured response is a simple, pre-defined
+        phrase (e.g., "Hello User."). If it is, the response is returned
+        directly.
+
+        Otherwise, it passes the structured fact(s) to the LLM-based
+        synthesizer to be converted into a fluent, conversational sentence.
+
+        Args:
+            structured_response: An internal, non-natural language string
+                containing the agent's raw answer.
+            user_input: The user's original question, used for context.
+
+        Returns:
+            The final, natural language response to be sent to the user.
+        """
         non_synthesize_triggers = [
             "Hello User",
             "Goodbye User",
@@ -379,9 +505,12 @@ class CognitiveAgent:
         return fluent_response
 
     def _reboot_interpreter(self) -> None:
-        """
-        Destroys and recreates the UniversalInterpreter to prevent long-term
-        memory leaks or state corruption in the underlying C++ library.
+        """Destroy and recreate the UniversalInterpreter to ensure stability.
+
+        This prophylactic measure is called periodically to prevent potential
+        long-term memory leaks or state corruption in the underlying C++
+        library of the LLM. It preserves and restores the interpretation
+        and synthesis caches to maintain performance.
         """
         print(
             "\n--- [SYSTEM HEALTH]: Prophylactically rebooting Universal Interpreter ---",
@@ -402,7 +531,13 @@ class CognitiveAgent:
         )
 
     def log_autonomous_cycle_completion(self) -> None:
-        """Called by the harvester after each cycle to track interpreter lifetime."""
+        """"Increment the autonomous cycle counter and trigger an interpreter reboot if needed.
+
+        This method is called by the KnowledgeHarvester after every Study
+        or Discovery cycle. It serves as a heartbeat to track the
+        interpreter's operational lifetime and trigger a prophylactic
+        reboot when a threshold is reached.
+        """
         self.autonomous_cycle_count += 1
         print(
             f"  [System Health]: Autonomous cycles since last interpreter reboot: {self.autonomous_cycle_count}/{self.INTERPRETER_REBOOT_THRESHOLD}",
@@ -412,6 +547,12 @@ class CognitiveAgent:
             self.autonomous_cycle_count = 0
 
     def _load_agent_state(self) -> None:
+        """Load the agent's operational state from its state file.
+
+        Reads the `my_agent_state.json` file to restore metadata that is
+        not part of the core knowledge graph, such as the total number of
+        learning iterations.
+        """
         if os.path.exists(self.state_file):
             try:
                 with open(self.state_file) as f:
@@ -426,11 +567,30 @@ class CognitiveAgent:
             self.learning_iterations = 0
 
     def _save_agent_state(self) -> None:
+        """Save the agent's current operational state to its state file.
+
+        Writes metadata, such as the `learning_iterations` counter, to
+        the `my_agent_state.json` file for persistence between sessions.
+        """
         state_data = {"learning_iterations": self.learning_iterations}
         with open(self.state_file, "w") as f:
             json.dump(state_data, f, indent=4)
 
     def _preprocess_self_reference(self, text: str) -> str:
+        """Normalize user input to replace self-references with a canonical name.
+
+        This function replaces pronouns and direct references (e.g., "you",
+        "your name") with a consistent, third-person reference ("the agent",
+        "the agent's name"). This simplifies the downstream parsing and
+        reasoning logic by ensuring the agent is always referred to in
+        the same way.
+
+        Args:
+            text: The raw input string from the user.
+
+        Returns:
+            The normalized string with self-references replaced.
+        """
         processed_text = re.sub(
             r"\byour name\b",
             "the agent's name",
@@ -471,6 +631,24 @@ class CognitiveAgent:
         start_node_id: str,
         max_hops: int,
     ) -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...]:
+        """Gather all facts related to a starting node via graph traversal.
+
+        This method performs a Breadth-First Search (BFS) starting from a
+        given node to find all connected facts up to a specified depth.
+        It traverses both outgoing and incoming relationships.
+
+        The results are cached using `lru_cache` for performance. If more
+        than 10 facts are found, it applies heuristics to filter for
+        relevance and salience before returning.
+
+        Args:
+            start_node_id: The unique ID of the node to start the traversal from.
+            max_hops: The maximum number of relationships (depth) to traverse.
+
+        Returns:
+            A tuple of fact tuples. Each inner tuple contains the formatted
+            fact string and another tuple of its sorted properties.
+        """
         print(
             f"  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: {start_node_id}",
         )
@@ -538,6 +716,22 @@ class CognitiveAgent:
         self,
         facts_with_props_tuple: tuple[tuple[str, tuple[tuple[str, str], ...]], ...],
     ) -> set[str]:
+        """Filter a set of facts to find the most current one.
+
+        This function is used for temporal reasoning. It iterates through
+        a list of facts, checks for an 'effective_date' property, and
+        returns the single most recent fact that is not in the future.
+
+        If no facts have a valid date, it returns all non-temporal facts.
+
+        Args:
+            facts_with_props_tuple: A tuple of facts gathered from the graph,
+                where each fact includes its properties.
+
+        Returns:
+            A set containing the single most current fact, or a set of all
+            non-temporal facts if no dates were found.
+        """
         print("  [TemporalReasoning]: Filtering facts by date...")
         today = datetime.utcnow().date()
         best_fact: str | None = None
@@ -568,11 +762,17 @@ class CognitiveAgent:
         }
 
     def _clean_phrase(self, phrase: str) -> str:
-        """
-        Cleans and normalizes a phrase for use as a concept in the graph.
+        """Clean and normalize a phrase for use as a concept in the graph.
+
         - Converts to lowercase.
         - Removes leading articles ('a', 'an', 'the').
         - Removes common punctuation from the end of the phrase.
+
+        Args:
+            phrase: The raw string phrase to be cleaned.
+
+        Returns:
+            The normalized phrase.
         """
         clean_phrase = phrase.lower().strip()
 
@@ -589,6 +789,25 @@ class CognitiveAgent:
         self,
         relation: RelationData,
     ) -> tuple[bool, str]:
+        """Process a structured fact to learn and integrate it into the graph.
+
+        This is the primary method for adding new knowledge. It takes a
+        structured `RelationData` object, cleans the subject and object,
+        determines the semantic relationship type, and adds the new nodes
+        and edge to the knowledge graph.
+
+        It also contains the core "curiosity" logic: if a new fact
+        contradicts an existing exclusive relationship (e.g., a person
+        can only have one name), it will trigger the clarification state.
+
+        Args:
+            relation: A TypedDict containing the subject, verb, and object
+                of the fact to be learned.
+
+        Returns:
+            A tuple containing a boolean indicating if a new fact was
+            learned, and a string message for the user.
+        """
         if self.inference_mode:
             return (
                 False,
@@ -705,6 +924,24 @@ class CognitiveAgent:
         return (True, "I have processed that information.")
 
     def _get_relation_type(self, verb: str, subject: str, object_: str) -> str:
+        """Determine the semantic relationship type from a simple verb.
+
+        This function converts a simple verb (like "is" or "locate in")
+        into a more structured, semantic relationship type for the graph
+        (e.g., "is_a", "is_located_in"). It includes special-case logic,
+        such as identifying the "has_name" relationship.
+
+        If no specific mapping is found, it defaults to using the verb
+        itself, formatted as snake_case.
+
+        Args:
+            verb: The verb from the parsed relation.
+            subject: The subject of the relation.
+            object_: The object of the relation.
+
+        Returns:
+            The formatted, semantic relationship type as a string.
+        """
         if "agent" in subject.lower() and verb in [
             "be",
             "is",
@@ -730,6 +967,19 @@ class CognitiveAgent:
         return relation_type_map.get(verb, verb.replace(" ", "_"))
 
     def learn_new_fact_autonomously(self, fact_sentence: str) -> bool:
+        """Process and learn a fact from a raw sentence string.
+
+        This is a high-level wrapper used by the KnowledgeHarvester. It
+        takes a raw sentence, sends it to the LLM interpreter, and if a
+        valid factual statement is returned, it passes the structured
+        relation to the main learning processor.
+
+        Args:
+            fact_sentence: A string containing a potential fact to learn.
+
+        Returns:
+            True if a new fact was successfully learned, False otherwise.
+        """
         if self.inference_mode:
             print("[Autonomous Learning]: Skipped. Agent is in inference mode.")
             return False
@@ -758,6 +1008,21 @@ class CognitiveAgent:
         name: str,
         node_type: str = "concept",
     ) -> ConceptNode | None:
+        """Find a concept node by name, creating it if it doesn't exist.
+
+        This is a core utility for managing concepts. It cleans the given
+        name, checks if a node with that name already exists, and returns
+        it. If not, it creates a new `ConceptNode`, attempting to infer a
+        more specific type (e.g., 'proper_noun') before adding it to the
+        graph.
+
+        Args:
+            name: The name of the concept to find or create.
+            node_type: The default node type to assign if creating a new node.
+
+        Returns:
+            The found or newly created ConceptNode, or None if the name is invalid.
+        """
         clean_name = self._clean_phrase(name)
         if not clean_name:
             return None
@@ -786,6 +1051,19 @@ class CognitiveAgent:
         concept_name2: str,
         weight: float = 0.5,
     ) -> None:
+        """Add a structured fact directly to the knowledge graph.
+
+        This is a helper method used primarily for seeding the brain with
+        initial knowledge. It bypasses all interpreters and directly
+        creates the specified nodes and relationship.
+
+        Args:
+            concept_name1: The name of the source concept.
+            concept_type1: The type of the source concept.
+            relation: The relationship type for the edge.
+            concept_name2: The name of the target concept.
+            weight: The confidence weight for the new fact.
+        """
         node1 = self._add_or_update_concept(concept_name1, node_type=concept_type1)
         node2 = self._add_or_update_concept(concept_name2)
         if node1 and node2:
@@ -795,9 +1073,20 @@ class CognitiveAgent:
             )
 
     def save_brain(self) -> None:
+        """Save the current knowledge graph to its JSON file.
+
+        This method persists the agent's long-term memory. It will not
+        execute if the agent is in inference-only mode.
+        """
         if not self.inference_mode:
             self.graph.save_to_file(self.brain_file)
 
     def save_state(self) -> None:
+        """Save the agent's current operational state to its JSON file.
+
+        This method persists metadata about the agent's lifetime, such as
+        learning counters. It is a convenience wrapper around the private
+        `_save_agent_state` method.
+        """
         if not self.inference_mode:
             self._save_agent_state()

@@ -9,14 +9,43 @@ if TYPE_CHECKING:
 
 
 class SymbolicParser:
+    """A deterministic, rule-based parser for understanding simple language.
+
+    This class is the core of the agent's native language understanding.
+    It attempts to deconstruct a sentence into a structured `InterpretData`
+    object by applying a series of grammatical rules. It relies on the
+    agent's `LexiconManager` to identify parts of speech.
+
+    This parser is designed to be the first-pass interpreter, allowing the
+    agent to bypass the LLM for sentences it can understand on its own.
+    """
     def __init__(self, agent: CognitiveAgent):
+        """Initialize the SymbolicParser.
+
+        Args:
+            agent: The instance of the CognitiveAgent this parser will serve.
+        """
         self.agent = agent
         print("   - Symbolic Parser initialized.")
 
     def parse(self, text: str) -> InterpretData | None:
-        """
-        Attempts to parse a simple sentence into a structured intent.
-        Returns an InterpretData object on success, or None on failure.
+        """Attempt to parse a simple sentence into a structured intent.
+
+        This method applies a prioritized sequence of rules to deconstruct
+        the input text:
+        1.  Checks for questions (e.g., "what is...").
+        2.  Checks for simple commands (e.g., "show all facts").
+        3.  Checks for Subject-Verb-Adjective structure.
+        4.  Falls back to a general Subject-Verb-Object structure.
+
+        If a rule matches, it returns a structured `InterpretData` object.
+        If no rules match, it returns None, signaling a parse failure.
+
+        Args:
+            text: The user input string to parse.
+
+        Returns:
+            An `InterpretData` object on a successful parse, or None.
         """
         print("  [Symbolic Parser]: Attempting to parse sentence...")
 
@@ -108,7 +137,22 @@ class SymbolicParser:
         return None
 
     def _find_verb(self, words: list[str]) -> tuple[str, int] | None:
-        """Scans a list of words to find a single, known verb."""
+        """Scan a list of words to find a single, known verb.
+
+        This helper function iterates through the words of a sentence and
+        uses the `LexiconManager` to check if any of them are categorized
+        as a 'verb'.
+
+        For the current V1 parser, it will only succeed if exactly one
+        known verb is found, as this simplifies the parsing logic.
+
+        Args:
+            words: A list of tokenized words from the input sentence.
+
+        Returns:
+            A tuple containing the verb string and its index, or None if
+            zero or more than one verb is found.
+        """
         found_verbs = []
         for i, word in enumerate(words):
             word_node = self.agent.graph.get_node_by_name(word)
@@ -122,7 +166,20 @@ class SymbolicParser:
         return None
 
     def _is_part_of_speech(self, word: str, pos: str) -> bool:
-        """Checks if a word has a specific part of speech in the Lexicon."""
+        """Check if a word is categorized as a specific part of speech.
+
+        This method queries the agent's Lexicon to determine if a word
+        has an "is_a" relationship to a given part-of-speech concept
+        (e.g., checks if 'brown' -> 'is_a' -> 'adjective').
+
+        Args:
+            word: The word to check.
+            pos: The part of speech to check for (e.g., "verb", "adjective").
+
+        Returns:
+            True if the word is categorized as the given part of speech,
+            False otherwise.
+        """
         word_node = self.agent.graph.get_node_by_name(word)
         if not word_node:
             return False

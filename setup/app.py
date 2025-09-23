@@ -32,8 +32,16 @@ DEFAULT_STATE_FILE = Path("my_agent_state.json")
 
 
 def load_agent() -> None:
-    """
-    Function to load the CognitiveAgent and start the background harvester.
+    """Initialize the global Axiom Agent and start its autonomous cycles.
+
+    This function is the core initialization routine for the training
+    server. It performs a thread-safe, one-time setup of the
+    CognitiveAgent, loading its brain from disk.
+
+    It then creates and schedules the KnowledgeHarvester's two main
+    autonomous learning cycles (Study and Discovery) to run in the
+    background, updating a global status variable to reflect the
+    agent's state ('loading', 'ready', or 'error').
     """
     global axiom_agent, agent_status
     loading_lock = threading.Lock()
@@ -83,23 +91,36 @@ def load_agent() -> None:
 
 @app.route("/")
 def index() -> str:
-    """Serves the main chat page."""
+    """Serve the main single-page application HTML."""
     return render_template("index.html")
 
 
 @app.route("/manifest.json")
 def manifest() -> Response:
+    """Serve the PWA manifest file for web app installation."""
     return send_from_directory("static", "manifest.json")
 
 
 @app.route("/sw.js")
 def service_worker() -> Response:
+    """Serve the service worker script for PWA offline capabilities."""
     return send_from_directory("static", "sw.js")
 
 
 @app.route("/status")
 def status() -> str | Response:
-    """An endpoint for the front-end to poll the agent's loading status."""
+    """Provide the agent's loading status and trigger initialization.
+
+    This endpoint is polled by the front-end. On the very first call,
+    it triggers the `load_agent` function in a background thread to
+    begin the resource-intensive initialization process.
+
+    Subsequent calls will return the current status ('loading', 'ready',
+    or 'error') without re-triggering the load.
+
+    Returns:
+        A JSON response with a 'status' key indicating the agent's state.
+    """
     global agent_status
     if agent_status == "uninitialized":
         threading.Thread(target=load_agent).start()
@@ -109,8 +130,19 @@ def status() -> str | Response:
 
 @app.route("/chat", methods=["POST"])
 def chat() -> tuple[Response, int] | Response:
-    """
-    The main endpoint for handling chat messages from the user.
+    """Handle an incoming user message and return the agent's response.
+
+    This is the main API endpoint for conversation. It waits until the
+    agent is fully initialized, then accepts a JSON payload with a
+    'message' key.
+
+    The user's message is passed to the agent's chat method within a
+    thread-safe lock. The agent's reply is returned in a JSON object
+    with a 'response' key.
+
+    Returns:
+        A JSON response with the agent's reply, or a JSON error
+        object with an appropriate HTTP status code on failure.
     """
     start_time = time.time()
     while agent_status != "ready":
@@ -144,6 +176,12 @@ def chat() -> tuple[Response, int] | Response:
 
 
 def run() -> None:
+    """Parse command-line arguments and start the Flask web server.
+
+    This function sets up the main application entry point. It handles
+    the optional '--ngrok' flag to expose the local server to the
+    internet via a public URL.
+    """
     parser = argparse.ArgumentParser(description="Run the Axiom Agent Training App.")
     parser.add_argument(
         "--ngrok",

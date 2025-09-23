@@ -5,8 +5,15 @@ from axiom.cognitive_agent import CognitiveAgent
 
 
 def run_training_session() -> None:
-    """
-    Initializes the agent and starts a command-line interface for training.
+    """Initialize the agent and start an interactive command-line training session.
+
+    This script provides a direct, text-based interface for manually
+    interacting with and teaching the Axiom Agent. It loads the agent in
+    its learning-enabled state and enters a read-eval-print loop (REPL)
+    that allows a user to chat with the agent.
+
+    All new knowledge learned during the session is saved to the brain
+    file in real-time.
     """
     print("--- [TRAINER]: Starting Axiom Agent Training Session... ---")
 

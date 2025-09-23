@@ -12,9 +12,15 @@ from axiom.knowledge_harvester import KnowledgeHarvester
 
 
 def start_autonomous_training() -> None:
-    """
-    Initializes the CognitiveAgent and starts the background harvester cycles
-    for continuous, unattended learning.
+    """Initialize the agent and run its autonomous learning cycles indefinitely.
+
+    This script runs the Axiom Agent in a "headless" mode, with no user
+    interaction. It loads the agent in its learning-enabled state,
+    schedules the recurring Study and Discovery cycles, and then enters an
+    infinite loop to keep the process alive.
+
+    This is the primary method for enabling the agent's 24/7,
+    unattended self-improvement.
     """
     print("--- [AUTONOMOUS TRAINER]: Starting Axiom Agent Initialization... ---")
 
