@@ -18,8 +18,9 @@ venv/
 # -----------------------------------------------------------------------------
 # Project-Specific Data & Models
 # -----------------------------------------------------------------------------
-# Ignore the directory containing brain, state, and cache files
-/brain/
+# Ignore all files in the brain folder but keep one
+brain/*
+!brain/.gitkeep
 
 # Ignore the directory containing large, rendered model snapshots
 /rendered/
