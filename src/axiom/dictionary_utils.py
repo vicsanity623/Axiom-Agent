@@ -96,9 +96,7 @@ def get_word_info_from_wordnet(word: str) -> WordInfo:
             break
         if ss.pos() == "v" and not best_synset:
             best_synset = ss
-        elif (
-            ss.pos() == "a" or ss.pos() == "s" and not best_synset
-        ):
+        elif ss.pos() == "a" or ss.pos() == "s" and not best_synset:
             best_synset = ss
 
     if not best_synset and synsets:

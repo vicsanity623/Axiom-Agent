@@ -5,7 +5,6 @@ import os
 import threading
 import time
 import traceback
-
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -85,8 +84,6 @@ def load_agent() -> None:
                 print(f"!!! CRITICAL ERROR INITIALIZING AGENT: {exc} !!!")
 
                 traceback.print_exc()
-
-
 
 
 @app.route("/")

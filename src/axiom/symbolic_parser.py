@@ -19,6 +19,7 @@ class SymbolicParser:
     This parser is designed to be the first-pass interpreter, allowing the
     agent to bypass the LLM for sentences it can understand on its own.
     """
+
     def __init__(self, agent: CognitiveAgent):
         """Initialize the SymbolicParser.
 

@@ -1248,7 +1248,8 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
     ]
     for color_name in colors:
         node = agent_instance._add_or_update_concept(color_name, "descriptor")
-        agent_instance.graph.add_edge(node, color_node, "is_a", 0.9)
+        if node and color_node:
+            agent_instance.graph.add_edge(node, color_node, "is_a", 0.9)
 
     sentiment_node = agent_instance._add_or_update_concept("sentiment", "attribute")
     sentiments = [
@@ -1286,7 +1287,8 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
     ]
     for sentiment_name in sentiments:
         node = agent_instance._add_or_update_concept(sentiment_name, "descriptor")
-        agent_instance.graph.add_edge(node, sentiment_node, "is_a", 0.8)
+        if node and sentiment_node:
+            agent_instance.graph.add_edge(node, sentiment_node, "is_a", 0.8)
 
     print("     - Integrating WordNet definitions for seeded concepts...")
 

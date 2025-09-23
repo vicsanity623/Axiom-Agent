@@ -6,13 +6,9 @@ import io
 import pstats
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
-
-if TYPE_CHECKING:
-    from types import TracebackType
 
 
 def run_profiling() -> None:

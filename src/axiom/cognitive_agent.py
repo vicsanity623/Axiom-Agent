@@ -531,7 +531,7 @@ class CognitiveAgent:
         )
 
     def log_autonomous_cycle_completion(self) -> None:
-        """"Increment the autonomous cycle counter and trigger an interpreter reboot if needed.
+        """ "Increment the autonomous cycle counter and trigger an interpreter reboot if needed.
 
         This method is called by the KnowledgeHarvester after every Study
         or Discovery cycle. It serves as a heartbeat to track the
@@ -821,29 +821,25 @@ class CognitiveAgent:
         if not all([subject, verb, object_]):
             return (False, "I couldn't understand the structure of that fact.")
 
-        subject_name: str | None = None
-        if isinstance(subject, str):
-            subject_name = subject
-        elif isinstance(subject, dict):
-            subject_name = subject.get("name")
-        if not subject_name:
+        subject_name_raw = subject.get("name") if isinstance(subject, dict) else subject
+        if not subject_name_raw:
             return (False, "Could not determine the subject of the fact.")
+        subject_name = subject_name_raw
 
         objects_to_process = []
         if isinstance(object_, list):
             for item in object_:
-                if isinstance(item, dict):
-                    name = item.get("entity") or item.get("name")
-                    if name:
-                        objects_to_process.append(name)
-                elif isinstance(item, str):
-                    objects_to_process.append(item)
-        elif isinstance(object_, dict):
-            name = object_.get("name")
+                name = (
+                    item.get("entity") or item.get("name")
+                    if isinstance(item, dict)
+                    else item
+                )
+                if name:
+                    objects_to_process.append(name)
+        else:
+            name = object_.get("name") if isinstance(object_, dict) else object_
             if name:
                 objects_to_process.append(name)
-        elif isinstance(object_, str):
-            objects_to_process.append(object_)
 
         if not objects_to_process:
             return (False, "Could not determine the object(s) of the fact.")
@@ -852,7 +848,6 @@ class CognitiveAgent:
             f"  [AGENT LEARNING: Processing interpreted statement: {subject_name} -> {verb} -> {objects_to_process}]",
         )
         self.learning_iterations += 1
-        learned_at_least_one = False
 
         assert verb is not None
         verb_cleaned = verb.lower().strip()
@@ -860,13 +855,9 @@ class CognitiveAgent:
 
         for object_name in objects_to_process:
             relation_type = self._get_relation_type(
-                verb_cleaned,
-                subject_name,
-                object_name,
+                verb_cleaned, subject_name, object_name,
             )
-
             exclusive_relations = ["has_name", "is_capital_of", "is_located_in"]
-
             if relation_type in exclusive_relations and sub_node:
                 for edge in self.graph.get_edges_from_node(sub_node.id):
                     if edge.type == relation_type:
@@ -881,27 +872,65 @@ class CognitiveAgent:
                                 f"Fact 1: {sub_node.name} {edge.type.replace('_', ' ')} {existing_target_data.get('name')}. "
                                 f"Fact 2: {sub_node.name} {relation_type.replace('_', ' ')} {object_name}."
                             )
-                            _ = self.interpreter.synthesize(
-                                conflicting_facts_str,
-                                mode="clarification_question",
+                            question = self.interpreter.synthesize(
+                                conflicting_facts_str, mode="clarification_question",
                             )
                             self.is_awaiting_clarification = True
                             self.clarification_context = {
                                 "subject": sub_node.name,
                                 "conflicting_relation": relation_type,
                             }
+                            return (False, question)
 
+        learned_at_least_one = False
+        for object_name in objects_to_process:
+            relation_type = self._get_relation_type(
+                verb_cleaned, subject_name, object_name,
+            )
             obj_node = self._add_or_update_concept(object_name)
             if sub_node and obj_node:
-                fact_already_exists = False
-                for edge in self.graph.get_edges_from_node(sub_node.id):
-                    if edge.type == relation_type and edge.target == obj_node.id:
-                        print(
-                            f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
-                        )
-                        fact_already_exists = True
+                edge_exists = any(
+                    edge.type == relation_type and edge.target == obj_node.id
+                    for edge in self.graph.get_edges_from_node(sub_node.id)
+                )
 
-                if not fact_already_exists:
+                if not edge_exists:
+                    self.graph.add_edge(
+                        sub_node, obj_node, relation_type, 0.9, properties=properties,
+                    )
+                    print(
+                        f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}",
+                    )
+                    learned_at_least_one = True
+                else:
+                    print(
+                        f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
+                    )
+
+        if learned_at_least_one:
+            self._gather_facts_multihop.cache_clear()
+            print("  [Cache]: Cleared reasoning cache due to new knowledge.")
+            self.save_brain()
+            self.save_state()
+            return (True, "I understand. I have noted that.")
+
+        return (True, "I have processed that information.")
+
+        learned_at_least_one = False
+        for object_name in objects_to_process:
+            relation_type = self._get_relation_type(
+                verb_cleaned,
+                subject_name,
+                object_name,
+            )
+            obj_node = self._add_or_update_concept(object_name)
+            if sub_node and obj_node:
+                edge_exists = any(
+                    edge.type == relation_type and edge.target == obj_node.id
+                    for edge in self.graph.get_edges_from_node(sub_node.id)
+                )
+
+                if not edge_exists:
                     self.graph.add_edge(
                         sub_node,
                         obj_node,
@@ -913,6 +942,10 @@ class CognitiveAgent:
                         f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}",
                     )
                     learned_at_least_one = True
+                else:
+                    print(
+                        f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
+                    )
 
         if learned_at_least_one:
             self._gather_facts_multihop.cache_clear()

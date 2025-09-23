@@ -80,6 +80,7 @@ class UniversalInterpreter:
     to perform structured interpretation, context resolution, and natural
     language synthesis.
     """
+
     def __init__(
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,

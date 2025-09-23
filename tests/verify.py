@@ -4,13 +4,9 @@ from __future__ import annotations
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
-
-if TYPE_CHECKING:
-    from types import TracebackType
 
 
 def run_verification_suite() -> None:
@@ -61,9 +57,13 @@ def _test_query_performance(agent: CognitiveAgent) -> None:
         print(f"  -> Cache Hit Query Time: {duration_hit:.4f} seconds.")
 
         if duration_hit < 0.01:
-            print(f"  ✅ [SUCCESS]: Cache Hit Query Time ({duration_hit:.4f}s) is excellent.")
+            print(
+                f"  ✅ [SUCCESS]: Cache Hit Query Time ({duration_hit:.4f}s) is excellent.",
+            )
         else:
-            print(f"  ⚠️ [WARNING]: Cache Hit Query Time ({duration_hit:.4f}s) is slower than expected.")
+            print(
+                f"  ⚠️ [WARNING]: Cache Hit Query Time ({duration_hit:.4f}s) is slower than expected.",
+            )
     except Exception as e:
         print(f"  ❌ [FAILURE]: An error occurred during the query time test: {e}")
 

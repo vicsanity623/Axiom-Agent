@@ -18,7 +18,7 @@ class LexiconManager:
 
     __slots__ = ("agent",)
 
-    def __init__(self, agent: "CognitiveAgent") -> None:
+    def __init__(self, agent: CognitiveAgent) -> None:
         """Initialize the LexiconManager.
 
         Args:
@@ -79,7 +79,10 @@ class LexiconManager:
                 property_node = self.agent._add_or_update_concept("property")
                 if property_node:
                     self.agent.graph.add_edge(
-                        pos_node, property_node, "is_a", weight=0.9
+                        pos_node,
+                        property_node,
+                        "is_a",
+                        weight=0.9,
                     )
                     print(
                         "    [Lexicon]: Categorized 'adjective' as a type of 'property'.",

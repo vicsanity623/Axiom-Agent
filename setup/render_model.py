@@ -6,6 +6,7 @@ import json
 import os
 import zipfile
 from datetime import datetime
+from typing import Any
 
 
 def render_axiom_model() -> None:
@@ -53,7 +54,10 @@ def render_axiom_model() -> None:
                 zf.write(cache_file, arcname="cache.json")
                 print(f"   - Compressing {cache_file}...")
             else:
-                empty_cache = {"interpretations": [], "synthesis": []}
+                empty_cache: dict[str, list[Any]] = {
+                    "interpretations": [],
+                    "synthesis": [],
+                }
                 zf.writestr("cache.json", json.dumps(empty_cache))
                 print("   - Cache file not found. Packaging an empty cache.")
 

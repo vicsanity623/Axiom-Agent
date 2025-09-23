@@ -195,6 +195,7 @@ class ConceptGraph:
     implementation. It also maintains a fast lookup table for finding
     nodes by name.
     """
+
     __slots__ = ("graph", "name_to_id")
 
     def __init__(self) -> None:
@@ -368,7 +369,6 @@ class ConceptGraph:
                 0.0,
                 current_activation - decay_rate,
             )
-
 
     def save_to_file(self, filename: Path | str) -> None:
         """Serialize the entire knowledge graph to a JSON file.
