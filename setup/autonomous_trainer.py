@@ -3,35 +3,36 @@ from __future__ import annotations
 # autonomous_trainer.py
 import threading
 import time
+import traceback
 from pathlib import Path
+from typing import Final
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_harvester import KnowledgeHarvester
 
+BRAIN_PATH: Final = Path("brain")
+BRAIN_FILE: Final = BRAIN_PATH / "my_agent_brain.json"
+STATE_FILE: Final = BRAIN_PATH / "my_agent_state.json"
 
-def start_autonomous_training() -> None:
+
+def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
     """Initialize the agent and run its autonomous learning cycles indefinitely.
 
     This script runs the Axiom Agent in a "headless" mode, with no user
     interaction. It loads the agent in its learning-enabled state,
-    schedules the recurring Study and Discovery cycles, and then enters an
-    infinite loop to keep the process alive.
+    schedules the recurring Study and Discovery cycles, and then enters
+    an infinite loop to keep the process alive.
 
     This is the primary method for enabling the agent's 24/7,
     unattended self-improvement.
     """
     print("--- [AUTONOMOUS TRAINER]: Starting Axiom Agent Initialization... ---")
 
-    axiom_agent: CognitiveAgent | None = None
     agent_interaction_lock = threading.Lock()
 
     try:
-        brain_path = Path("brain")
-        brain_file = brain_path / "my_agent_brain.json"
-        state_file = brain_path / "my_agent_state.json"
-
         axiom_agent = CognitiveAgent(
             brain_file=brain_file,
             state_file=state_file,
@@ -69,12 +70,10 @@ def start_autonomous_training() -> None:
         print("\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---")
     except Exception as exc:
         print(f"!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: {exc} !!!")
-        import traceback
-
         traceback.print_exc()
     finally:
         print("--- [AUTONOMOUS TRAINER]: Process terminated. ---")
 
 
 if __name__ == "__main__":
-    start_autonomous_training()
+    start_autonomous_training(BRAIN_FILE, STATE_FILE)
