@@ -45,6 +45,8 @@ def render_axiom_model() -> None:
     print(f"✅ Created version metadata file for model {timestamp}.")
 
     output_filename = f"rendered/axiom_model_{timestamp}.axm"
+    output_directory = os.path.dirname(output_filename)
+    os.makedirs(output_directory, exist_ok=True)
     try:
         with zipfile.ZipFile(output_filename, "w", zipfile.ZIP_DEFLATED) as zf:
             zf.write(brain_file, arcname="brain.json")

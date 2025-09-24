@@ -829,11 +829,11 @@ class CognitiveAgent:
         objects_to_process = []
         if isinstance(object_, list):
             for item in object_:
-                name = (
-                    item.get("entity") or item.get("name")
-                    if isinstance(item, dict)
-                    else item
-                )
+                if isinstance(item, dict):
+                    name = item.get("entity") or item.get("name")
+                else:
+                    name = item
+
                 if name:
                     objects_to_process.append(name)
         else:
@@ -884,46 +884,6 @@ class CognitiveAgent:
                                 "conflicting_relation": relation_type,
                             }
                             return (False, question)
-
-        learned_at_least_one = False
-        for object_name in objects_to_process:
-            relation_type = self._get_relation_type(
-                verb_cleaned,
-                subject_name,
-                object_name,
-            )
-            obj_node = self._add_or_update_concept(object_name)
-            if sub_node and obj_node:
-                edge_exists = any(
-                    edge.type == relation_type and edge.target == obj_node.id
-                    for edge in self.graph.get_edges_from_node(sub_node.id)
-                )
-
-                if not edge_exists:
-                    self.graph.add_edge(
-                        sub_node,
-                        obj_node,
-                        relation_type,
-                        0.9,
-                        properties=properties,
-                    )
-                    print(
-                        f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}",
-                    )
-                    learned_at_least_one = True
-                else:
-                    print(
-                        f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
-                    )
-
-        if learned_at_least_one:
-            self._gather_facts_multihop.cache_clear()
-            print("  [Cache]: Cleared reasoning cache due to new knowledge.")
-            self.save_brain()
-            self.save_state()
-            return (True, "I understand. I have noted that.")
-
-        return (True, "I have processed that information.")
 
         learned_at_least_one = False
         for object_name in objects_to_process:

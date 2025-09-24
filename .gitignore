@@ -15,6 +15,7 @@ venv/
 # Ignore Python's build/install metadata folders
 *.egg-info/
 /axiom_agent.egg-info/
+.coverage
 # -----------------------------------------------------------------------------
 # Project-Specific Data & Models
 # -----------------------------------------------------------------------------
