@@ -5,7 +5,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, TypeAlias, TypedDict, cast
+from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict, cast
 
 from llama_cpp import Llama
 
@@ -54,7 +54,7 @@ class PropertyData(TypedDict):
 class RelationData(TypedDict):
     subject: str
     verb: str
-    object: str | dict[str, Any] | list[str | dict[str, Any]]
+    object: str | dict[str, str] | list[str | dict[str, str]]
     properties: NotRequired[PropertyData]
 
 
