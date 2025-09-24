@@ -345,6 +345,79 @@ class UniversalInterpreter:
             contextual_input = self.resolve_context(history, user_input)
         return self.interpret(contextual_input)
 
+    def break_down_definition(self, subject: str, chunky_definition: str) -> list[str]:
+        """Use the LLM to break a complex definition into simple, atomic facts.
+
+        This method is the core of the introspective refinement cycle. It takes
+        a subject and a long, complex definitional phrase ("chunky fact") and
+        prompts the LLM to deconstruct it into a list of simple, standalone
+        sentences that can be learned individually by the agent.
+
+        Args:
+            subject: The subject of the definition (e.g., "Bacteria").
+            chunky_definition: The complex phrase to break down.
+
+        Returns:
+            A list of simple, atomic fact sentences, or an empty list on failure.
+        """
+        print(f"  [Interpreter]: Breaking down chunky definition for '{subject}'...")
+        system_prompt = (
+            "You are a logical decomposition engine. Your task is to break down a "
+            "complex 'Definition' about a 'Subject' into a list of simple, atomic, "
+            "declarative sentences. Each sentence must be a standalone fact.\n"
+            "RULES:\n"
+            "1. Each output sentence MUST start with the original 'Subject'.\n"
+            "2. The output MUST be a simple list, with each sentence on a new line, "
+            "prefixed with a hyphen.\n"
+            "3. DO NOT add any other text, explanation, or commentary."
+        )
+        examples_prompt = (
+            "Here are some examples:\n"
+            "Subject: Bacteria\n"
+            "Definition: ubiquitous, mostly free-living organisms often consisting of one biological cell\n"
+            "Output:\n"
+            "- Bacteria are ubiquitous.\n"
+            "- Bacteria are mostly free-living organisms.\n"
+            "- Bacteria consist of one biological cell.\n\n"
+            "Subject: SymbolicParser\n"
+            "Definition: a deterministic, rule-based parser for understanding simple language\n"
+            "Output:\n"
+            "- SymbolicParser is a deterministic parser.\n"
+            "- SymbolicParser is a rule-based parser.\n"
+            "- SymbolicParser is for understanding simple language."
+        )
+        full_prompt = (
+            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"Subject: {subject.capitalize()}\nDefinition: {chunky_definition}\n"
+            f"Output:[/INST]"
+        )
+        try:
+            output = cast(
+                "dict",
+                self.llm(
+                    full_prompt,
+                    max_tokens=256,
+                    stop=["</s>"],
+                    echo=False,
+                    temperature=0.2,
+                ),
+            )
+            assert isinstance(output, dict)
+            response_text = output["choices"][0]["text"].strip()
+            atomic_sentences = [
+                s.strip()
+                for s in response_text.replace("-", "").split("\n")
+                if s.strip()
+            ]
+
+            if atomic_sentences:
+                print(f"    - Decomposed into {len(atomic_sentences)} atomic facts.")
+                return atomic_sentences
+            return []
+        except Exception as e:
+            print(f"  [Interpreter Error]: Could not break down definition. Error: {e}")
+            return []
+
     def generate_curious_questions(self, topic: str, known_fact: str) -> list[str]:
         """Generate simple, fundamental follow-up questions about a topic.
 

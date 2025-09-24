@@ -23,9 +23,10 @@ from axiom.cognitive_agent import CognitiveAgent
 
 axiom_agent: CognitiveAgent | None = None
 
-THIS_FILE: Final = Path(__file__).absolute()
-STATIC_DIR: Final = THIS_FILE.parent / "static"
-TEMPLATE_DIR = THIS_FILE.parent / "templates"
+THIS_FILE: Final = Path(__file__).resolve()
+PROJECT_ROOT: Final = THIS_FILE.parent.parent
+STATIC_DIR: Final = PROJECT_ROOT / "static"
+TEMPLATE_DIR: Final = PROJECT_ROOT / "templates"
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 

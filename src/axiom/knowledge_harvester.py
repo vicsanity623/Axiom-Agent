@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from threading import Lock
 
     from axiom.cognitive_agent import CognitiveAgent
+    from axiom.graph_core import ConceptNode, RelationshipEdge
 
 wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
 
@@ -195,6 +196,97 @@ class KnowledgeHarvester:
 
         print(f"{LogColors.GREEN}--- [Study Cycle Finished] ---\n{LogColors.RESET}")
         self.agent.log_autonomous_cycle_completion()
+
+    def refinement_cycle(self) -> None:
+        """Run one full introspection and refinement cycle.
+
+        This cycle allows the agent to improve the quality of its own knowledge.
+        It searches for "chunky" facts (e.g., long, definitional concepts)
+        and uses the LLM to break them down into smaller, more precise, atomic
+        facts. This improves the agent's ability to reason symbolically.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print(f"\n--- [Refinement Cycle Started at {timestamp}] ---")
+
+        chunky_fact = None
+        with self.lock:
+            chunky_fact = self._find_chunky_fact()
+
+        if chunky_fact:
+            source_node, target_node, edge = chunky_fact
+            print(
+                f"  [Refinement]: Found a chunky fact to refine: '{source_node.name}' --[{edge.type}]--> '{target_node.name}'",
+            )
+
+            atomic_sentences = self.agent.interpreter.break_down_definition(
+                subject=source_node.name,
+                chunky_definition=target_node.name,
+            )
+
+            if atomic_sentences:
+                print(
+                    f"  [Refinement]: Decomposed into {len(atomic_sentences)} new atomic facts.",
+                )
+                for sentence in atomic_sentences:
+                    with self.lock:
+                        self.agent.learn_new_fact_autonomously(sentence)
+
+                with self.lock:
+                    graph_edge = self.agent.graph.graph[edge.source][edge.target]
+                    key_to_modify = None
+                    for key, data in graph_edge.items():
+                        if data.get("type") == edge.type:
+                            key_to_modify = key
+                            break
+
+                    if key_to_modify is not None:
+                        self.agent.graph.graph[edge.source][edge.target][key_to_modify][
+                            "weight"
+                        ] = 0.2
+                        self.agent.save_brain()
+                        print(
+                            "  [Refinement]: Marked original fact as refined by lowering its weight.",
+                        )
+
+        else:
+            print("[Refinement]: No chunky facts found for refinement this cycle.")
+
+        print(
+            f"{LogColors.GREEN}--- [Refinement Cycle Finished] ---\n{LogColors.RESET}",
+        )
+        self.agent.log_autonomous_cycle_completion()
+
+    def _find_chunky_fact(
+        self,
+    ) -> tuple[ConceptNode, ConceptNode, RelationshipEdge] | None:
+        """Find a single, high-confidence, unrefined "chunky" fact.
+
+        A "chunky" fact is defined as a relationship where the object is a
+        long noun phrase, suggesting it's a definition that could be
+        broken down into smaller, more atomic facts.
+
+        This method searches for `is_a` relationships with long targets.
+
+        Returns:
+            A tuple containing the source node, target node, and edge object
+            of a suitable fact, or None if none is found.
+        """
+        potential_facts = []
+
+        all_edges = self.agent.graph.get_all_edges()
+
+        for edge in all_edges:
+            if edge.type == "is_a" and edge.weight > 0.8:
+                target_node = self.agent.graph.get_node_by_id(edge.target)
+                if target_node and len(target_node.name.split()) > 5:
+                    source_node = self.agent.graph.get_node_by_id(edge.source)
+                    if source_node:
+                        potential_facts.append((source_node, target_node, edge))
+
+        if potential_facts:
+            return random.choice(potential_facts)
+
+        return None
 
     def _deepen_knowledge_of_random_concept(self) -> None:
         """Pick a random known concept and try to learn a new related fact.
@@ -481,6 +573,12 @@ class KnowledgeHarvester:
                 return None
 
             page = wikipedia.page(search_results[0], auto_suggest=False, redirect=True)
+
+            if not any(word in page.title.lower() for word in topic.lower().split()):
+                print(
+                    f"  [Knowledge Source]: Wikipedia returned a mismatched page (Title: '{page.title}'). Rejecting.",
+                )
+                return None
 
             if page and page.summary:
                 first_sentence = page.summary.split(". ")[0].strip() + "."

@@ -22,8 +22,8 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
 
     This script runs the Axiom Agent in a "headless" mode, with no user
     interaction. It loads the agent in its learning-enabled state,
-    schedules the recurring Study and Discovery cycles, and then enters
-    an infinite loop to keep the process alive.
+    schedules the recurring Study, Discovery, and Refinement cycles, and then
+    enters an infinite loop to keep the process alive.
 
     This is the primary method for enabling the agent's 24/7,
     unattended self-improvement.
@@ -48,6 +48,15 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
             minutes=6,
         )
         print("--- [SCHEDULER]: Study Cycle is scheduled to run every 6 minutes. ---")
+
+        scheduler.add_job(
+            harvester.refinement_cycle,
+            "interval",
+            minutes=15,
+        )
+        print(
+            "--- [SCHEDULER]: Refinement Cycle is scheduled to run every 15 minutes. ---",
+        )
 
         scheduler.add_job(
             harvester.discover_cycle,

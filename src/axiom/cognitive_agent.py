@@ -171,7 +171,8 @@ class CognitiveAgent:
         if self.is_awaiting_clarification:
             return self._handle_clarification(user_input)
 
-        normalized_input = self._preprocess_self_reference(user_input)
+        contextual_input = self._resolve_references(user_input)
+        normalized_input = self._preprocess_self_reference(contextual_input)
 
         interpretation: InterpretData | None = None
 
@@ -236,6 +237,87 @@ class CognitiveAgent:
         self.conversation_history.append(f"Agent: {final_response}")
 
         return final_response
+
+    def _resolve_references(self, text: str) -> str:
+        """Resolve simple pronouns using the immediate conversation history.
+
+        This is a deterministic, non-LLM coreference resolution mechanism.
+        It looks for basic pronouns (like "it" or "they") and attempts to
+        replace them with the primary subject of the user's previous
+        utterance.
+
+        Args:
+            text: The user input string, potentially containing pronouns.
+
+        Returns:
+            The input string with pronouns replaced, or the original string
+            if no pronouns were found or no antecedent could be determined.
+        """
+        pronouns_to_resolve = {"it", "they", "its", "their", "them"}
+        words_in_text = set(text.lower().split())
+
+        if not pronouns_to_resolve.intersection(words_in_text):
+            return text
+
+        if not self.conversation_history:
+            return text
+
+        last_user_utterance = ""
+        for entry in reversed(self.conversation_history):
+            if entry.startswith("User:"):
+                last_user_utterance = entry.replace("User:", "").strip()
+                break
+
+        if not last_user_utterance:
+            return text
+
+        last_interpretation = self.parser.parse(last_user_utterance)
+        antecedent = None
+
+        if last_interpretation:
+            relation = last_interpretation.get("relation")
+            entities = last_interpretation.get("entities")
+
+            if relation:
+                antecedent = relation["subject"]
+            elif entities:
+                antecedent = entities[0]["name"]
+
+        if antecedent:
+            modified_text = re.sub(r"\bit\b", antecedent, text, flags=re.IGNORECASE)
+            modified_text = re.sub(
+                r"\bthey\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+            modified_text = re.sub(
+                r"\bthem\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+
+            modified_text = re.sub(
+                r"\bits\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+            modified_text = re.sub(
+                r"\btheir\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+
+            if modified_text != text:
+                print(
+                    f"  [Coreference]: Resolved pronouns, transforming '{text}' to '{modified_text}'",
+                )
+                return modified_text
+
+        return text
 
     def _handle_clarification(self, user_input: str) -> str:
         """Handle the user's response after a contradiction was detected.
