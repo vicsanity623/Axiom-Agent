@@ -112,7 +112,9 @@ class SymbolicParser:
                     f"  [Symbolic Parser]: Successfully parsed Prepositional structure: '{subject}' -> '{relation_type}' -> '{prep_object}'.",
                 )
                 relation = RelationData(
-                    subject=subject, verb=relation_type, object=prep_object,
+                    subject=subject,
+                    verb=relation_type,
+                    object=prep_object,
                 )
                 return InterpretData(
                     intent="statement_of_fact",
