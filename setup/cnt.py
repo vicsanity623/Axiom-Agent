@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import traceback
+
 # app.py (Command-Line Manual Trainer)
 from axiom.cognitive_agent import CognitiveAgent
 
@@ -21,10 +23,8 @@ def run_training_session() -> None:
         axiom_agent = CognitiveAgent(inference_mode=False)
         print("--- [TRAINER]: Agent initialized. You can now begin training. ---")
         print("--- [TRAINER]: Type 'quit' or 'exit' to save and end the session. ---")
-    except Exception as e:
-        print(f"!!! [TRAINER]: CRITICAL ERROR during initialization: {e} !!!")
-        import traceback
-
+    except Exception as exc:
+        print(f"!!! [TRAINER]: CRITICAL ERROR during initialization: {exc} !!!")
         traceback.print_exc()
         return
 
@@ -43,8 +43,9 @@ def run_training_session() -> None:
         except (KeyboardInterrupt, EOFError):
             print("\n--- [TRAINER]: Interrupted. Exiting training session. ---")
             break
-        except Exception as e:
-            print(f"!!! [TRAINER]: An error occurred during the chat loop: {e} !!!")
+        except Exception as exc:
+            print(f"!!! [TRAINER]: An error occurred during the chat loop: {exc} !!!")
+            traceback.print_exc()
 
 
 if __name__ == "__main__":

@@ -7,22 +7,31 @@ import json
 import os
 import sys
 import zipfile
+from pathlib import Path
+from typing import Any, Final
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    render_template,
+    request,
+    send_from_directory,
+)
 
 from axiom.cognitive_agent import CognitiveAgent
 
-axiom_agent = None
+axiom_agent: CognitiveAgent | None = None
 
-STATIC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
-TEMPLATE_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "templates"),
-)
+THIS_FILE: Final = Path(__file__).resolve()
+PROJECT_ROOT: Final = THIS_FILE.parent.parent
+STATIC_DIR: Final = PROJECT_ROOT / "static"
+TEMPLATE_DIR: Final = PROJECT_ROOT / "templates"
 
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 
 
-def find_latest_model(directory="rendered"):
+def find_latest_model(directory: str = "rendered") -> str | None:
     """Find and return the path to the most recent .axm model file.
 
     Scans the specified directory for files matching the 'axiom_model_*.axm'
@@ -51,7 +60,7 @@ def find_latest_model(directory="rendered"):
     return latest_file
 
 
-def load_axiom_model(axm_filepath):
+def load_axiom_model(axm_filepath: str) -> tuple[Any, Any] | None:
     """Load and unpack an Axiom Mind (.axm) model file.
 
     Reads the specified .axm file (which is a zip archive) and extracts
@@ -84,25 +93,25 @@ def load_axiom_model(axm_filepath):
 
 
 @app.route("/")
-def index():
+def index() -> str:
     """Serve the main single-page application HTML."""
     return render_template("index.html")
 
 
 @app.route("/manifest.json")
-def manifest():
+def manifest() -> Response:
     """Serve the PWA manifest file for web app installation."""
     return send_from_directory(STATIC_DIR, "manifest.json")
 
 
 @app.route("/sw.js")
-def service_worker():
+def service_worker() -> Response:
     """Serve the service worker script for PWA offline capabilities."""
     return send_from_directory(STATIC_DIR, "sw.js")
 
 
 @app.route("/chat", methods=["POST"])
-def chat():
+def chat() -> tuple[Response, int] | Response:
     """Handle incoming user messages and return the agent's response.
 
     This is the main API endpoint for conversation. It expects a JSON
@@ -116,6 +125,10 @@ def chat():
     """
     if not axiom_agent:
         return jsonify({"error": "Agent is not available or is still loading."}), 503
+
+    if request.json is None:
+        return jsonify({"error": "request.json is None"}), 503
+
     user_message = request.json.get("message")
     if not user_message:
         return jsonify({"error": "No message provided."}), 400
@@ -131,7 +144,7 @@ def chat():
 
 
 @app.route("/status")
-def status():
+def status() -> Response:
     """Provide the current loading status of the agent.
 
     This endpoint allows the front-end to poll the server to determine
@@ -145,26 +158,34 @@ def status():
     return jsonify({"status": "ready" if axiom_agent else "loading_model"})
 
 
-if __name__ == "__main__":
+def run() -> int:
+    """Run webserver."""
+    global axiom_agent
+
     latest_model_path = find_latest_model()
     if not latest_model_path:
         print(
             "--- [Server]: Shutting down. Please run a trainer to generate a model first.",
         )
-        sys.exit(1)
+        return 1
 
     model_data = load_axiom_model(latest_model_path)
 
-    if model_data:
-        brain, cache = model_data
-        print("--- [Server]: Initializing agent in INFERENCE-ONLY mode... ---")
-        axiom_agent = CognitiveAgent(
-            load_from_file=False,
-            brain_data=brain,
-            cache_data=cache,
-            inference_mode=True,
-        )
-        print("--- [Server]: Agent is ready. Starting web server... ---")
-        app.run(host="0.0.0.0", port=7501, debug=False)
-    else:
-        sys.exit(1)
+    if not model_data:
+        return 1
+
+    brain, cache = model_data
+    print("--- [Server]: Initializing agent in INFERENCE-ONLY mode... ---")
+    axiom_agent = CognitiveAgent(
+        load_from_file=False,
+        brain_data=brain,
+        cache_data=cache,
+        inference_mode=True,
+    )
+    print("--- [Server]: Agent is ready. Starting web server... ---")
+    app.run(host="0.0.0.0", port=7501, debug=False)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())

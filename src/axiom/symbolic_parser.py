@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 from .universal_interpreter import InterpretData, RelationData
@@ -19,6 +20,24 @@ class SymbolicParser:
     This parser is designed to be the first-pass interpreter, allowing the
     agent to bypass the LLM for sentences it can understand on its own.
     """
+
+    PREPOSITION_PATTERN = re.compile(
+        r"^(?P<subject>.+?)\s+"
+        r"(?P<verb>is|are|was|were)\s+"
+        r"(?P<object>.+?)\s+"
+        r"(?P<preposition>in|on|at|of|from|with|inside)\s+"
+        r"(?P<prep_object>.+?)$",
+        re.IGNORECASE,
+    )
+
+    PREPOSITION_TO_RELATION_MAP = {
+        ("is", "in"): "is_located_in",
+        ("are", "in"): "is_located_in",
+        ("is", "on"): "is_located_on",
+        ("are", "on"): "is_located_on",
+        ("is", "at"): "is_located_at",
+        ("are", "at"): "is_located_at",
+    }
 
     def __init__(self, agent: CognitiveAgent):
         """Initialize the SymbolicParser.
@@ -76,6 +95,38 @@ class SymbolicParser:
                 key_topics=["show all facts"],
                 full_text_rephrased="User issued a command to show all facts.",
             )
+
+        preposition_match = self.PREPOSITION_PATTERN.match(text)
+        if preposition_match:
+            groups = preposition_match.groupdict()
+            subject = self.agent._clean_phrase(groups["subject"])
+            verb = groups["verb"].lower()
+            object_phrase = self.agent._clean_phrase(groups["object"])
+            preposition = groups["preposition"].lower()
+            prep_object = self.agent._clean_phrase(groups["prep_object"])
+
+            relation_type = self.PREPOSITION_TO_RELATION_MAP.get((verb, preposition))
+
+            if relation_type:
+                print(
+                    f"  [Symbolic Parser]: Successfully parsed Prepositional structure: '{subject}' -> '{relation_type}' -> '{prep_object}'.",
+                )
+                relation = RelationData(
+                    subject=subject,
+                    verb=relation_type,
+                    object=prep_object,
+                )
+                return InterpretData(
+                    intent="statement_of_fact",
+                    entities=[
+                        {"name": subject, "type": "CONCEPT"},
+                        {"name": prep_object, "type": "CONCEPT"},
+                        {"name": object_phrase, "type": "CONCEPT"},
+                    ],
+                    relation=relation,
+                    key_topics=[subject, prep_object, object_phrase],
+                    full_text_rephrased=text,
+                )
 
         verb_info = self._find_verb(words)
         if not verb_info:

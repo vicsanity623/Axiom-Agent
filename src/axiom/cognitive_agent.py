@@ -7,21 +7,21 @@ import re
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, NotRequired, TypedDict
+from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict
 
-from .dictionary_utils import get_word_info_from_wordnet
-from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
-from .knowledge_base import seed_core_vocabulary, seed_domain_knowledge
-from .lexicon_manager import LexiconManager
-from .symbolic_parser import SymbolicParser
-from .universal_interpreter import (
+from axiom.dictionary_utils import get_word_info_from_wordnet
+from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
+from axiom.knowledge_base import seed_core_vocabulary, seed_domain_knowledge
+from axiom.lexicon_manager import LexiconManager
+from axiom.symbolic_parser import SymbolicParser
+from axiom.universal_interpreter import (
     InterpretData,
     RelationData,
     UniversalInterpreter,
 )
 
 if TYPE_CHECKING:
-    from .universal_interpreter import Entity
+    from axiom.universal_interpreter import Entity
 
 BRAIN_FOLDER: Final = Path("brain")
 DEFAULT_BRAIN_FILE: Final = BRAIN_FOLDER / "my_agent_brain.json"
@@ -33,7 +33,24 @@ class ClarificationContext(TypedDict):
     conflicting_relation: NotRequired[str]
 
 
+RELATION_TYPE_MAP: Final = {
+    "be": "is_a",
+    "is": "is_a",
+    "are": "is_a",
+    "cause": "causes",
+    "causes": "causes",
+    "locate_in": "is_located_in",
+    "located_in": "is_located_in",
+    "part_of": "is_part_of",
+    "learn": "learns",
+    "release": "released",
+    "released": "released",
+}
+
+
 class CognitiveAgent:
+    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 150
+
     def __init__(
         self,
         brain_file: Path = DEFAULT_BRAIN_FILE,
@@ -122,7 +139,6 @@ class CognitiveAgent:
         self.conversation_history: list[str] = []
         self.enable_contextual_memory = False
         self.autonomous_cycle_count = 0
-        self.INTERPRETER_REBOOT_THRESHOLD = 150
 
     def chat(self, user_input: str) -> str:
         """Process a single user input and return the agent's response.
@@ -155,7 +171,8 @@ class CognitiveAgent:
         if self.is_awaiting_clarification:
             return self._handle_clarification(user_input)
 
-        normalized_input = self._preprocess_self_reference(user_input)
+        contextual_input = self._resolve_references(user_input)
+        normalized_input = self._preprocess_self_reference(contextual_input)
 
         interpretation: InterpretData | None = None
 
@@ -220,6 +237,87 @@ class CognitiveAgent:
         self.conversation_history.append(f"Agent: {final_response}")
 
         return final_response
+
+    def _resolve_references(self, text: str) -> str:
+        """Resolve simple pronouns using the immediate conversation history.
+
+        This is a deterministic, non-LLM coreference resolution mechanism.
+        It looks for basic pronouns (like "it" or "they") and attempts to
+        replace them with the primary subject of the user's previous
+        utterance.
+
+        Args:
+            text: The user input string, potentially containing pronouns.
+
+        Returns:
+            The input string with pronouns replaced, or the original string
+            if no pronouns were found or no antecedent could be determined.
+        """
+        pronouns_to_resolve = {"it", "they", "its", "their", "them"}
+        words_in_text = set(text.lower().split())
+
+        if not pronouns_to_resolve.intersection(words_in_text):
+            return text
+
+        if not self.conversation_history:
+            return text
+
+        last_user_utterance = ""
+        for entry in reversed(self.conversation_history):
+            if entry.startswith("User:"):
+                last_user_utterance = entry.replace("User:", "").strip()
+                break
+
+        if not last_user_utterance:
+            return text
+
+        last_interpretation = self.parser.parse(last_user_utterance)
+        antecedent = None
+
+        if last_interpretation:
+            relation = last_interpretation.get("relation")
+            entities = last_interpretation.get("entities")
+
+            if relation:
+                antecedent = relation["subject"]
+            elif entities:
+                antecedent = entities[0]["name"]
+
+        if antecedent:
+            modified_text = re.sub(r"\bit\b", antecedent, text, flags=re.IGNORECASE)
+            modified_text = re.sub(
+                r"\bthey\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+            modified_text = re.sub(
+                r"\bthem\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+
+            modified_text = re.sub(
+                r"\bits\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+            modified_text = re.sub(
+                r"\btheir\b",
+                antecedent,
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+
+            if modified_text != text:
+                print(
+                    f"  [Coreference]: Resolved pronouns, transforming '{text}' to '{modified_text}'",
+                )
+                return modified_text
+
+        return text
 
     def _handle_clarification(self, user_input: str) -> str:
         """Handle the user's response after a contradiction was detected.
@@ -829,11 +927,11 @@ class CognitiveAgent:
         objects_to_process = []
         if isinstance(object_, list):
             for item in object_:
-                name = (
-                    item.get("entity") or item.get("name")
-                    if isinstance(item, dict)
-                    else item
-                )
+                if isinstance(item, dict):
+                    name = item.get("entity") or item.get("name")
+                else:
+                    name = item
+
                 if name:
                     objects_to_process.append(name)
         else:
@@ -925,46 +1023,6 @@ class CognitiveAgent:
 
         return (True, "I have processed that information.")
 
-        learned_at_least_one = False
-        for object_name in objects_to_process:
-            relation_type = self._get_relation_type(
-                verb_cleaned,
-                subject_name,
-                object_name,
-            )
-            obj_node = self._add_or_update_concept(object_name)
-            if sub_node and obj_node:
-                edge_exists = any(
-                    edge.type == relation_type and edge.target == obj_node.id
-                    for edge in self.graph.get_edges_from_node(sub_node.id)
-                )
-
-                if not edge_exists:
-                    self.graph.add_edge(
-                        sub_node,
-                        obj_node,
-                        relation_type,
-                        0.9,
-                        properties=properties,
-                    )
-                    print(
-                        f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}",
-                    )
-                    learned_at_least_one = True
-                else:
-                    print(
-                        f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
-                    )
-
-        if learned_at_least_one:
-            self._gather_facts_multihop.cache_clear()
-            print("  [Cache]: Cleared reasoning cache due to new knowledge.")
-            self.save_brain()
-            self.save_state()
-            return (True, "I understand. I have noted that.")
-
-        return (True, "I have processed that information.")
-
     def _get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.
 
@@ -993,20 +1051,7 @@ class CognitiveAgent:
         ]:
             if len(object_.split()) == 1 and object_[0].isupper():
                 return "has_name"
-        relation_type_map = {
-            "be": "is_a",
-            "is": "is_a",
-            "are": "is_a",
-            "cause": "causes",
-            "causes": "causes",
-            "locate_in": "is_located_in",
-            "located_in": "is_located_in",
-            "part_of": "is_part_of",
-            "learn": "learns",
-            "release": "released",
-            "released": "released",
-        }
-        return relation_type_map.get(verb, verb.replace(" ", "_"))
+        return RELATION_TYPE_MAP.get(verb, verb.replace(" ", "_"))
 
     def learn_new_fact_autonomously(self, fact_sentence: str) -> bool:
         """Process and learn a fact from a raw sentence string.

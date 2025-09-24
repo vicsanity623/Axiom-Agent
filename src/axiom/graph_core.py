@@ -353,6 +353,20 @@ class ConceptGraph:
             edges.append(RelationshipEdge.from_dict(full_edge_data))
         return edges
 
+    def get_all_edges(self) -> list[RelationshipEdge]:
+        """Retrieve all edges in the graph as RelationshipEdge objects.
+
+        Returns:
+            A list of all RelationshipEdge objects in the graph.
+        """
+        reconstructed_edges = []
+        for u, v, data in self.graph.edges(data=True):
+            full_data = data.copy()
+            full_data["source"] = u
+            full_data["target"] = v
+            reconstructed_edges.append(RelationshipEdge.from_dict(full_data))
+        return reconstructed_edges
+
     def decay_activations(self, decay_rate: float = 0.1) -> None:
         """Apply a decay function to the activation level of all nodes.
 
