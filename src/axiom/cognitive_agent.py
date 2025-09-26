@@ -429,7 +429,7 @@ class CognitiveAgent:
                     if path:
                         explanation = self._format_path_as_sentence(path)
                         return f"Based on what I know: {explanation}"
-                    pass
+                    return f"I don't know of a direct relationship between {start_concept} and {end_concept}."
 
         if intent in ("question_about_entity", "question_about_concept"):
             entity_name = entities[0]["name"] if entities else user_input
@@ -533,32 +533,6 @@ class CognitiveAgent:
                     )
                 return "I don't have a name yet."
             return "I don't seem to have a concept of myself right now."
-
-        is_relational_query = (
-            user_input.lower().startswith(("is ", "are ", "was ", "were "))
-            and "?" in user_input
-        )
-        if is_relational_query:
-            parts = re.split(
-                r"\s+(is|are|was|were)\s+a?\s*",
-                user_input,
-                flags=re.IGNORECASE,
-            )
-            if len(parts) >= 3:
-                start_concept_name = self._clean_phrase(parts[0])
-                end_concept_name = self._clean_phrase(parts[2].replace("?", ""))
-
-                start_node = self.graph.get_node_by_name(start_concept_name)
-                end_node = self.graph.get_node_by_name(end_concept_name)
-
-                if start_node and end_node:
-                    print(
-                        f"  [Multi-Hop]: Querying for path between '{start_node.name}' and '{end_node.name}'.",
-                    )
-                    path = self._perform_multi_hop_query(start_node, end_node)
-                    if path:
-                        explanation = self._format_path_as_sentence(path)
-                        return f"Based on what I know: {explanation}"
 
         subject_node = self.graph.get_node_by_name(clean_entity_name)
         if not subject_node:
