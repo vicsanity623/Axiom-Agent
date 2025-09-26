@@ -71,9 +71,17 @@ The project is designed around a clean development cycle.
 
 ---
 
-## 🚀 The Vision: Intellectual Escape Velocity
+## 🚀 The Vision: A New Foundation for AI
 
-The goal is to continue expanding the sophistication of the `SymbolicParser` and the `CognitiveAgent`'s reasoning algorithms. As the agent's internal, verifiable `ConceptGraph` and `Lexicon` grow, it will build its own comprehensive, high-fidelity model of reality and language. This creates a path toward a truly autonomous cognitive entity built on a foundation of verifiable truth, not just probabilistic mimicry.
+The goal is to continue expanding the sophistication of the `SymbolicParser` and the `CognitiveAgent`'s reasoning algorithms until the LLM fallback is no longer needed. As the agent's internal, verifiable `ConceptGraph` grows, it will build its own comprehensive model of reality and language. This creates a path toward a truly autonomous cognitive entity built on a foundation of verifiable truth, not just probabilistic mimicry.
+
+This vision is built on two core principles that challenge the current AI paradigm:
+
+### A Path to Efficient, Accessible AI
+The biggest barrier to entry in modern AI is the immense computational cost. State-of-the-art models require massive, energy-intensive GPU clusters, placing them out of reach for almost everyone. Axiom is a direct challenge to this paradigm. By prioritizing a lightweight, CPU-runnable symbolic core, the ultimate goal is **to prove that a truly intelligent system can be efficient, accessible, and run on consumer-grade hardware**, democratizing the future of AI.
+
+### From Digital Parrot to Principled Reasoner
+A major ethical risk of pure language models is their potential to become "digital sociopaths"—systems that can flawlessly mimic human language without any underlying comprehension, belief, or ethical framework. Axiom's architecture is fundamentally designed to prevent this. Because every piece of knowledge is part of an interconnected, logical model, the agent's conclusions are grounded in the facts it has learned and the reasoning paths it can verify. The ultimate vision is not just an AI that *sounds* intelligent, but one that is *ACTUALLY INTELLIGENT*, whose responses are **derived from a coherent, verifiable, and principled understanding of the world.**
 
 ---
 
