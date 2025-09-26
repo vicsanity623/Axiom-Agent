@@ -38,11 +38,6 @@ def render_axiom_model() -> None:
         "version": timestamp,
         "render_date_utc": datetime.utcnow().isoformat(),
     }
-    # version_file = Path("version.json")
-    # with version_file.open("w", encoding="utf-8") as fp:
-    #     json.dump(version_data, fp, indent=2)
-
-    # print(f"✅ Created version metadata file for model {timestamp}.")
 
     rendered_folder = Path("rendered")
     output_filename = rendered_folder / f"axiom_model_{timestamp}.axm"
@@ -63,7 +58,6 @@ def render_axiom_model() -> None:
                 zf.writestr("cache.json", json.dumps(empty_cache))
                 print("   - Cache file not found. Packaging an empty cache.")
 
-            # zf.write(version_file, arcname="version.json")
             zf.writestr("version.json", json.dumps(version_data, indent=2))
             print("   - Compressing version.json...")
 
@@ -71,10 +65,6 @@ def render_axiom_model() -> None:
 
     except Exception as e:
         print(f"❌ CRITICAL ERROR: Failed to create the .axm package. Error: {e}")
-    # finally:
-    #     if version_file.exists():
-    #         version_file.unlink()
-    #         print("🧹 Cleaned up temporary files.")
 
 
 if __name__ == "__main__":

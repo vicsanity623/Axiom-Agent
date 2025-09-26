@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from axiom.dictionary_utils import get_word_info_from_wordnet
 
 if TYPE_CHECKING:
-    from .cognitive_agent import CognitiveAgent
+    from axiom.cognitive_agent import CognitiveAgent
 
 
 def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:

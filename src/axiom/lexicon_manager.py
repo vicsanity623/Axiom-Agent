@@ -4,7 +4,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .cognitive_agent import CognitiveAgent
+    from axiom.cognitive_agent import CognitiveAgent
 
 
 class LexiconManager:
@@ -37,6 +37,9 @@ class LexiconManager:
             True if the word is known, False otherwise.
         """
 
+        if word.lower() in ["a", "an", "the", "i"]:
+            return self.agent.graph.get_node_by_name(word.lower()) is not None
+
         clean_word = self.agent._clean_phrase(word)
         if not clean_word:
             return False
@@ -62,6 +65,12 @@ class LexiconManager:
             part_of_speech: The grammatical role of the word (e.g., 'noun').
             definition: An optional definition string for the word.
         """
+
+        if word.lower() in ["a", "an", "the", "i"]:
+            clean_word = word.lower()
+        else:
+            clean_word = self.agent._clean_phrase(word)
+
         clean_word = self.agent._clean_phrase(word)
         if not clean_word:
             return
