@@ -48,7 +48,7 @@ Intent: TypeAlias = Literal[
 
 
 class PropertyData(TypedDict):
-    effective_date: str  # YYYY-MM-DD
+    effective_date: str
 
 
 class RelationData(TypedDict):

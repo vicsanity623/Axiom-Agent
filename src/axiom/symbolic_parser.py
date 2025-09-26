@@ -39,6 +39,14 @@ class SymbolicParser:
         ("are", "at"): "is_located_at",
     }
 
+    RELATIONAL_QUESTION_PATTERN = re.compile(
+        r"^(?P<verb>is|are|was|were)\s+"
+        r"(?P<subject>.+?)\s+"
+        r"a?\s*"  # Handles optional "a" or "an"
+        r"(?P<object>.+?)\??$",
+        re.IGNORECASE,
+    )
+
     def __init__(self, agent: CognitiveAgent):
         """Initialize the SymbolicParser.
 
@@ -73,9 +81,31 @@ class SymbolicParser:
         if not words:
             return None
 
-        question_words = {"what", "who", "where", "when", "why", "how", "is", "are"}
+        relational_match = self.RELATIONAL_QUESTION_PATTERN.match(text)
+        if relational_match:
+            groups = relational_match.groupdict()
+            subject = self.agent._clean_phrase(groups["subject"])
+            verb = groups["verb"].lower()
+            object_ = self.agent._clean_phrase(groups["object"])
+
+            print(
+                f"  [Symbolic Parser]: Successfully parsed Relational Question: '{subject}' --[{verb}]--> '{object_}'?",
+            )
+            relation = RelationData(subject=subject, verb=verb, object=object_)
+            return InterpretData(
+                intent="question_about_concept",
+                entities=[
+                    {"name": subject, "type": "CONCEPT"},
+                    {"name": object_, "type": "CONCEPT"},
+                ],
+                relation=relation,
+                key_topics=[subject, object_],
+                full_text_rephrased=text,
+            )
+
+        question_words = {"what", "who", "where", "when", "why", "how"}
         if words[0] in question_words:
-            print("  [Symbolic Parser]: Successfully parsed a question.")
+            print("  [Symbolic Parser]: Successfully parsed a wh-question.")
             entity_name = " ".join(words[2:]) if len(words) > 2 else " ".join(words[1:])
             entity_name = entity_name.replace("?", "").strip()
             return InterpretData(

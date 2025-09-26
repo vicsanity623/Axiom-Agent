@@ -387,24 +387,7 @@ class CognitiveAgent:
         relation: RelationData | None,
         user_input: str,
     ) -> str:
-        """Route the interpreted user input to the appropriate cognitive function.
-
-        This method acts as a central switchboard, taking the structured
-        output from an interpreter (either symbolic or LLM) and deciding
-        which specialized method to call. It handles routing for greetings,
-        learning new facts, answering questions, and processing commands.
-
-        Args:
-            intent: The classified intent of the user's message.
-            entities: A list of named entities extracted from the message.
-            relation: The structured factual relationship, if one was found.
-            user_input: The original raw text from the user.
-
-        Returns:
-            A structured, non-natural language string representing the
-            result of the cognitive process. This is then passed to the
-            synthesizer.
-        """
+        """Route the interpreted user input to the appropriate cognitive function."""
         if intent == "greeting":
             return "Hello User."
         if intent == "farewell":
@@ -429,6 +412,24 @@ class CognitiveAgent:
 
         if intent == "command" and "show all facts" in user_input.lower():
             return self._get_all_facts_as_string()
+
+        if intent in ("question_about_entity", "question_about_concept") and relation:
+            start_concept = relation.get("subject")
+            end_concept = relation.get("object")
+
+            if isinstance(start_concept, str) and isinstance(end_concept, str):
+                start_node = self.graph.get_node_by_name(start_concept)
+                end_node = self.graph.get_node_by_name(end_concept)
+
+                if start_node and end_node:
+                    print(
+                        f"  [Multi-Hop]: Querying for path between '{start_node.name}' and '{end_node.name}'.",
+                    )
+                    path = self._perform_multi_hop_query(start_node, end_node)
+                    if path:
+                        explanation = self._format_path_as_sentence(path)
+                        return f"Based on what I know: {explanation}"
+                    pass
 
         if intent in ("question_about_entity", "question_about_concept"):
             entity_name = entities[0]["name"] if entities else user_input
@@ -499,9 +500,8 @@ class CognitiveAgent:
         it in the knowledge graph, and performs a multi-hop traversal to
         gather all related, high-confidence facts.
 
-        It also handles special cases, such as questions about the agent
-        itself, and can filter facts based on temporal queries (e.g.,
-        questions containing "now" or "currently").
+        It can now also perform multi-hop symbolic reasoning for questions
+        that ask about a relationship between two entities.
 
         Args:
             entity_name: The primary subject of the user's question.
@@ -534,11 +534,37 @@ class CognitiveAgent:
                 return "I don't have a name yet."
             return "I don't seem to have a concept of myself right now."
 
+        is_relational_query = (
+            user_input.lower().startswith(("is ", "are ", "was ", "were "))
+            and "?" in user_input
+        )
+        if is_relational_query:
+            parts = re.split(
+                r"\s+(is|are|was|were)\s+a?\s*",
+                user_input,
+                flags=re.IGNORECASE,
+            )
+            if len(parts) >= 3:
+                start_concept_name = self._clean_phrase(parts[0])
+                end_concept_name = self._clean_phrase(parts[2].replace("?", ""))
+
+                start_node = self.graph.get_node_by_name(start_concept_name)
+                end_node = self.graph.get_node_by_name(end_concept_name)
+
+                if start_node and end_node:
+                    print(
+                        f"  [Multi-Hop]: Querying for path between '{start_node.name}' and '{end_node.name}'.",
+                    )
+                    path = self._perform_multi_hop_query(start_node, end_node)
+                    if path:
+                        explanation = self._format_path_as_sentence(path)
+                        return f"Based on what I know: {explanation}"
+
         subject_node = self.graph.get_node_by_name(clean_entity_name)
         if not subject_node:
             return f"I don't have any information about {entity_name}."
 
-        print(f"  [CognitiveAgent]: Starting reasoning for '{entity_name}'.")
+        print(f"  [CognitiveAgent]: Starting single-hop reasoning for '{entity_name}'.")
         facts_with_props = self._gather_facts_multihop(subject_node.id, max_hops=4)
 
         is_temporal_query = any(
@@ -601,6 +627,68 @@ class CognitiveAgent:
         )
         print(f"  [Synthesized Response]: {fluent_response}")
         return fluent_response
+
+    def _perform_multi_hop_query(
+        self,
+        start_node: ConceptNode,
+        end_node: ConceptNode,
+        max_hops: int = 3,
+    ) -> list[RelationshipEdge] | None:
+        """Find a path of relationships between a start and end node."""
+
+        queue: list[tuple[str, list[RelationshipEdge]]] = [(start_node.id, [])]
+        visited: set[str] = {start_node.id}
+
+        while queue:
+            current_node_id, path = queue.pop(0)
+
+            if len(path) >= max_hops:
+                continue
+
+            for edge in self.graph.get_edges_from_node(current_node_id):
+                neighbor_id = edge.target
+
+                if neighbor_id == end_node.id:
+                    return path + [edge]
+
+                if neighbor_id not in visited:
+                    visited.add(neighbor_id)
+                    new_path = path + [edge]
+                    queue.append((neighbor_id, new_path))
+
+        print("    [BFS Engine]: FAILED. Queue is empty, no path found.")
+        return None
+
+    def _format_path_as_sentence(self, path: list[RelationshipEdge]) -> str:
+        """Convert a path of edges into a human-readable sentence.
+
+        Args:
+            path: A list of RelationshipEdge objects representing a path.
+
+        Returns:
+            A string explaining the chain of reasoning.
+        """
+        if not path:
+            return ""
+
+        parts = []
+        for i, edge in enumerate(path):
+            source_node = self.graph.get_node_by_id(edge.source)
+            target_node = self.graph.get_node_by_id(edge.target)
+
+            if not source_node or not target_node:
+                continue
+
+            if i == 0:
+                parts.append(
+                    f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name}",
+                )
+            else:
+                parts.append(
+                    f"which in turn {edge.type.replace('_', ' ')} {target_node.name}",
+                )
+
+        return ", and ".join(parts) + "."
 
     def _reboot_interpreter(self) -> None:
         """Destroy and recreate the UniversalInterpreter to ensure stability.
