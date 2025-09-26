@@ -3,10 +3,10 @@ from __future__ import annotations
 import re
 from typing import TYPE_CHECKING
 
-from .universal_interpreter import InterpretData, RelationData
+from axiom.universal_interpreter import InterpretData, RelationData
 
 if TYPE_CHECKING:
-    from .cognitive_agent import CognitiveAgent
+    from axiom.cognitive_agent import CognitiveAgent
 
 
 class SymbolicParser:
