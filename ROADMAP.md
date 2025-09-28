@@ -23,26 +23,38 @@ This crucial phase is **complete**. The project has successfully pivoted to a **
 
 ## ✅ Phase 3: Advanced Symbolic Reasoning (Complete)
 
-This phase is now **complete**. The agent has successfully moved beyond simple fact recall to true symbolic reasoning. Its understanding of grammar and context has been significantly deepened, and it can now infer knowledge by combining facts it has learned.
+This phase is now **complete**. The agent has successfully moved beyond simple fact recall to true symbolic reasoning. Its understanding of grammar, context, and its own autonomous operation has been significantly deepened.
 
 ### ✅ **Core Achievements of this Phase:**
-- **Expanded Parser Grammar (Prepositions):** The `SymbolicParser` was upgraded to understand prepositional phrases (e.g., "The book is **on the table**," "Paris is **in France**"), allowing it to learn more complex and precise factual relationships.
-- **Deterministic Coreference Resolution:** A non-LLM mechanism for resolving pronouns (`it`, `they`) was implemented. The agent now uses the immediate conversation history to understand simple contextual follow-up questions.
-- **Introspective Knowledge Refinement:** A new autonomous `refinement_cycle` was created. This allows the agent to proactively review its own "chunky," un-atomic facts and use the LLM to break them down into smaller, higher-quality, atomic facts, thereby improving the integrity of its knowledge base.
-- **Multi-Hop Symbolic Reasoning:** The agent is now capable of **Multi-Hop Symbolic Reasoning**. It can answer a question by logically combining multiple, separate facts from its knowledge base without LLM assistance (e.g., answering "Is Socrates a mortal?" by combining the facts `Socrates is a human` and `A human is a mortal`).
+- **Multi-Hop Symbolic Reasoning:** The agent is now capable of **Multi-Hop Symbolic Reasoning**. It can answer a question by logically combining multiple, separate facts from its knowledge base without LLM assistance.
+- **Upgraded Parser (Relational Questions):** The `SymbolicParser` was enhanced to correctly parse relational questions (e.g., "Is Socrates a mortal?"), providing the structured output needed to trigger the reasoning engine.
+- **Introspective Knowledge Refinement:** A new autonomous `refinement_cycle` was created, allowing the agent to proactively review and improve the quality of its own knowledge.
+- **Phased Autonomous Learning:** The agent's autonomous operation was upgraded to a more intelligent, phased schedule. It now dedicates specific time blocks to either a **Learning Phase** (acquiring new information) or a **Refinement Phase** (consolidating existing knowledge), improving efficiency and stability.
+- **Deterministic Coreference Resolution:** A non-LLM mechanism for resolving pronouns (`it`, `they`) was implemented, allowing the agent to understand simple contextual follow-up questions.
+- **Expanded Parser Grammar (Prepositions):** The `SymbolicParser` was upgraded to understand prepositional phrases, allowing it to learn more complex and precise factual relationships.
 
 ---
 
-## The Path Forward: Scalability and Strategy
+## The Path Forward: Foundational Refinements & Scalability
 
-With the core symbolic learning and reasoning engine now in place, the strategic focus shifts from *intelligence* to *scalability* and *strategic learning*.
+With the core reasoning engine now in place, the immediate focus is on refining the agent's fundamental understanding of language to make its knowledge base more unified and its reasoning more powerful.
 
-### **Phase 4: The Distributed Mind (Knowledge Scalability) (Current Focus)**
-- **Goal:** Overcome local RAM/storage limits by migrating the knowledge graph to a free-tier cloud database, enabling the agent's memory to scale to hundreds of thousands of concepts.
+### **Phase 4: The Hardened Mind (Foundational Nuance & Robustness) (Current Focus)**
+- **Goal:** To address the subtle but critical limitations discovered during long-term autonomous runs. This phase will focus on hardening the agent's foundational understanding of language and making its internal logic more resilient to the messy nature of real-world data.
 - **Status:** **Current Focus.**
-- **Next Steps:**
-    - **Milestone:** The agent's brain lives in a persistent, scalable cloud database (e.g., Neo4j AuraDB Free, Redis Cloud), separating the "mind" from the "machine."
-- **Success Metrics:** The agent's knowledge base can grow beyond the limits of a local machine without performance degradation. The autonomous training can run on one machine while the interactive agent runs on another, both connected to the same cloud-based brain.
+- **Key Steps / To-Do List:**
+    1.  **Implement a Lemmatization Layer:** (Problem: "factory" vs "factories"). Solution: Integrate a lemmatizer into `_clean_phrase`.
+    2.  **Expand the Pre-processing Pipeline:** (Problem: "what's" vs "what is"). Solution: Add a contraction expander and a smarter self-reference normalizer.
+    3.  **Establish Semantic Equivalence:** (Problem: `"zero"` vs `"0"`). Solution: Seed an `is_equivalent_to` relationship and normalize concepts in the pre-processor.
+    4.  **Harden the LLM Interpreter:** The interpreter methods currently crash if the LLM is disabled. Add null checks (`if self.llm is None:`) to all methods that call the LLM, allowing them to fail gracefully and providing a true symbolic-only mode for development.
+    5.  **Debug and Harden the `Refinement Cycle`:** (Problem: `_find_chunky_fact` is missing candidates). Solution: Perform a focused debugging session and add more sophisticated heuristics.
+    6.  **Improve Discovery Topic Filtering:** (Problem: "(disambiguation)" pages). Solution: Enhance the `reject_keywords` filter to handle parenthetical meta-tags.
+
+- **Success Metrics:**
+    *   The agent can successfully reason across singular and plural concepts.
+    *   The agent correctly understands questions containing common contractions.
+    *   The agent can be taught a simple mathematical fact using symbols (`0 + 1 = 1`) and correctly answer a question about it using words (`"What is zero plus one?"`).
+    *   The `Refinement Cycle` reliably finds and refines at least one "chunky" fact per day during autonomous runs.
 
 ### **Phase 5: The Autonomous Scholar (Advanced Curriculum Learning)**
 - **Goal:** Evolve the agent's learning from simple goal fulfillment to a strategic, goal-oriented "curriculum" driven by the gaps in its own understanding.

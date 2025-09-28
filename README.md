@@ -1,4 +1,6 @@
-# Axiom Agent
+---
+<p align="center"><img src="static/Axiom.png" alt="Axiom Agent Banner"></p>
+# Axiom
 
 Axiom is a **cognitive architecture**—a framework for a new type of artificial intelligence designed to achieve genuine understanding by building its own internal, logical model of reality from the ground up.
 
@@ -25,10 +27,7 @@ This architecture allows the agent to learn, reason, and grow in a way that is f
 ### Cognitive & Reasoning Abilities
 *   **Multi-Hop Symbolic Reasoning:** The agent can answer questions by logically combining multiple, separate facts from its knowledge base **without LLM assistance.** It can infer that `Socrates is mortal` by connecting the facts that `Socrates is a human` and `A human is a mortal`.
 *   **Contextual Conversation:** The agent can understand simple conversational context. It uses a deterministic **coreference resolution** mechanism to understand what pronouns like `it` and `they` refer to based on the recent conversation history.
-*   **Dual-Cycle Autonomous Learning:** The agent operates 24/7 with three intelligent, self-improving cycles:
-    -   **The Discovery Cycle:** Explores curated subjects (like "Physics" or "History") and uses a **popularity heuristic** to find relevant new topics to learn about.
-    -   **The Study Cycle:** Proactively **deepens its knowledge** by researching concepts it already knows to discover and learn new, related facts.
-    -   **The Refinement Cycle:** Introspectively reviews its own knowledge, finds "chunky" un-atomic facts, and uses an LLM to **break them down into smaller, higher-quality facts**, continuously improving its own understanding.
+*   **Phased Autonomous Learning:** The agent now operates on an intelligent, phased schedule. It spends dedicated hours in a **Learning Phase** (using `Study` and `Discovery` cycles to acquire new knowledge) and then switches to a **Refinement Phase** to introspectively consolidate and improve what it has learned.
 *   **Grounded Language Acquisition:** The agent learns language by identifying unknown words, autonomously researching their definitions using a high-precision **Dictionary API**, and integrating that linguistic knowledge into its own brain.
 
 <br/>
@@ -63,6 +62,10 @@ The agent uses a local LLM for complex sentences and knowledge refinement.
 
 <br/>
 
+*   **Note on LLM-Optional Mode:** The training scripts (`cnt.py`, `app.py`) will detect if the LLM model is missing and automatically start the agent in a **symbolic-only mode**. This is perfect for testing the core logic without requiring a powerful machine, though some features like knowledge refinement will be disabled.
+
+<br/>
+
 ### Step 3: Run the Agent
 The project is designed around a clean development cycle.
 1.  **Train:** Use `python setup/cnt.py` to interactively teach the agent or `python setup/autonomous_trainer.py` to let it learn on its own.
@@ -81,7 +84,7 @@ This vision is built on two core principles that challenge the current AI paradi
 The biggest barrier to entry in modern AI is the immense computational cost. State-of-the-art models require massive, energy-intensive GPU clusters, placing them out of reach for almost everyone. Axiom is a direct challenge to this paradigm. By prioritizing a lightweight, CPU-runnable symbolic core, the ultimate goal is **to prove that a truly intelligent system can be efficient, accessible, and run on consumer-grade hardware**, democratizing the future of AI.
 
 ### From Digital Parrot to Principled Reasoner
-A major ethical risk of pure language models is their potential to become "digital sociopaths"—systems that can flawlessly mimic human language without any underlying comprehension, belief, or ethical framework. Axiom's architecture is fundamentally designed to prevent this. Because every piece of knowledge is part of an interconnected, logical model, the agent's conclusions are grounded in the facts it has learned and the reasoning paths it can verify. The ultimate vision is not just an AI that *sounds* intelligent, but one that is *ACTUALLY INTELLIGENT*, whose responses are **derived from a coherent, verifiable, and principled understanding of the world.**
+A major ethical risk of pure language models is their potential to become "digital sociopaths"—systems that can flawlessly mimic human language without any underlying comprehension, belief, or ethical framework. Axiom's architecture is fundamentally designed to prevent this. Because every piece of knowledge is part of an interconnected, logical model, the agent's conclusions are grounded in the facts it has learned and the reasoning paths it can verify. The ultimate vision is not just an AI that *sounds* intelligent, but one that is **ACTUALLY INTELLIGENT**, whose responses are **derived from a coherent, verifiable, and principled understanding of the world.**
 
 ---
 

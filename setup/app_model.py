@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import glob
 import json
-
-# setup/app_model.py
-import os
 import sys
 import zipfile
 from pathlib import Path
@@ -31,7 +27,7 @@ TEMPLATE_DIR: Final = PROJECT_ROOT / "templates"
 app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
 
 
-def find_latest_model(directory: str = "rendered") -> str | None:
+def find_latest_model(directory: Path = PROJECT_ROOT / "rendered") -> Path | None:
     """Find and return the path to the most recent .axm model file.
 
     Scans the specified directory for files matching the 'axiom_model_*.axm'
@@ -42,25 +38,24 @@ def find_latest_model(directory: str = "rendered") -> str | None:
         directory: The directory to search for model files.
 
     Returns:
-        The file path to the latest model as a string, or None if no
+        The file path to the latest model as a Path object, or None if no
         model files are found.
     """
     print(
         f"--- [Server]: Searching for the latest .axm model file in '{directory}'... ---",
     )
-    search_pattern = os.path.join(directory, "axiom_model_*.axm")
-    model_files = glob.glob(search_pattern)
+    model_files = sorted(directory.glob("axiom_model_*.axm"), reverse=True)
     if not model_files:
         print(
             f"!!! [Server]: CRITICAL ERROR: No .axm model files found in '{directory}'.",
         )
         return None
-    latest_file = sorted(model_files, reverse=True)[0]
-    print(f"--- [Server]: Found latest model: '{os.path.basename(latest_file)}' ---")
+    latest_file = model_files[0]
+    print(f"--- [Server]: Found latest model: '{latest_file.name}' ---")
     return latest_file
 
 
-def load_axiom_model(axm_filepath: str) -> tuple[Any, Any] | None:
+def load_axiom_model(axm_filepath: Path) -> tuple[Any, Any] | None:
     """Load and unpack an Axiom Mind (.axm) model file.
 
     Reads the specified .axm file (which is a zip archive) and extracts
@@ -74,7 +69,7 @@ def load_axiom_model(axm_filepath: str) -> tuple[Any, Any] | None:
         A tuple containing the brain_data and cache_data dictionaries,
         or None if the file does not exist or fails to parse.
     """
-    if not os.path.exists(axm_filepath):
+    if not axm_filepath.exists():
         return None
     try:
         with zipfile.ZipFile(axm_filepath, "r") as zf:

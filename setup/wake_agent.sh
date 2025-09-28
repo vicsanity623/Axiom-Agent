@@ -1,5 +1,6 @@
 #!/bin/bash
 # wake_agent.sh
+# THIS IS NOT BEING USED AS OF 09/27/2025
 # This script sends a single, silent HTTP request to the agent's status endpoint
 # to trigger its initialization and start the autonomous learning cycles.
 

@@ -81,10 +81,13 @@ class UniversalInterpreter:
     language synthesis.
     """
 
+    llm: Llama | None
+
     def __init__(
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,
         cache_file: str | Path = DEFAULT_CACHE_PATH,
+        load_llm: bool = True,
     ) -> None:
         """Initialize the UniversalInterpreter and load the LLM into memory.
 
@@ -93,24 +96,29 @@ class UniversalInterpreter:
             cache_file: The file path for the interpretation and synthesis
                 caches.
         """
-        print("Initializing Universal Interpreter (loading Mini LLM)...")
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(
-                f"Interpreter model not found at {model_path}. Please download it.",
-            )
+        print("Initializing Universal Interpreter (loading Mini LLM if enabled)...")
+        self.llm: Llama | None = None
 
-        self.llm = Llama(
-            model_path=str(model_path),
-            n_gpu_layers=0,
-            n_ctx=2048,
-            n_threads=0,
-            n_batch=1024,
-            verbose=False,
-        )
+        if load_llm:
+            print("Initializing Universal Interpreter (loading Mini LLM)...")
+            if not os.path.exists(model_path):
+                raise FileNotFoundError(
+                    f"Interpreter model not found at {model_path}. Please download it.",
+                )
+
+            self.llm = Llama(
+                model_path=str(model_path),
+                n_gpu_layers=0,
+                n_ctx=2048,
+                n_threads=0,
+                n_batch=1024,
+                verbose=False,
+            )
+        else:
+            print("Initializing Universal Interpreter in SYMBOLIC-ONLY mode.")
 
         self.interpretation_cache: dict[str, InterpretData] = {}
         self.synthesis_cache: dict[str, str] = {}
-
         self.cache_file = cache_file
         self._load_cache()
 
@@ -189,6 +197,18 @@ class UniversalInterpreter:
             understanding of the input. Returns a default 'unknown'
             intent on failure.
         """
+        if self.llm is None:
+            print(
+                "  [Interpreter Error]: LLM is disabled. Cannot interpret complex input.",
+            )
+            return InterpretData(
+                intent="unknown",
+                entities=[],
+                relation=None,
+                key_topics=user_input.split(),
+                full_text_rephrased=f"Could not interpret (LLM disabled): '{user_input}'",
+            )
+
         cache_key = user_input
         if cache_key in self.interpretation_cache:
             print("  [Interpreter Cache]: Hit!")
@@ -268,6 +288,12 @@ class UniversalInterpreter:
             The rephrased input string with pronouns resolved, or the
             original input if no changes were needed.
         """
+        if self.llm is None:
+            print(
+                "  [Context Resolver Error]: LLM is disabled. Cannot resolve context.",
+            )
+            return new_input
+
         print("  [Context Resolver]: Attempting to resolve pronouns...")
         formatted_history = "\n".join(history)
         system_prompt = (
@@ -360,6 +386,12 @@ class UniversalInterpreter:
         Returns:
             A list of simple, atomic fact sentences, or an empty list on failure.
         """
+        if self.llm is None:
+            print(
+                "  [Interpreter Error]: LLM is disabled. Cannot break down definition.",
+            )
+            return []
+
         print(f"  [Interpreter]: Breaking down chunky definition for '{subject}'...")
         system_prompt = (
             "You are a logical decomposition engine. Your task is to break down a "
@@ -433,6 +465,12 @@ class UniversalInterpreter:
         Returns:
             A list of two generated question strings, or an empty list on failure.
         """
+        if self.llm is None:
+            print(
+                "  [Question Generation Error]: LLM is disabled. Cannot generate questions.",
+            )
+            return []
+
         system_prompt = (
             "You are a creative, inquisitive assistant that thinks like a curious child. "
             "Your task is to generate exactly two, simple, fundamental follow-up questions about a topic, "
@@ -506,6 +544,11 @@ class UniversalInterpreter:
         Returns:
             A natural language string representing the synthesized response.
         """
+        if self.llm is None:
+            # If the LLM is disabled, we cannot synthesize a fluent sentence.
+            # We fall back to returning the raw, structured facts.
+            return structured_facts
+
         cache_key = f"{mode}|{original_question}|{structured_facts}"
 
         if cache_key in self.synthesis_cache:

@@ -24,12 +24,14 @@ source venv/bin/activate
 ### Step 2: Install All Dependencies
 This project uses a `pyproject.toml` file to manage all dependencies. This single command installs the core application libraries *and* all the development tools (like Ruff, MyPy, and Pytest) needed for contributing.
 ```bash
-# The quotes are important to prevent errors in some shells like Zsh
 pip install -e '.[dev]'
 ```
+The quotes are important to prevent errors in some shells like Zsh
 
-### Step 3: Download the LLM Model (Required for Fallback)
-The agent currently uses a local LLM as a fallback for complex sentences its native parser cannot yet handle.
+
+### Step 3: Download the LLM Model (Optional, for Full Functionality)
+The agent uses a local LLM as a fallback for complex sentences and for its autonomous "Refinement" cycle.
+
 1.  Download the **`mistral-7b-instruct-v0.2.Q4_K_M.gguf`** model from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
 2.  Create a `models/` directory in the root of the project.
 3.  Place the downloaded `.gguf` file inside the `models/` directory.
@@ -47,45 +49,51 @@ The project is structured around a professional **Check -> Code/Train -> Check -
 ```
 If the script reports formatting or linting issues, you can often fix them automatically with these commands:
 ```bash
-# Auto-format all code
 ruff format .
 
-# Auto-fix all simple linting issues
 ruff check . --fix
 ```
+Auto-format all code
+Auto-fix all simple linting issues
+
 Run `./check.sh` again to confirm everything passes.
 
 ### 2. Train and Develop (Offline)
 This is where you'll do your work. The agent's memory is stored in the `brain/` directory. For most development, you'll want a clean slate to test new features.
 ```bash
-# To start fresh for a test session
-rm -f brain/*
+rm -rf brain/
 ```
+To start fresh for a test session
+
 -   **For direct, interactive testing:** `python setup/cnt.py`
 -   **For testing autonomous cycles:** `python setup/autonomous_trainer.py`
+
+### 3. LLM-Optional Development (For Fast, Symbolic-Only Testing)
+We are committed to supporting development on lower-spec machines. The training scripts (`cnt.py`, `app.py`) will **automatically detect if the LLM model file is missing** and start the agent in a symbolic-only mode.
+
+This is the perfect way to work on the `SymbolicParser` or the core `CognitiveAgent` logic without the overhead of loading and running the LLM. Some features, like the `refinement_cycle`, will be disabled, but you will be able to test the core symbolic engine at full speed.
 
 ---
 
 ## How to Contribute
 
-We are thrilled that you want to help build this new kind of mind. The current focus of the project is on **Phase 3: Advanced Symbolic Reasoning**. Our goal is to expand the agent's native language understanding to handle more complex grammar and reduce its reliance on the LLM.
+We are thrilled that you want to help build this new kind of mind. The current focus of the project is on **Phase 6: The Hardened Mind**. Our goal is to address the subtle but critical limitations discovered during long-term autonomous runs to make the agent's understanding of language more robust and nuanced.
 
-### Your First Contribution: Expanding the Parser's Grammar
+### Your First Contribution: The "Plural Problem" (Lemmatization)
 
-The best way to get started is to help teach the agent a new, fundamental part of English grammar: **prepositional phrases**.
+The best way to get started is to help the agent overcome one of its biggest current limitations: it treats singular and plural words (like "factory" and "factories") as completely different concepts.
 
 **The Challenge:**
-1.  Fork the repository and create a new branch (e.g., `feature/parser-prepositions`).
-2.  Modify the `SymbolicParser` in `src/axiom/symbolic_parser.py` to correctly parse a sentence like **"Paris is in France"**.
-3.  The parser should recognize "in" as a preposition and create a semantic relationship like `Paris --[is_located_in]--> France`. This will likely require creating a mapping from common prepositions to relationship types (e.g., "in" -> "is_located_in", "on" -> "is_on_top_of", "of" -> "is_part_of").
-4.  You will need to update the `knowledge_base.py` to seed the agent with knowledge of common prepositions.
-5.  Add a test case to the `tests/` directory to verify your new functionality.
-6.  Ensure all checks in `./check.sh` are passing.
-7.  Submit a Pull Request!
+1.  Fork the repository and create a new branch (e.g., `feat/lemmatization-layer`).
+2.  Your mission is to integrate a lemmatizer (like `WordNetLemmatizer` from the `nltk` library, which is already a dependency) into the agent's core logic. The best place for this is likely within the `_clean_phrase` method in `src/axiom/cognitive_agent.py`.
+3.  The goal is to ensure that all concepts are reduced to their dictionary root form (their "lemma") before being stored in or queried from the knowledge graph. This will unify the agent's understanding and make its reasoning much more powerful.
+4.  Add a test case to the `tests/` directory to verify your new functionality.
+5.  Ensure all checks in `./check.sh` are passing.
+6.  Submit a Pull Request with a clear description of your changes!
 
 ### General Contribution Steps
 1.  **Read the Roadmap:** For the big picture, please review the **[ROADMAP.md](ROADMAP.md)** file.
-2.  **Find a Task:** Find a task in an upcoming phase that interests you, or propose a new one by opening an issue.
+2.  **Find a Task:** Find a task in the "Current Focus" phase that interests you, or propose a new one by opening an issue.
 3.  **Fork and Branch:** Fork the repository and create a new feature branch for your work.
 4.  **Submit a Pull Request:** When your feature is complete and all checks are passing, submit a pull request with a clear description of the changes you've made.
 
