@@ -49,7 +49,7 @@ RELATION_TYPE_MAP: Final = {
 
 
 class CognitiveAgent:
-    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 150
+    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 50
 
     def __init__(
         self,
