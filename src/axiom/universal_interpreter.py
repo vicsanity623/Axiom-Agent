@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # universal_interpreter.py
 import json
-import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict, cast
@@ -71,6 +70,9 @@ class InterpretData(TypedDict):
     full_text_rephrased: str
 
 
+PRONOUNS: Final = ("it", "its", "they", "them", "their", "he", "she", "his", "her")
+
+
 class UniversalInterpreter:
     """Provides an LLM-based interface for complex language tasks.
 
@@ -80,8 +82,6 @@ class UniversalInterpreter:
     to perform structured interpretation, context resolution, and natural
     language synthesis.
     """
-
-    llm: Llama | None
 
     def __init__(
         self,
@@ -101,7 +101,7 @@ class UniversalInterpreter:
 
         if load_llm:
             print("Initializing Universal Interpreter (loading Mini LLM)...")
-            if not os.path.exists(model_path):
+            if not Path(model_path).exists():
                 raise FileNotFoundError(
                     f"Interpreter model not found at {model_path}. Please download it.",
                 )
@@ -119,20 +119,20 @@ class UniversalInterpreter:
 
         self.interpretation_cache: dict[str, InterpretData] = {}
         self.synthesis_cache: dict[str, str] = {}
-        self.cache_file = cache_file
+        self.cache_file = Path(cache_file)
         self._load_cache()
 
         print("Universal Interpreter loaded successfully.")
 
     def _load_cache(self) -> None:
         """Load the interpretation and synthesis caches from a JSON file."""
-        if not os.path.exists(self.cache_file):
+        if not self.cache_file.exists():
             print("[Cache]: No cache file found. Starting fresh.")
             return
 
         try:
-            with open(self.cache_file) as f:
-                cache_data = json.load(f)
+            with self.cache_file.open("rb") as fp:
+                cache_data = json.load(fp)
                 self.interpretation_cache = dict(
                     cache_data.get("interpretations", []),
                 )
@@ -140,23 +140,23 @@ class UniversalInterpreter:
             print(
                 f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}.",
             )
-        except Exception as e:
+        except Exception as exc:
             print(
-                f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}",
+                f"[Cache Error]: Could not load cache file. Starting fresh. Error: {exc}",
             )
 
     def _save_cache(self) -> None:
         """Save the current interpretation and synthesis caches to a JSON file."""
         try:
-            with open(self.cache_file, "w") as f:
+            with self.cache_file.open("w", encoding="utf-8") as f:
                 cache_data = {
                     "interpretations": list(self.interpretation_cache.items()),
                     "synthesis": list(self.synthesis_cache.items()),
                 }
                 json.dump(cache_data, f, indent=4)
-        except Exception as e:
+        except Exception as exc:
             print(
-                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {e}",
+                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {exc}",
             )
 
     def _clean_llm_json_output(self, raw_text: str) -> str:
@@ -238,7 +238,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=512,
@@ -323,7 +323,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=128,
@@ -364,9 +364,9 @@ class UniversalInterpreter:
             understanding of the contextualized input.
         """
         contextual_input = user_input
-        pronouns = ["it", "its", "they", "them", "their", "he", "she", "his", "her"]
+
         if history and any(
-            f" {pronoun} " in f" {user_input.lower()} " for pronoun in pronouns
+            f" {pronoun} " in f" {user_input.lower()} " for pronoun in PRONOUNS
         ):
             contextual_input = self.resolve_context(history, user_input)
         return self.interpret(contextual_input)
@@ -425,7 +425,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=256,
@@ -495,7 +495,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=128,
@@ -516,9 +516,9 @@ class UniversalInterpreter:
                 print(f"    - Generated {len(questions)} curious questions.")
                 return questions
             return []
-        except Exception as e:
+        except Exception as exc:
             print(
-                f"  [Question Generation Error]: Could not generate questions. Error: {e}",
+                f"  [Question Generation Error]: Could not generate questions. Error: {exc}",
             )
             return []
 
@@ -578,7 +578,7 @@ class UniversalInterpreter:
         full_prompt = f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=256,
