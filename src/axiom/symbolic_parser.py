@@ -47,6 +47,8 @@ class SymbolicParser:
         re.IGNORECASE,
     )
 
+    QUESTION_WORDS = {"what", "who", "where", "when", "why", "how", "which", "whomst"}
+
     def __init__(self, agent: CognitiveAgent):
         """Initialize the SymbolicParser.
 
@@ -103,8 +105,7 @@ class SymbolicParser:
                 full_text_rephrased=text,
             )
 
-        question_words = {"what", "who", "where", "when", "why", "how"}
-        if words[0] in question_words:
+        if words[0] in self.QUESTION_WORDS:
             print("  [Symbolic Parser]: Successfully parsed a wh-question.")
             entity_name = " ".join(words[2:]) if len(words) > 2 else " ".join(words[1:])
             entity_name = entity_name.replace("?", "").strip()

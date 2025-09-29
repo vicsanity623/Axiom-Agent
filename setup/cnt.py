@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import os
 import traceback
+from pathlib import Path
 
-# app.py (Command-Line Manual Trainer)
+# cnt.py (Command-Line Manual Trainer)
 from axiom.cognitive_agent import CognitiveAgent
+from axiom.universal_interpreter import DEFAULT_MODEL_PATH
+
+BRAIN_FILE = Path("brain/my_agent_brain.json")
+STATE_FILE = Path("brain/my_agent_state.json")
 
 
 def run_training_session() -> None:
@@ -19,8 +25,24 @@ def run_training_session() -> None:
     """
     print("--- [TRAINER]: Starting Axiom Agent Training Session... ---")
 
+    llm_should_be_enabled = True
+    if not os.path.exists(DEFAULT_MODEL_PATH):
+        print("\n" + "=" * 50)
+        print("!!! WARNING: LLM model not found! !!!")
+        print(f"    - Searched for model at: {DEFAULT_MODEL_PATH}")
+        print("    - Agent will run in SYMBOLIC-ONLY mode.")
+        print("    - Refinement and complex sentence understanding will be disabled.")
+        print("=" * 50 + "\n")
+        llm_should_be_enabled = False
+
     try:
-        axiom_agent = CognitiveAgent(inference_mode=False)
+        axiom_agent = CognitiveAgent(
+            brain_file=BRAIN_FILE,
+            state_file=STATE_FILE,
+            inference_mode=False,
+            enable_llm=llm_should_be_enabled,
+        )
+
         print("--- [TRAINER]: Agent initialized. You can now begin training. ---")
         print("--- [TRAINER]: Type 'quit' or 'exit' to save and end the session. ---")
     except Exception as exc:

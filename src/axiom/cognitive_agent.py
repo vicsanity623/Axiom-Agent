@@ -49,7 +49,7 @@ RELATION_TYPE_MAP: Final = {
 
 
 class CognitiveAgent:
-    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 150
+    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 50
 
     def __init__(
         self,
@@ -59,6 +59,7 @@ class CognitiveAgent:
         brain_data: dict | None = None,
         cache_data: dict | None = None,
         inference_mode: bool = False,
+        enable_llm: bool = True,
     ) -> None:
         """Initialize a new instance of the CognitiveAgent.
 
@@ -89,7 +90,7 @@ class CognitiveAgent:
         if self.inference_mode:
             print("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
-        self.interpreter = UniversalInterpreter()
+        self.interpreter = UniversalInterpreter(load_llm=enable_llm)
         self.lexicon = LexiconManager(self)
         self.parser = SymbolicParser(self)
         self.learning_goals: list[str] = []

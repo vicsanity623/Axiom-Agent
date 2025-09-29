@@ -1,6 +1,7 @@
 #!/bin/bash
 # monitor.sh
 #
+# THIS IS NOT BEING USED AS OF 09/27/2025
 # This is the primary script for monitoring the Axiom Agent.
 # It ensures the agent's service is running and then connects
 # to its live output log, waiting for the log to be created if needed.

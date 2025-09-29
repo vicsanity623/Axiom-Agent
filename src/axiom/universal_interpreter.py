@@ -2,7 +2,6 @@ from __future__ import annotations
 
 # universal_interpreter.py
 import json
-import os
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict, cast
@@ -71,6 +70,9 @@ class InterpretData(TypedDict):
     full_text_rephrased: str
 
 
+PRONOUNS: Final = ("it", "its", "they", "them", "their", "he", "she", "his", "her")
+
+
 class UniversalInterpreter:
     """Provides an LLM-based interface for complex language tasks.
 
@@ -85,6 +87,7 @@ class UniversalInterpreter:
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,
         cache_file: str | Path = DEFAULT_CACHE_PATH,
+        load_llm: bool = True,
     ) -> None:
         """Initialize the UniversalInterpreter and load the LLM into memory.
 
@@ -93,38 +96,43 @@ class UniversalInterpreter:
             cache_file: The file path for the interpretation and synthesis
                 caches.
         """
-        print("Initializing Universal Interpreter (loading Mini LLM)...")
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(
-                f"Interpreter model not found at {model_path}. Please download it.",
-            )
+        print("Initializing Universal Interpreter (loading Mini LLM if enabled)...")
+        self.llm: Llama | None = None
 
-        self.llm = Llama(
-            model_path=str(model_path),
-            n_gpu_layers=0,
-            n_ctx=2048,
-            n_threads=0,
-            n_batch=1024,
-            verbose=False,
-        )
+        if load_llm:
+            print("Initializing Universal Interpreter (loading Mini LLM)...")
+            if not Path(model_path).exists():
+                raise FileNotFoundError(
+                    f"Interpreter model not found at {model_path}. Please download it.",
+                )
+
+            self.llm = Llama(
+                model_path=str(model_path),
+                n_gpu_layers=0,
+                n_ctx=2048,
+                n_threads=0,
+                n_batch=1024,
+                verbose=False,
+            )
+        else:
+            print("Initializing Universal Interpreter in SYMBOLIC-ONLY mode.")
 
         self.interpretation_cache: dict[str, InterpretData] = {}
         self.synthesis_cache: dict[str, str] = {}
-
-        self.cache_file = cache_file
+        self.cache_file = Path(cache_file)
         self._load_cache()
 
         print("Universal Interpreter loaded successfully.")
 
     def _load_cache(self) -> None:
         """Load the interpretation and synthesis caches from a JSON file."""
-        if not os.path.exists(self.cache_file):
+        if not self.cache_file.exists():
             print("[Cache]: No cache file found. Starting fresh.")
             return
 
         try:
-            with open(self.cache_file) as f:
-                cache_data = json.load(f)
+            with self.cache_file.open("rb") as fp:
+                cache_data = json.load(fp)
                 self.interpretation_cache = dict(
                     cache_data.get("interpretations", []),
                 )
@@ -132,23 +140,23 @@ class UniversalInterpreter:
             print(
                 f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}.",
             )
-        except Exception as e:
+        except Exception as exc:
             print(
-                f"[Cache Error]: Could not load cache file. Starting fresh. Error: {e}",
+                f"[Cache Error]: Could not load cache file. Starting fresh. Error: {exc}",
             )
 
     def _save_cache(self) -> None:
         """Save the current interpretation and synthesis caches to a JSON file."""
         try:
-            with open(self.cache_file, "w") as f:
+            with self.cache_file.open("w", encoding="utf-8") as f:
                 cache_data = {
                     "interpretations": list(self.interpretation_cache.items()),
                     "synthesis": list(self.synthesis_cache.items()),
                 }
                 json.dump(cache_data, f, indent=4)
-        except Exception as e:
+        except Exception as exc:
             print(
-                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {e}",
+                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {exc}",
             )
 
     def _clean_llm_json_output(self, raw_text: str) -> str:
@@ -189,6 +197,18 @@ class UniversalInterpreter:
             understanding of the input. Returns a default 'unknown'
             intent on failure.
         """
+        if self.llm is None:
+            print(
+                "  [Interpreter Error]: LLM is disabled. Cannot interpret complex input.",
+            )
+            return InterpretData(
+                intent="unknown",
+                entities=[],
+                relation=None,
+                key_topics=user_input.split(),
+                full_text_rephrased=f"Could not interpret (LLM disabled): '{user_input}'",
+            )
+
         cache_key = user_input
         if cache_key in self.interpretation_cache:
             print("  [Interpreter Cache]: Hit!")
@@ -218,7 +238,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=512,
@@ -268,6 +288,12 @@ class UniversalInterpreter:
             The rephrased input string with pronouns resolved, or the
             original input if no changes were needed.
         """
+        if self.llm is None:
+            print(
+                "  [Context Resolver Error]: LLM is disabled. Cannot resolve context.",
+            )
+            return new_input
+
         print("  [Context Resolver]: Attempting to resolve pronouns...")
         formatted_history = "\n".join(history)
         system_prompt = (
@@ -297,7 +323,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=128,
@@ -338,9 +364,9 @@ class UniversalInterpreter:
             understanding of the contextualized input.
         """
         contextual_input = user_input
-        pronouns = ["it", "its", "they", "them", "their", "he", "she", "his", "her"]
+
         if history and any(
-            f" {pronoun} " in f" {user_input.lower()} " for pronoun in pronouns
+            f" {pronoun} " in f" {user_input.lower()} " for pronoun in PRONOUNS
         ):
             contextual_input = self.resolve_context(history, user_input)
         return self.interpret(contextual_input)
@@ -360,6 +386,12 @@ class UniversalInterpreter:
         Returns:
             A list of simple, atomic fact sentences, or an empty list on failure.
         """
+        if self.llm is None:
+            print(
+                "  [Interpreter Error]: LLM is disabled. Cannot break down definition.",
+            )
+            return []
+
         print(f"  [Interpreter]: Breaking down chunky definition for '{subject}'...")
         system_prompt = (
             "You are a logical decomposition engine. Your task is to break down a "
@@ -393,7 +425,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=256,
@@ -433,6 +465,12 @@ class UniversalInterpreter:
         Returns:
             A list of two generated question strings, or an empty list on failure.
         """
+        if self.llm is None:
+            print(
+                "  [Question Generation Error]: LLM is disabled. Cannot generate questions.",
+            )
+            return []
+
         system_prompt = (
             "You are a creative, inquisitive assistant that thinks like a curious child. "
             "Your task is to generate exactly two, simple, fundamental follow-up questions about a topic, "
@@ -457,7 +495,7 @@ class UniversalInterpreter:
         )
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=128,
@@ -478,9 +516,9 @@ class UniversalInterpreter:
                 print(f"    - Generated {len(questions)} curious questions.")
                 return questions
             return []
-        except Exception as e:
+        except Exception as exc:
             print(
-                f"  [Question Generation Error]: Could not generate questions. Error: {e}",
+                f"  [Question Generation Error]: Could not generate questions. Error: {exc}",
             )
             return []
 
@@ -506,6 +544,11 @@ class UniversalInterpreter:
         Returns:
             A natural language string representing the synthesized response.
         """
+        if self.llm is None:
+            # If the LLM is disabled, we cannot synthesize a fluent sentence.
+            # We fall back to returning the raw, structured facts.
+            return structured_facts
+
         cache_key = f"{mode}|{original_question}|{structured_facts}"
 
         if cache_key in self.synthesis_cache:
@@ -535,7 +578,7 @@ class UniversalInterpreter:
         full_prompt = f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
             output = cast(
-                "dict",
+                "dict[str, list[dict[str, str]]]",
                 self.llm(
                     full_prompt,
                     max_tokens=256,
