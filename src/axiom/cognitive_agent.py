@@ -575,7 +575,9 @@ class CognitiveAgent:
         return ". ".join(sorted(facts)) + "."
 
     def _synthesize_response(
-        self, structured_response: str, user_input: str,
+        self,
+        structured_response: str,
+        user_input: str,
     ) -> tuple[str, bool]:
         """Convert a structured, internal response into natural language.
 
