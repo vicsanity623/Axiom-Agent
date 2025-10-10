@@ -6,32 +6,34 @@ This document outlines the current status and future architectural direction for
 
 This foundational phase is **complete**. It established a stable, high-performance cognitive engine with a professional toolchain, a scalable knowledge graph, and a complete training-to-deployment workflow running on local CPU hardware.
 
----
-
 ## ✅ Phase 2: The Symbolic Interpreter & Intelligent Learner (Complete)
 
-This crucial phase is **complete**. The project has successfully pivoted to a **Symbolic-First Architecture**, systematically replacing the original LLM dependency with a more robust, deterministic, and intelligent system for learning and understanding language.
+This crucial phase is **complete**. It transformed the agent's autonomous learning from a random process into an intelligent, goal-driven system.
 
 ### ✅ **Core Achievements of this Phase:**
-- **Symbolic-First Cognitive Flow:** The agent now attempts to understand input using its native `SymbolicParser` **before** falling back to the LLM, marking a fundamental shift in its architecture.
-- **Autonomous Vocabulary Expansion:** The agent can identify unknown words, create "INVESTIGATE" goals, and autonomously research their definitions using a high-precision **Dictionary API**, with a web-scraping fallback for resilience.
-- **Intelligent Topic Discovery:** The `Discovery Cycle` is no longer random. It now explores curated **core subjects** and uses a **popularity heuristic** to find relevant new topics, leading to a more useful learning path.
-- **Productive Study Cycle:** The agent now has a **"Deepen Knowledge"** routine where it proactively researches concepts it already knows to discover and learn new, related facts, enriching its understanding.
-- **Expanded Parser Grammar (Adjectives & Questions):** The `SymbolicParser` has been upgraded to understand adjectives (learning `has_property` relationships) and to correctly identify and parse simple questions.
+- **Symbolic-First Cognitive Flow:** The agent now attempts to understand input using its native `SymbolicParser` **before** falling back to the LLM.
+- **Autonomous Vocabulary Expansion:** The agent can identify unknown words, create "INVESTIGATE" goals, and autonomously research their definitions using a high-precision **Dictionary API**.
+- **Intelligent Topic Discovery:** The `Discovery Cycle` now explores curated **core subjects** and uses a **popularity heuristic** to find relevant new topics.
+- **Productive Study Cycle:** The agent now has a **"Deepen Knowledge"** routine where it proactively researches concepts it already knows to discover and learn new, related facts.
 
 ---
 
-## ✅ Phase 3: Advanced Symbolic Reasoning (Complete)
+## The Path Forward: Deepening Semantic Understanding
 
-This phase is now **complete**. The agent has successfully moved beyond simple fact recall to true symbolic reasoning. Its understanding of grammar, context, and its own autonomous operation has been significantly deepened.
+With the agent now capable of stable, intelligent, and symbolic-first learning, the strategic focus shifts to deepening its semantic understanding and scaling its knowledge base.
 
-### ✅ **Core Achievements of this Phase:**
-- **Multi-Hop Symbolic Reasoning:** The agent is now capable of **Multi-Hop Symbolic Reasoning**. It can answer a question by logically combining multiple, separate facts from its knowledge base without LLM assistance.
-- **Upgraded Parser (Relational Questions):** The `SymbolicParser` was enhanced to correctly parse relational questions (e.g., "Is Socrates a mortal?"), providing the structured output needed to trigger the reasoning engine.
-- **Introspective Knowledge Refinement:** A new autonomous `refinement_cycle` was created, allowing the agent to proactively review and improve the quality of its own knowledge.
-- **Phased Autonomous Learning:** The agent's autonomous operation was upgraded to a more intelligent, phased schedule. It now dedicates specific time blocks to either a **Learning Phase** (acquiring new information) or a **Refinement Phase** (consolidating existing knowledge), improving efficiency and stability.
-- **Deterministic Coreference Resolution:** A non-LLM mechanism for resolving pronouns (`it`, `they`) was implemented, allowing the agent to understand simple contextual follow-up questions.
-- **Expanded Parser Grammar (Prepositions):** The `SymbolicParser` was upgraded to understand prepositional phrases, allowing it to learn more complex and precise factual relationships.
+### **Phase 3: The Multi-Stage Symbolic Parser (Current Focus)**
+- **Goal:** To evolve the `SymbolicParser` from a simple, monolithic function into a sophisticated, multi-stage pipeline, enabling it to deconstruct complex sentences and extract multiple atomic facts.
+- **Status:** **In Progress.**
+- **Completed Steps & Successes:**
+    1.  **The Chunker (Clause Splitter):** The `SymbolicParser` has been successfully refactored into a pipeline. It can now split complex, multi-sentence text into individual, parsable clauses.
+    2.  **Expanded Parser Grammar:** The parser's pattern-matching engine has been upgraded to understand **adjectives** (learning `has_property` relationships) and to correctly identify **questions**.
+    3.  **Coreference Resolution:** A deterministic, symbolic mechanism for **short-term memory** is complete. The agent can now resolve basic pronouns (e.g., "it," "they") by referencing the subject of the previous conversational turn.
+    4.  **Introspective Learning:** The agent can now **learn from its own synthesized output**. If the LLM synthesizer "leaks" a new fact, the agent can parse its own response and integrate that new knowledge into its symbolic brain.
+- **Next Steps:**
+    i. **Implement the Semantic Mapper:** Develop the first version of the contextual mapper with a small set of rules for common prepositions to handle more complex clauses (e.g., "lying between Africa and Asia").
+    ii. **Develop Introspective Refinement:** Create a new autonomous cycle where the agent reviews its own "chunky" facts (long, un-atomic definitions) and attempts to break them down into smaller, more precise facts.
+- **Success Metrics:** The agent can successfully parse a complex sentence (e.g., "The Red Sea is an inlet of the Indian Ocean, which lies between Africa and Asia") and learn **multiple, distinct, atomic facts** from it, all without LLM assistance.
 
 ---
 

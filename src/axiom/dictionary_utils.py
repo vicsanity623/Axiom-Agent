@@ -52,8 +52,9 @@ try:
     wn.synsets("test")
 except LookupError:
     print("NLTK 'wordnet' corpus not found. Downloading now...")
-    nltk.download('wordnet')
+    nltk.download("wordnet")
     from nltk.corpus import wordnet as wn
+
 
 class WordInfo(TypedDict):
     type: Literal["concept" | "noun" | "verb" | "descriptor" | "adverb"]

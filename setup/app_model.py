@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import glob
 import hashlib
 import json
 import logging
-import os
 import sys
 import zipfile
 from pathlib import Path
-from typing import Any, Final
+from typing import Final
 
 from flask import (
     Flask,
@@ -88,7 +86,10 @@ def load_axiom_model(axm_filepath: Path) -> tuple[dict, dict] | None:
         or None if the file is invalid, corrupt, or fails verification.
     """
     if not axm_filepath.exists():
-        logger.error("Attempted to load a model file that does not exist: %s", axm_filepath)
+        logger.error(
+            "Attempted to load a model file that does not exist: %s",
+            axm_filepath,
+        )
         return None
 
     try:
@@ -121,7 +122,10 @@ def load_axiom_model(axm_filepath: Path) -> tuple[dict, dict] | None:
 
             logger.info("Axiom Mind Data Successfully Read")
             logger.info("  - Version: %s", version_data.get("version"))
-            logger.info("  - Render Date (UTC): %s", version_data.get("render_date_utc"))
+            logger.info(
+                "  - Render Date (UTC): %s",
+                version_data.get("render_date_utc"),
+            )
             return brain_data, cache_data
     except Exception as e:
         logger.critical("Failed to load or parse .axm model: %s", e)
@@ -153,7 +157,9 @@ def chat() -> tuple[Response, int] | Response:
         return jsonify({"error": "Agent is not available or is still loading."}), 503
 
     if not request.json or "message" not in request.json:
-        return jsonify({"error": "Invalid request: missing JSON or 'message' key."}), 400
+        return jsonify(
+            {"error": "Invalid request: missing JSON or 'message' key."},
+        ), 400
 
     user_message = request.json["message"]
     try:

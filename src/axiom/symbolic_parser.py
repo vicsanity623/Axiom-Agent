@@ -21,69 +21,112 @@ class SymbolicParser:
     agent to bypass the LLM for sentences it can understand on its own.
     """
 
-    PREPOSITION_PATTERN = re.compile(
-        r"^(?P<subject>.+?)\s+"
-        r"(?P<verb>is|are|was|were)\s+"
-        r"(?P<object>.+?)\s+"
-        r"(?P<preposition>in|on|at|of|from|with|inside)\s+"
-        r"(?P<prep_object>.+?)$",
-        re.IGNORECASE,
+    __slots__ = (
+        "agent",
+        "RELATIONAL_QUESTION_PATTERN",
+        "PREPOSITION_PATTERN",
+        "QUESTION_WORDS",
+        "PREPOSITION_TO_RELATION_MAP",
     )
 
-    PREPOSITION_TO_RELATION_MAP = {
-        ("is", "in"): "is_located_in",
-        ("are", "in"): "is_located_in",
-        ("is", "on"): "is_located_on",
-        ("are", "on"): "is_located_on",
-        ("is", "at"): "is_located_at",
-        ("are", "at"): "is_located_at",
-    }
-
-    RELATIONAL_QUESTION_PATTERN = re.compile(
-        r"^(?P<verb>is|are|was|were)\s+"
-        r"(?P<subject>.+?)\s+"
-        r"a?\s*"  # Handles optional "a" or "an"
-        r"(?P<object>.+?)\??$",
-        re.IGNORECASE,
-    )
-
-    QUESTION_WORDS = {"what", "who", "where", "when", "why", "how", "which", "whomst"}
-
-    def __init__(self, agent: CognitiveAgent):
-        """Initialize the SymbolicParser.
-
-        Args:
-            agent: The instance of the CognitiveAgent this parser will serve.
-        """
+    def __init__(self, agent: CognitiveAgent) -> None:
+        """Initialize the SymbolicParser."""
+        self.RELATIONAL_QUESTION_PATTERN = re.compile(
+            r"(?i)^(is|are|was|were|do|does|did|has|have|had)\s+"
+            r"(?P<subject>.+?)\s+"
+            r"(?P<verb>\w+)\s+"
+            r"(?P<object>.+)\?*$",
+        )
+        self.PREPOSITION_PATTERN = re.compile(
+            r"(?i)^(?P<subject>.+?)\s+"
+            r"(?P<verb>is|are|was|were)\s+"
+            r"(?P<object>.+?)\s+"
+            r"(?P<preposition>in|on|at|of|from|with|inside)\s+"
+            r"(?P<prep_object>.+?)$",
+        )
+        self.QUESTION_WORDS = {
+            "what",
+            "who",
+            "where",
+            "when",
+            "why",
+            "how",
+            "which",
+            "whomst",
+        }
+        self.PREPOSITION_TO_RELATION_MAP = {
+            ("is", "in"): "is_located_in",
+            ("are", "in"): "is_located_in",
+            ("is", "on"): "is_located_on",
+            ("are", "on"): "is_located_on",
+            ("is", "at"): "is_located_at",
+            ("are", "at"): "is_located_at",
+        }
         self.agent = agent
         print("   - Symbolic Parser initialized.")
 
-    def parse(self, text: str) -> InterpretData | None:
-        """Attempt to parse a simple sentence into a structured intent.
+    def _split_into_clauses(self, text: str) -> list[str]:
+        """Splits a complex text block into simpler, independent clauses."""
 
-        This method applies a prioritized sequence of rules to deconstruct
-        the input text:
-        1.  Checks for questions (e.g., "what is...").
-        2.  Checks for simple commands (e.g., "show all facts").
-        3.  Checks for Subject-Verb-Adjective structure.
-        4.  Falls back to a general Subject-Verb-Object structure.
+        sentences = [s.strip() for s in text.split(".") if s.strip()]
 
-        If a rule matches, it returns a structured `InterpretData` object.
-        If no rules match, it returns None, signaling a parse failure.
+        all_clauses = []
+        split_phrases = [" and ", " but ", " which ", " who ", " that "]
+        placeholder = "||CLAUSE_BREAK||"
 
-        Args:
-            text: The user input string to parse.
+        for sentence in sentences:
+            clause_text = sentence
+            for phrase in split_phrases:
+                clause_text = re.sub(
+                    re.escape(phrase),
+                    placeholder,
+                    clause_text,
+                    flags=re.IGNORECASE,
+                )
 
-        Returns:
-            An `InterpretData` object on a successful parse, or None.
+            clauses_from_sentence = [
+                c.strip(" ,") for c in clause_text.split(placeholder) if c.strip()
+            ]
+            all_clauses.extend(clauses_from_sentence)
+
+        if len(all_clauses) > 1:
+            print(
+                f"  [Chunker]: Split text into {len(all_clauses)} clauses: {all_clauses}",
+            )
+
+        return all_clauses
+
+    def parse(self, text: str) -> list[InterpretData] | None:
         """
-        print("  [Symbolic Parser]: Attempting to parse sentence...")
+        Attempts to parse a sentence by running it through a multi-stage pipeline.
+        Returns a list of interpretations (one for each successfully parsed clause).
+        """
+        print(f"  [Symbolic Parser]: Attempting to parse sentence: '{text}'")
 
-        words = text.lower().split()
+        clauses = self._split_into_clauses(text)
+
+        all_interpretations: list[InterpretData] = []
+
+        for clause in clauses:
+            interpretation = self._parse_single_clause(clause)
+            if interpretation:
+                all_interpretations.append(interpretation)
+
+        if all_interpretations:
+            return all_interpretations
+
+        print("  [Symbolic Parser]: Failed. No clauses could be parsed.")
+        return None
+
+    # --- YOUR EXISTING LOGIC, NOW IN A HELPER METHOD ---
+    def _parse_single_clause(self, clause: str) -> InterpretData | None:
+        """Applies a prioritized sequence of rules to deconstruct a single clause."""
+        words = clause.lower().split()
         if not words:
             return None
 
-        relational_match = self.RELATIONAL_QUESTION_PATTERN.match(text)
+        # Rule 1: Relational Questions
+        relational_match = self.RELATIONAL_QUESTION_PATTERN.match(clause)
         if relational_match:
             groups = relational_match.groupdict()
             subject = self.agent._clean_phrase(groups["subject"])
@@ -102,22 +145,25 @@ class SymbolicParser:
                 ],
                 relation=relation,
                 key_topics=[subject, object_],
-                full_text_rephrased=text,
+                full_text_rephrased=clause,
             )
 
+        # Rule 2: Wh-Questions
         if words[0] in self.QUESTION_WORDS:
             print("  [Symbolic Parser]: Successfully parsed a wh-question.")
             entity_name = " ".join(words[2:]) if len(words) > 2 else " ".join(words[1:])
             entity_name = entity_name.replace("?", "").strip()
+            entity_name = re.sub(r"^(is|are|was|were)\s+", "", entity_name)
             return InterpretData(
                 intent="question_about_entity",
                 entities=[{"name": entity_name, "type": "CONCEPT"}],
                 relation=None,
                 key_topics=[entity_name],
-                full_text_rephrased=text,
+                full_text_rephrased=clause,
             )
 
-        if text.lower() == "show all facts":
+        # Rule 3: Commands
+        if clause.lower() == "show all facts":
             print("  [Symbolic Parser]: Successfully parsed 'show all facts' command.")
             return InterpretData(
                 intent="command",
@@ -127,7 +173,8 @@ class SymbolicParser:
                 full_text_rephrased="User issued a command to show all facts.",
             )
 
-        preposition_match = self.PREPOSITION_PATTERN.match(text)
+        # Rule 4: Prepositional Phrases
+        preposition_match = self.PREPOSITION_PATTERN.match(clause)
         if preposition_match:
             groups = preposition_match.groupdict()
             subject = self.agent._clean_phrase(groups["subject"])
@@ -156,18 +203,16 @@ class SymbolicParser:
                     ],
                     relation=relation,
                     key_topics=[subject, prep_object, object_phrase],
-                    full_text_rephrased=text,
+                    full_text_rephrased=clause,
                 )
 
+        # Rule 5: Statement Structures
         verb_info = self._find_verb(words)
         if not verb_info:
-            print(
-                "  [Symbolic Parser]: Failed. Could not identify a single known verb.",
-            )
             return None
-
         verb, verb_index = verb_info
 
+        # Rule 5a: Adjectives
         if len(words) > verb_index + 1:
             potential_adjective = words[verb_index + 1]
             if self._is_part_of_speech(potential_adjective, "adjective"):
@@ -191,9 +236,10 @@ class SymbolicParser:
                     ],
                     relation=relation,
                     key_topics=[subject, potential_adjective],
-                    full_text_rephrased=text,
+                    full_text_rephrased=clause,
                 )
 
+        # Rule 5b: Subject-Verb-Object
         if verb_index > 0 and verb_index < len(words) - 1:
             subject = " ".join(words[:verb_index])
             object_ = " ".join(words[verb_index + 1 :])
@@ -213,10 +259,9 @@ class SymbolicParser:
                 ],
                 relation=relation,
                 key_topics=[subject, object_],
-                full_text_rephrased=text,
+                full_text_rephrased=clause,
             )
 
-        print("  [Symbolic Parser]: Failed. Sentence structure not recognized.")
         return None
 
     def _find_verb(self, words: list[str]) -> tuple[str, int] | None:
