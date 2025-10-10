@@ -31,6 +31,7 @@ This architecture allows the agent to learn, reason, and grow in a way that is f
 *   **Intelligent Autonomous Learning:** The agent operates 24/7 with two focused learning cycles:
     -   **The Discovery Cycle:** Explores curated subjects and uses a popularity heuristic to find relevant new topics.
     -   **The Study Cycle:** Prioritizes researching unknown words from its learning queue using a high-precision **Dictionary API**. When the queue is empty, it proactively **deepens its knowledge** by researching concepts it already knows to find new, related facts.
+    -   **Refinement Phase** Agent spends hours introspectively consolidate and improve what it has learned.
 
 <br/>
 
@@ -70,9 +71,10 @@ The agent uses a local LLM for complex sentences and introspective learning.
 
 ### Step 3: Run the Agent
 The project is designed around a clean development cycle.
-1.  **Train:** Use `python setup/cnt.py` to interactively teach the agent or `python setup/autonomous_trainer.py` to let it learn on its own.
-2.  **Render:** Use `python setup/render_model.py` to package the trained brain into a stable `.axm` model.
-3.  **Deploy:** Use `python setup/app_model.py` to launch the web UI, which will serve the latest rendered model.
+1.  **Train:** Use `python setup/cnt.py` to interactively teach the agent
+2.  or `python setup/autonomous_trainer.py` to let it learn on its own.
+3.  **Render:** Use `python setup/render_model.py` to package the trained brain into a stable `.axm` model.
+4.  **Deploy:** Use `python setup/app_model.py` to launch the web UI, which will serve the latest rendered model.
 
 ---
 
