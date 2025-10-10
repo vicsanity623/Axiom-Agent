@@ -118,14 +118,12 @@ class SymbolicParser:
         print("  [Symbolic Parser]: Failed. No clauses could be parsed.")
         return None
 
-    # --- YOUR EXISTING LOGIC, NOW IN A HELPER METHOD ---
     def _parse_single_clause(self, clause: str) -> InterpretData | None:
         """Applies a prioritized sequence of rules to deconstruct a single clause."""
         words = clause.lower().split()
         if not words:
             return None
 
-        # Rule 1: Relational Questions
         relational_match = self.RELATIONAL_QUESTION_PATTERN.match(clause)
         if relational_match:
             groups = relational_match.groupdict()
@@ -148,7 +146,6 @@ class SymbolicParser:
                 full_text_rephrased=clause,
             )
 
-        # Rule 2: Wh-Questions
         if words[0] in self.QUESTION_WORDS:
             print("  [Symbolic Parser]: Successfully parsed a wh-question.")
             entity_name = " ".join(words[2:]) if len(words) > 2 else " ".join(words[1:])
@@ -162,7 +159,6 @@ class SymbolicParser:
                 full_text_rephrased=clause,
             )
 
-        # Rule 3: Commands
         if clause.lower() == "show all facts":
             print("  [Symbolic Parser]: Successfully parsed 'show all facts' command.")
             return InterpretData(
@@ -173,7 +169,6 @@ class SymbolicParser:
                 full_text_rephrased="User issued a command to show all facts.",
             )
 
-        # Rule 4: Prepositional Phrases
         preposition_match = self.PREPOSITION_PATTERN.match(clause)
         if preposition_match:
             groups = preposition_match.groupdict()
@@ -206,13 +201,11 @@ class SymbolicParser:
                     full_text_rephrased=clause,
                 )
 
-        # Rule 5: Statement Structures
         verb_info = self._find_verb(words)
         if not verb_info:
             return None
         verb, verb_index = verb_info
 
-        # Rule 5a: Adjectives
         if len(words) > verb_index + 1:
             potential_adjective = words[verb_index + 1]
             if self._is_part_of_speech(potential_adjective, "adjective"):
@@ -239,7 +232,6 @@ class SymbolicParser:
                     full_text_rephrased=clause,
                 )
 
-        # Rule 5b: Subject-Verb-Object
         if verb_index > 0 and verb_index < len(words) - 1:
             subject = " ".join(words[:verb_index])
             object_ = " ".join(words[verb_index + 1 :])

@@ -539,7 +539,6 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         weight=0.8,
     )
 
-    # Basic Geography
     agent_instance.manual_add_knowledge(
         "earth",
         "planet",
@@ -772,7 +771,6 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         weight=1.0,
     )
 
-    # Basic Biology & Hierarchy
     agent_instance.manual_add_knowledge(
         "human",
         "species",

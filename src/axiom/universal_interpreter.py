@@ -545,8 +545,6 @@ class UniversalInterpreter:
             A natural language string representing the synthesized response.
         """
         if self.llm is None:
-            # If the LLM is disabled, we cannot synthesize a fluent sentence.
-            # We fall back to returning the raw, structured facts.
             return structured_facts
 
         cache_key = f"{mode}|{original_question}|{structured_facts}"

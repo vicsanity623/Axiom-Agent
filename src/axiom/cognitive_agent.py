@@ -286,8 +286,6 @@ class CognitiveAgent:
     def _resolve_references(self, text: str) -> str:
         """Resolve simple pronouns using the stored interpretations from history."""
         pronouns_to_resolve = {"it", "they", "its", "their", "them"}
-        # A quick check to see if any pronouns are in the text to resolve.
-        # Use word boundaries (\b) to avoid matching 'with' or 'within'.
         if not any(
             re.search(rf"\b{pronoun}\b", text, re.IGNORECASE)
             for pronoun in pronouns_to_resolve
@@ -296,17 +294,14 @@ class CognitiveAgent:
             return text
 
         antecedent = None
-        # Search backwards through the new structured history
-        # We start from the second-to-last entry to avoid looking at the current turn.
         for speaker, interpretations in reversed(self.structured_history):
             if speaker == "user" and interpretations:
                 primary_interpretation = interpretations[0]
                 relation = primary_interpretation.get("relation")
 
-                # The subject of a relation is the best candidate for an antecedent.
                 if relation and relation.get("subject"):
                     antecedent = relation["subject"]
-                    break  # Found it, stop searching
+                    break
 
         if antecedent:
             clean_antecedent = self._clean_phrase(antecedent)
@@ -316,7 +311,6 @@ class CognitiveAgent:
                 )
                 return text
 
-            # Use regex to perform case-insensitive replacement of whole words only
             modified_text = re.sub(
                 r"\b(it|they|them)\b",
                 clean_antecedent,
@@ -619,7 +613,6 @@ class CognitiveAgent:
             "I'm not familiar with the term",
         ]
         if any(trigger in structured_response for trigger in non_synthesize_triggers):
-            # The LLM was NOT used, return the structured response directly.
             return (structured_response, False)
 
         print(f"  [Structured Response]: {structured_response}")
@@ -628,7 +621,6 @@ class CognitiveAgent:
             original_question=user_input,
         )
         print(f"  [Synthesized Response]: {fluent_response}")
-        # The LLM WAS used, return the fluent response and True.
         return (fluent_response, True)
 
     def _perform_multi_hop_query(

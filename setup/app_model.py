@@ -17,12 +17,10 @@ from flask import (
     send_from_directory,
 )
 
-# Add the 'src' directory to the Python path
 sys.path.append(str(Path(__file__).resolve().parent.parent / "src"))
 
 from axiom.cognitive_agent import CognitiveAgent
 
-# --- Module-level setup ---
 logger = logging.getLogger(__name__)
 axiom_agent: CognitiveAgent | None = None
 
@@ -57,7 +55,6 @@ def find_latest_model(directory: Path = RENDERED_DIR) -> Path | None:
             logger.critical("No .axm model files found in '%s'.", directory)
             return None
 
-        # Sort by modification time (most recent first), with name as a tie-breaker.
         latest_file = sorted(
             model_files,
             key=lambda p: (p.stat().st_mtime, p.name),
@@ -94,7 +91,6 @@ def load_axiom_model(axm_filepath: Path) -> tuple[dict, dict] | None:
 
     try:
         with zipfile.ZipFile(axm_filepath, "r") as zf:
-            # Security: Prevent path traversal attacks (zip-slip).
             for member in zf.namelist():
                 if ".." in member:
                     raise ValueError(f"Invalid path in zip file: {member}")
@@ -103,7 +99,6 @@ def load_axiom_model(axm_filepath: Path) -> tuple[dict, dict] | None:
             brain_bytes = zf.read("brain.json")
             cache_data = json.loads(zf.read("cache.json"))
 
-            # --- Verification ---
             schema_version = version_data.get("schema_version", 1)
             expected_checksum = version_data.get("checksum")
 
