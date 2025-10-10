@@ -5,7 +5,8 @@ import os
 import uuid
 
 # graph_core.py
-from typing import TYPE_CHECKING, TypedDict
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Dict, TypedDict
 
 import networkx as nx
 from networkx.readwrite import json_graph
