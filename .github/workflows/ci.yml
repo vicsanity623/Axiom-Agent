@@ -16,7 +16,7 @@ jobs:
       - name: Install deps
         run: |
           pip install uv
-          uv pip install -e '.[dev]
+          uv pip install -e .[dev]
       - name: Run checks
         run: |
           . venv/bin/activate
