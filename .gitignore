@@ -21,6 +21,7 @@ venv/
 # -----------------------------------------------------------------------------
 # Ignore all files in the brain folder but keep one
 brain/*
+brain.zip
 !brain/.gitkeep
 
 # Ignore the directory containing large, rendered model snapshots

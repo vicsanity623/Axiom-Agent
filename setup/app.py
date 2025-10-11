@@ -117,7 +117,7 @@ class CycleManager:
         self.scheduler.add_job(
             self.harvester.refinement_cycle,
             "interval",
-            minutes=10,
+            minutes=6,
             id="refinement_cycle_job",
         )
         self.current_phase = "refinement"
