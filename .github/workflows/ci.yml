@@ -1,30 +1,52 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: ['3.11']
+        python-version: ["3.11", "3.12"]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python }}
-          cache: 'pip'
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache uv environment
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: ${{ runner.os }}-uv-${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'uv.lock') }}
 
       - name: Install dependencies
         run: |
-            pip install uv
-            uv pip install -e .[dev] --system --index-url https://abetlen.github.io/llama-cpp-python/whl/cpu --extra-index-url https://pypi.org/simple
+          pip install uv
+          uv sync --dev
+
       - name: Run quality checks
-        run: ./check.sh
-      
+        run: |
+          source .venv/bin/activate
+          ./check.sh
+
       - name: Run tests
-        run: pytest -q
+        run: |
+          source .venv/bin/activate
+          pytest -q --cov=axiom --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
