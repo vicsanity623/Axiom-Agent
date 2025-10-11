@@ -32,9 +32,6 @@ dev = [
     "types-requests",
 ]
 
-[[tool.uv.index]]
-url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
-
 [project.urls]
 "Source" = "https://github.com/vicsanity623/Axiom-Agent"
 "Bug Tracker" = "https://github.com/vicsanity623/Axiom-Agent/issues"
