@@ -316,6 +316,23 @@ class ConceptGraph:
         )
         return new_edge
 
+    def update_edge_weight(self, edge: RelationshipEdge, new_weight: float) -> None:
+        """Find a specific edge in the graph and update its weight.
+
+        This is used by the refinement cycle to "punish" a chunky fact
+        after it has been successfully decomposed into smaller, atomic facts.
+
+        Args:
+            edge: The `RelationshipEdge` object to be updated.
+            new_weight: The new weight to assign to the edge.
+        """
+        if self.graph.has_edge(edge.source, edge.target, key=edge.id):
+            self.graph.edges[edge.source, edge.target, edge.id]["weight"] = new_weight
+        else:
+            print(
+                f"[Graph Core Warning]: Could not find edge {edge.id} to update its weight.",
+            )
+
     def get_edges_from_node(self, node_id: str) -> list[RelationshipEdge]:
         """Retrieve all outgoing edges (relationships) from a specific node.
 
