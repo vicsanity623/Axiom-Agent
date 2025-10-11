@@ -1,27 +1,31 @@
 name: CI
+
 on: [push, pull_request]
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [3.11]
+        python: ['3.11']
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
           cache: 'pip'
-      - name: Install deps
+
+      - name: Install dependencies
         run: |
           pip install uv
           uv pip install -e .[dev] --system
-      - name: Run checks
-        run: |
-          . venv/bin/activate
-          ./check.sh
+      
+      - name: Run quality checks
+        run: ./check.sh
+      
       - name: Run tests
-        run: |
-          . venv/bin/activate
-          pytest -q
+        run: pytest -q
