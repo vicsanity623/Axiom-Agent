@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
             pip install uv
-            uv sync --dev --system
+            uv pip install -e .[dev] --system --index-url https://abetlen.github.io/llama-cpp-python/whl/cpu --extra-index-url https://pypi.org/simple
       - name: Run quality checks
         run: ./check.sh
       
