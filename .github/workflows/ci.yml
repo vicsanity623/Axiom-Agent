@@ -33,6 +33,7 @@ jobs:
         run: |
           pip install uv
           uv sync --all-extras
+          uv pip install -e .
 
       - name: Run quality checks
         run: |
