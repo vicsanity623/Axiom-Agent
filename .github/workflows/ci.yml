@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install uv
-          uv pip install -e .[dev] --system
+          uv pip install -e .[dev] --system --no-binary llama-cpp-python
       
       - name: Run quality checks
         run: ./check.sh
