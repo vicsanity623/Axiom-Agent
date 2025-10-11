@@ -17,8 +17,6 @@ from flask import (
     send_from_directory,
 )
 
-sys.path.append(str(Path(__file__).resolve().parent.parent / "src"))
-
 from axiom.cognitive_agent import CognitiveAgent
 
 logger = logging.getLogger(__name__)
