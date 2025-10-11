@@ -11,11 +11,15 @@ __pycache__/
 interpreter_cache.json
 
 # Ignore the virtual environment folder
-venv/
+.venv/
 # Ignore Python's build/install metadata folders
 *.egg-info/
 /axiom_agent.egg-info/
 .coverage
+
+# Ignore dependency lock files to prevent cross-platform binary issues
+uv.lock
+
 # -----------------------------------------------------------------------------
 # Project-Specific Data & Models
 # -----------------------------------------------------------------------------
