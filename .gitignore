@@ -17,8 +17,6 @@ interpreter_cache.json
 /axiom_agent.egg-info/
 .coverage
 
-# Ignore dependency lock files to prevent cross-platform binary issues
-uv.lock
 
 # -----------------------------------------------------------------------------
 # Project-Specific Data & Models
