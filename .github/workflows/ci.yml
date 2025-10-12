@@ -22,14 +22,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          # Use the official, built-in caching for pip/uv. It's more efficient.
           cache: 'pip'
 
-      - name: Install dependencies from lockfile
-        run: |
-          pip install uv
-          # This is the correct command to use the lockfile for a reproducible build
-          uv pip install -e .[dev] --locked
+      - name: Install dependencies
+        run: pip install -e '.[dev]'
 
       - name: Run quality checks
         run: ./check.sh
