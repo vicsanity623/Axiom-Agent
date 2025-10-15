@@ -238,9 +238,7 @@ class CognitiveAgent:
                         "  [Cognitive Reflex]: Unknown word '%s', added to learning goals.",
                         word_to_learn,
                     )
-                return f"New word '{
-                    word_to_learn
-                }' discovered, I must research it before I can understand."
+                return f"New word '{word_to_learn}' discovered, I must research it before I can understand."
 
             logger.warning(
                 "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter.",
