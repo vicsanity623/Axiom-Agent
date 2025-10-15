@@ -510,9 +510,7 @@ class CognitiveAgent:
                     if path:
                         explanation = self._format_path_as_sentence(path)
                         return f"Based on what I know: {explanation}"
-                    return f"I don't know of a direct relationship between {
-                        start_concept
-                    } and {end_concept}."
+                    return f"I don't know of a direct relationship between {start_concept} and {end_concept}."
 
         if intent in ("question_about_entity", "question_about_concept"):
             entity_name = entities[0]["name"] if entities else user_input
@@ -756,9 +754,7 @@ class CognitiveAgent:
 
             if i == 0:
                 parts.append(
-                    f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {
-                        target_node.name
-                    }",
+                    f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name}",
                 )
             else:
                 parts.append(
@@ -786,13 +782,9 @@ class CognitiveAgent:
 
             if edge.type in ["is_a", "has_property"]:
                 if target_node.name != object_:
-                    return f"No, based on what I know, {subject} is {
-                        target_node.name
-                    }, not {object_}."
+                    return f"No, based on what I know, {subject} is {target_node.name}, not {object_}."
 
-        return f"I'm not sure. I don't have any information about whether {subject} is {
-            object_
-        }."
+        return f"I'm not sure. I don't have any information about whether {subject} is {object_}."
 
     def _reboot_interpreter(self) -> None:
         """Destroy and recreate the UniversalInterpreter to ensure stability.
@@ -987,9 +979,7 @@ class CognitiveAgent:
                     continue
                 target_node_data = self.graph.graph.nodes.get(edge.target)
                 if target_node_data:
-                    fact_str = f"{current_node_data.get('name').capitalize()} {
-                        edge.type.replace('_', ' ')
-                    } {target_node_data.get('name').capitalize()}"
+                    fact_str = f"{current_node_data.get('name').capitalize()} {edge.type.replace('_', ' ')} {target_node_data.get('name').capitalize()}"
                     if fact_str not in found_facts:
                         found_facts[fact_str] = edge
                     if edge.target not in visited:
@@ -1001,9 +991,7 @@ class CognitiveAgent:
                     continue
                 source_node_data = self.graph.graph.nodes.get(edge.source)
                 if source_node_data:
-                    fact_str = f"{source_node_data.get('name').capitalize()} {
-                        edge.type.replace('_', ' ')
-                    } {current_node_data.get('name').capitalize()}"
+                    fact_str = f"{source_node_data.get('name').capitalize()} {edge.type.replace('_', ' ')} {current_node_data.get('name').capitalize()}"
                     if fact_str not in found_facts:
                         found_facts[fact_str] = edge
                     if edge.source not in visited:
