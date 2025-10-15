@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-# knowledge_base.py
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
+# knowledge_base.py
+from tqdm import tqdm
+
 from axiom.dictionary_utils import get_word_info_from_wordnet
+
+get_word_info_from_wordnet = lru_cache(maxsize=None)(get_word_info_from_wordnet)
 
 if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
@@ -782,6 +787,13 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
     agent_instance.manual_add_knowledge("cat", "species", "is_a", "mammal", weight=1.0)
     agent_instance.manual_add_knowledge("mammal", "class", "is_a", "animal", weight=1.0)
     agent_instance.manual_add_knowledge(
+        "mammal",
+        "class",
+        "gives_birth_to",
+        "live young",
+        weight=0.95,
+    )
+    agent_instance.manual_add_knowledge(
         "animal",
         "kingdom",
         "is_a",
@@ -1294,6 +1306,10 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         data["name"] for _, data in agent_instance.graph.graph.nodes(data=True)
     }
 
+    for word in tqdm(list(seeded_words), desc="Integrating WordNet..."):
+        if len(word.split()) > 1:
+            continue
+
     for word in list(seeded_words):
         if len(word.split()) > 1:
             continue
@@ -1383,6 +1399,15 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
         "take": "verb",
         "takes": "verb",
         "took": "verb",
+        "give": "verb",
+        "gives": "verb",
+        "gave": "verb",
+        "birth": "noun",
+        "lay": "verb",
+        "include": "verb",
+        "includes": "verb",
+        "consist": "verb",
+        "consists": "verb",
         "lays": "verb",
         "i": "pronoun",
         "you": "pronoun",
@@ -1432,3 +1457,6 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
 
     for word, pos in core_vocab.items():
         agent_instance.lexicon.add_linguistic_knowledge(word, pos)
+
+
+print("     - Core vocabulary seeding complete.")

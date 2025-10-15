@@ -4,43 +4,77 @@
 
 Axiom is a **cognitive architecture**—a framework for a new type of artificial intelligence designed to achieve genuine understanding by building its own internal, logical model of reality from the ground up.
 
-This project's core philosophy is that true intelligence cannot be achieved by statistical mimicry (like in traditional LLMs). It must be built on a foundation of verifiable, interconnected knowledge. Axiom is an experiment to cultivate such a mind.
+This project’s core philosophy is that true intelligence cannot be achieved by statistical mimicry (like in traditional LLMs). It must be built on a foundation of verifiable, interconnected knowledge. **Axiom is an experiment to cultivate such a mind.**
 
 ---
 
-## The Core Architecture: Symbolic-First, LLM-Assisted
+## 🧠 The Core Architecture: Symbolic-First, LLM-Assisted
 
-Axiom's design is a radical departure from LLM-centric AI. It operates on a **symbolic-first** principle, where the core of the agent is a deterministic, logical brain.
+Axiom’s design is a radical departure from LLM-centric AI.  
+It operates on a **symbolic-first** principle, where the core of the agent is a deterministic, logical brain.
 
-1.  **The Symbolic Brain (The Knowledge Graph):** At its heart, Axiom has a structured `ConceptGraph`—its long-term memory. This is a logical map of concepts and their relationships (`Paris --[is_located_in]--> France`). This architecture **prevents hallucinations** by ensuring the agent's knowledge is grounded in verifiable facts it has learned.
+1. **The Symbolic Brain (Knowledge Graph):**  
+   At its heart, Axiom has a structured `ConceptGraph` — its long-term memory.  
+   This logical map of concepts and relationships (e.g. `Paris --[is_located_in]--> France`) grounds the agent’s knowledge in verifiable facts and **prevents hallucinations**.
 
-2.  **The Symbolic Senses (The Multi-Stage Parser):** Axiom has its own native ability to understand language. It uses a `SymbolicParser` that operates as a multi-stage pipeline, first splitting complex sentences into simpler clauses, then applying a series of grammatical rules to extract atomic facts. For a growing number of sentences, it can achieve understanding **without any external models.**
+2. **The Symbolic Senses (Multi-Stage Parser):**  
+   Axiom’s `SymbolicParser` deconstructs complex text into atomic logical statements, extracting multiple facts per sentence.  
+   For a growing class of sentences, it achieves understanding **without any external model.**
 
-3.  **The LLM as a Tool (The Fallback Interpreter):** When the agent's native parser encounters a sentence too complex for its current understanding, it uses a local LLM as a fallback tool. The LLM's only job is to translate the complex sentence into a structured format that the agent's symbolic brain can then process. **The LLM is a temporary crutch, not the mind itself.**
+3. **The LLM as a Tool (Fallback Interpreter):**  
+   When the agent’s parser encounters a sentence too complex for its rules, it calls a local LLM **as a translation tool**.  
+   The model’s only job is to produce a structured representation that the symbolic brain can then absorb.  
+   The **LLM is a temporary crutch, not the mind itself.**
 
 ---
 
 ## ✅ Key Capabilities: A New Path to Understanding
 
-This architecture allows the agent to learn, reason, and grow in a way that is fundamentally different from static models.
+This architecture enables the agent to learn, reason, and evolve in a verifiable, self-contained way.
 
 ### Cognitive & Reasoning Abilities
-*   **Multi-Stage Symbolic Parsing:** The agent's `SymbolicParser` can deconstruct complex, multi-sentence text into individual clauses and learn multiple, distinct facts from a single input.
-*   **Contextual Conversation:** The agent possesses a deterministic **coreference resolution** mechanism for short-term memory, allowing it to understand what pronouns like `it` and `they` refer to based on the recent conversation history.
-*   **Introspective Learning:** The agent can **learn from its own output**. If its LLM synthesizer "leaks" a new fact while answering a question, the agent parses its own response and integrates that new knowledge into its symbolic brain, creating a powerful self-improvement loop.
-*   **Intelligent Autonomous Learning:** The agent operates 24/7 with two focused learning cycles:
-    -   **The Discovery Cycle:** Explores curated subjects and uses a popularity heuristic to find relevant new topics.
-    -   **The Study Cycle:** Prioritizes researching unknown words from its learning queue using a high-precision **Dictionary API**. When the queue is empty, it proactively **deepens its knowledge** by researching concepts it already knows to find new, related facts.
-    -   **Refinement Phase** Agent spends hours introspectively consolidate and improve what it has learned.
-
-<br/>
-
-### Professional Development & Deployment
-*   **Automated Quality Assurance (`./check.sh`):** A full suite of tools (Ruff, MyPy, Pytest) ensures the codebase is clean, consistent, and reliable.
-*   **Modern Python Packaging (`pyproject.toml`):** The project uses the latest standards for managing dependencies and configuration.
-*   **Robust Train -> Render -> Deploy Workflow:** A professional toolchain separates offline training (in `cnt.py` or `autonomous_trainer.py`) from online, read-only deployment (in `app_model.py`), ensuring stability.
+* **Multi-Stage Symbolic Parsing:** Understands multi-clause input and extracts multiple distinct facts.
+* **Contextual Conversation:** Tracks pronouns (`it`, `they`) via a deterministic short-term memory.
+* **Introspective Learning:** Can **learn from its own output**—if the LLM “leaks” a new fact, the agent parses and stores it, creating a feedback loop of self-improvement.
+* **Intelligent Autonomous Learning:** Operates in cycles:
+  - **Discovery Cycle:** Finds and explores new topics.
+  - **Study Cycle:** Researches unknown or related concepts via a high-precision Dictionary API.
+  - **Refinement Phase:** Consolidates and clarifies existing knowledge.
 
 ---
+
+## 🔬 Evidence, Tests, and Verification
+
+The claims of this architecture are **reproducibly testable** through automated experiments.
+
+### 🧪 Verified Demonstrations
+
+| Test | Description | Runs in CI? |
+|------|--------------|-------------|
+| [`tests/test_golden_path.py`](tests/test_golden_path.py) | The **original golden-path** demonstration. Shows full learn → query → introspect → recall loop using a real LLM. | ⚙️ Optional (requires model) |
+| [`tests/test_golden_path_mocked.py`](tests/test_golden_path_mocked.py) | **Deterministic CI-safe test**. Mocks the LLM to verify the same loop without requiring a model. | ✅ Always |
+| [`tests/test_introspection_suite.py`](tests/test_introspection_suite.py) | **Parameterized introspection suite**. Tests multiple concept–property pairs and collects success metrics. | ⚙️ Runs when a model is available |
+
+The continuous-integration workflow (`.github/workflows/ci.yml`) automatically:
+- Runs all static analysis and lint checks via `./check.sh`
+- Executes the deterministic test suite (`pytest -m "not introspection"`)
+- Optionally runs full introspection tests if a model is detected
+- Uploads coverage and introspection reports as build artifacts
+
+### 📊 Local Verification (Quickstart)
+
+To reproduce the evidence locally:
+
+```bash
+# 1. Run the deterministic, CI-safe suite
+pytest -q -m "not introspection" --disable-warnings
+
+# 2. (Optional) Run the full introspection suite with a local model
+pytest -q -m introspection --disable-warnings
+
+# 3. View coverage results
+pytest --cov=axiom --cov-report=term-missing
+```
 
 ## 🛠️ Setup and Installation
 

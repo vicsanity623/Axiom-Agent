@@ -1,11 +1,11 @@
 /* static/style.css */
 @font-face {
-    font-family: 'OldEnglish'; /* We are giving our font a custom name */
+    font-family: 'OldEnglish';
     src: url('/static/fonts/OldeEnglish.ttf') format('truetype');
 }
 
 :root {
-    /* NEW: Higher contrast, denser color palette */
+
     --bg-color: #121212;
     --chat-bg-color: #1E1E1E;
     --header-bg-color: #252526;
@@ -14,14 +14,14 @@
     --ai-bubble-bg: #2D2D2D;
     --input-bg: #252526;
     --input-border: #383838;
-    --send-button-bg: #8A2BE2; /* A richer purple */
+    --send-button-bg: #8A2BE2;
     --send-button-hover-bg: #9932CC;
     --send-button-icon: #FFFFFF;
     --loading-spinner-color: #FFFFFF;
     --ai-error-bubble-bg: #6b2f2f;
-    --status-loading-bg: #DAA520; /* Orange/Gold for Initializing */
-    --status-ready-bg: #2E8B57;   /* Sea Green for Ready */
-    --status-error-bg: #B22222;   /* Firebrick Red for Error */
+    --status-loading-bg: #DAA520;
+    --status-ready-bg: #2E8B57;
+    --status-error-bg: #B22222;
     --sidebar-bg: #252526;
     --sidebar-text: #CCCCCC;
     --sidebar-hover-bg: #3E3E3E;
@@ -74,22 +74,19 @@ body {
     flex-grow: 1;
 }
 
-/* --- UPDATED: Status Indicator is now a dot --- */
 .status-indicator {
     width: 12px;
     height: 12px;
-    border-radius: 50%; /* Makes it a perfect circle */
+    border-radius: 50%;
     background-color: var(--status-loading-bg);
     transition: background-color 0.3s ease;
-    flex-shrink: 0; /* Prevents it from shrinking */
+    flex-shrink: 0;
 
-    /* Remove old text properties */
     padding: 0;
     font-size: 0;
     color: transparent;
     white-space: nowrap;
 }
-/* --- END UPDATE --- */
 
 
 .chat-messages {
@@ -98,7 +95,7 @@ body {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 15px; /* Slightly increased gap */
+    gap: 15px;
 }
 
 .message {
@@ -108,8 +105,8 @@ body {
 }
 
 .message-content {
-    display: flex; /* For menu alignment */
-    align-items: flex-start; /* Align menu to top */
+    display: flex;
+    align-items: flex-start;
     padding: 10px 15px;
     border-radius: 18px;
     line-height: 1.5;
@@ -119,7 +116,7 @@ body {
 }
 
 .message-text {
-    padding-right: 25px; /* Space for the menu button */
+    padding-right: 25px;
 }
 
 .message-menu-container {

@@ -43,6 +43,8 @@ Intent: TypeAlias = Literal[
     "positive_affirmation",
     "command",
     "unknown",
+    "unknown_verb_failure",
+    "question_yes_no",
 ]
 
 

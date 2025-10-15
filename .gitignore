@@ -41,9 +41,12 @@ brain.zip
 # -----------------------------------------------------------------------------
 # Ignore all log files
 *.log
+*.tar.gz
 profile_results.txt
 waker.log
 /facts/
+/analysis_reports/
+/docs/
 
 # -----------------------------------------------------------------------------
 # System & Editor Files

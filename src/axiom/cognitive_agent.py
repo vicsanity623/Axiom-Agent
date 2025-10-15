@@ -1,6 +1,10 @@
-from __future__ import annotations
+"""The core module for the Axiom Cognitive Agent.
 
-# cognitive_agent.py
+This module is responsible for:
+- Managing the entire cognitive loop from understanding user input,
+to learning and responding.
+"""
+
 import json
 import logging
 import os
@@ -8,7 +12,9 @@ import re
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict
+from typing import ClassVar, Final, NotRequired, TypedDict
+
+from nltk.stem import WordNetLemmatizer
 
 from axiom.dictionary_utils import get_word_info_from_wordnet
 from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
@@ -16,13 +22,11 @@ from axiom.knowledge_base import seed_core_vocabulary, seed_domain_knowledge
 from axiom.lexicon_manager import LexiconManager
 from axiom.symbolic_parser import SymbolicParser
 from axiom.universal_interpreter import (
+    Entity,
     InterpretData,
     RelationData,
     UniversalInterpreter,
 )
-
-if TYPE_CHECKING:
-    from axiom.universal_interpreter import Entity
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,12 +35,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger("CognitiveAgent")
 
+lemmatizer = WordNetLemmatizer()
+
 BRAIN_FOLDER: Final = Path("brain")
 DEFAULT_BRAIN_FILE: Final = BRAIN_FOLDER / "my_agent_brain.json"
 DEFAULT_STATE_FILE: Final = BRAIN_FOLDER / "my_agent_state.json"
 
 
 class ClarificationContext(TypedDict):
+    """Hold contextual information needed for a clarification request."""
+
     subject: NotRequired[str]
     conflicting_relation: NotRequired[str]
 
@@ -55,8 +63,35 @@ RELATION_TYPE_MAP: Final[dict[str, str]] = {
     "released": "released",
 }
 
+CONTRACTION_MAP: Final[dict[str, str]] = {
+    "what's": "what is",
+    "whats": "what is",
+    "it's": "it is",
+    "its": "it is",
+    "he's": "he is",
+    "she's": "she is",
+    "that's": "that is",
+    "there's": "there is",
+    "i'm": "i am",
+    "you're": "you are",
+    "we're": "we are",
+    "they're": "they are",
+    "can't": "can not",
+    "won't": "will not",
+    "don't": "do not",
+    "doesn't": "does not",
+    "didn't": "did not",
+    "isn't": "is not",
+    "aren't": "are not",
+}
+
 
 class CognitiveAgent:
+    """Orchestrate the primary cognitive functions of the Axiom Agent.
+
+    This class integrates all other components to execute a symbolic-first thought process.
+    """
+
     INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 50
 
     def __init__(
@@ -101,10 +136,11 @@ class CognitiveAgent:
         self.interpreter = UniversalInterpreter(load_llm=enable_llm)
         self.lexicon = LexiconManager(self)
         self.parser = SymbolicParser(self)
+        self.lemmatizer = WordNetLemmatizer()
         self.learning_goals: list[str] = []
 
         if load_from_file:
-            logger.info(f"   - Loading brain from file: {self.brain_file}")
+            logger.info("   - Loading brain from file: %s", self.brain_file)
             self.graph = ConceptGraph.load_from_file(self.brain_file)
             self._load_agent_state()
 
@@ -124,7 +160,7 @@ class CognitiveAgent:
 
             if not name_edge_exists:
                 logger.critical(
-                    "   - CRITICAL FAILURE: Agent's core identity is missing. Re-seeding brain for integrity.",
+                    "   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity.",
                 )
                 self.graph = ConceptGraph()
                 seed_domain_knowledge(self)
@@ -173,70 +209,60 @@ class CognitiveAgent:
         Returns:
             A natural language string representing the agent's final response.
         """
-        logger.info(f"\nUser: {user_input}")
+        logger.info(" \nUser: %s", user_input)
         self.graph.decay_activations()
 
         if self.is_awaiting_clarification:
             return self._handle_clarification(user_input)
 
-        contextual_input = self._resolve_references(user_input)
+        expanded_input = self._expand_contractions(user_input)
+        contextual_input = self._resolve_references(expanded_input)
         normalized_input = self._preprocess_self_reference(contextual_input)
+        interpretations: list[InterpretData] | None = self.parser.parse(
+            normalized_input,
+        )
 
-        interpretations: list[InterpretData] | None = None
-
-        symbolic_interpretations = self.parser.parse(normalized_input)
-
-        if symbolic_interpretations:
-            interpretations = symbolic_interpretations
-            logger.info(
-                f"  [Cognitive Flow]: Symbolic parsing succeeded with {len(interpretations)} interpretation(s). Skipping LLM interpreter.",
-            )
-
-        else:
+        if not interpretations:
             words = normalized_input.lower().split()
-            unknown_words = []
-            for word in words:
-                clean_word = re.sub(r"[^\w\s]", "", word)
-                if clean_word and not self.lexicon.is_known_word(clean_word):
-                    unknown_words.append(clean_word)
-
+            unknown_words = [
+                re.sub(r"[^\w\s]", "", w)
+                for w in words
+                if w and not self.lexicon.is_known_word(re.sub(r"[^\w\s]", "", w))
+            ]
             if unknown_words:
                 word_to_learn = sorted(set(unknown_words))[0]
                 goal = f"INVESTIGATE: {word_to_learn}"
                 if goal not in self.learning_goals:
                     self.learning_goals.append(goal)
                     logger.info(
-                        f"  [Cognitive Reflex]: I don't know the word '{word_to_learn}'. Adding to learning goals.",
+                        "  [Cognitive Reflex]: Unknown word '%s', added to learning goals.",
+                        word_to_learn,
                     )
-
-                return f"I'm not familiar with the term '{word_to_learn}'. I'll need to research it before I can understand your sentence."
+                return f"New word '{
+                    word_to_learn
+                }' discovered, I must research it before I can understand."
 
             logger.warning(
                 "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter.",
             )
-
             llm_interpretation = self.interpreter.interpret(normalized_input)
             if llm_interpretation:
                 interpretations = [llm_interpretation]
 
-            if not interpretations:
-                return "I'm sorry, I was unable to understand that."
+        if not interpretations:
+            return "I'm sorry, I was unable to understand that."
 
-        if interpretations:
-            self.structured_history.append(("user", interpretations))
+        self.structured_history.append(("user", interpretations))
+        if len(self.structured_history) > 10:
+            self.structured_history = self.structured_history[-10:]
 
-            logger.debug(
-                f"[DEBUG] Structured history now has {len(self.structured_history)} entries",
-            )
-            for speaker, interps in self.structured_history[-3:]:
-                logger.debug(f"  - {speaker}: {[i.get('relation') for i in interps]}")
         primary_interpretation = interpretations[0]
         logger.info(
-            f"  [Interpreter Output]: Intent='{primary_interpretation.get('intent', 'N/A')}', "
-            f"Entities={[e.get('name') for e in primary_interpretation.get('entities', [])]}, "
-            f"Relation={primary_interpretation.get('relation')}",
+            "  [Interpreter Output]: Intent='%s', Entities=%s, Relation=%s",
+            primary_interpretation.get("intent", "N/A"),
+            [e.get("name") for e in primary_interpretation.get("entities", [])],
+            primary_interpretation.get("relation"),
         )
-
         intent = primary_interpretation.get("intent", "unknown")
         entities: list[Entity] = primary_interpretation.get("entities", [])
         relation: RelationData | None = primary_interpretation.get("relation")
@@ -248,12 +274,12 @@ class CognitiveAgent:
             user_input,
         )
 
-        if interpretations and len(interpretations) > 1:
-            for extra_interpretation in interpretations[1:]:
-                if extra_interpretation.get("intent") == "statement_of_fact":
-                    relation_to_learn = extra_interpretation.get("relation")
-                    if relation_to_learn:
-                        self._process_statement_for_learning(relation_to_learn)
+        if len(interpretations) > 1:
+            for extra in interpretations[1:]:
+                if extra.get("intent") == "statement_of_fact":
+                    rel = extra.get("relation")
+                    if rel:
+                        self._process_statement_for_learning(rel)
 
         final_response, synthesizer_was_used = self._synthesize_response(
             structured_response,
@@ -261,25 +287,26 @@ class CognitiveAgent:
         )
 
         if synthesizer_was_used and not self.inference_mode:
-            print(
-                "  [Introspection]: Analyzing synthesized response for new knowledge...",
-            )
-            new_interpretations = self.parser.parse(final_response)
-            if new_interpretations:
-                for interpretation in new_interpretations:
-                    if interpretation.get("intent") == "statement_of_fact":
-                        new_relation = interpretation.get("relation")
-                        if new_relation:
-                            print(
-                                "  [Introspection]: Found a new potential fact in own response. Attempting to learn.",
-                            )
-                            self._process_statement_for_learning(new_relation)
+            introspection_context = None
+            if intent.startswith("question") and relation and relation.get("subject"):
+                introspection_context = relation["subject"]
+            elif intent.startswith("question") and entities:
+                introspection_context = entities[0]["name"]
 
-        if interpretations:
-            self.structured_history.append(("user", interpretations))
-
-        if len(self.structured_history) > 10:
-            self.structured_history = self.structured_history[-10:]
+            if introspection_context:
+                logger.info(
+                    "  [Introspection]: Analyzing synthesized response for new knowledge...",
+                )
+                new_interpretations = self.parser.parse(
+                    final_response,
+                    context_subject=introspection_context,
+                )
+                if new_interpretations:
+                    for interp in new_interpretations:
+                        if interp.get("intent") == "statement_of_fact":
+                            new_rel = interp.get("relation")
+                            if new_rel:
+                                self._process_statement_for_learning(new_rel)
 
         return final_response
 
@@ -298,16 +325,21 @@ class CognitiveAgent:
             if speaker == "user" and interpretations:
                 primary_interpretation = interpretations[0]
                 relation = primary_interpretation.get("relation")
+                entities = primary_interpretation.get("entities")
 
                 if relation and relation.get("subject"):
                     antecedent = relation["subject"]
+                    break
+                if entities:
+                    antecedent = entities[0]["name"]
                     break
 
         if antecedent:
             clean_antecedent = self._clean_phrase(antecedent)
             if not clean_antecedent:
                 logger.debug(
-                    f"[Coreference]: Found antecedent '{antecedent}', but it was empty after cleaning.",
+                    "[Coreference]: Found antecedent %s, but it was empty after cleaning.",
+                    antecedent,
                 )
                 return text
 
@@ -326,7 +358,9 @@ class CognitiveAgent:
 
             if modified_text != text:
                 logger.info(
-                    f"  [Coreference]: Resolved pronouns, transforming '{text}' to '{modified_text}'",
+                    "  [Coreference]: Resolved pronouns, transforming '%s' to '%s'",
+                    text,
+                    modified_text,
                 )
                 return modified_text
             logger.debug(
@@ -383,13 +417,19 @@ class CognitiveAgent:
                         ):
                             self.graph.graph[u][v][key]["weight"] = 1.0
                             logger.info(
-                                f"    - REINFORCED: {subject_name} --[{relation_type}]--> {correct_answer_name}",
+                                "    - REINFORCED: %s --[%s]--> %s",
+                                subject_name,
+                                relation_type,
+                                correct_answer_name,
                             )
                         else:
                             self.graph.graph[u][v][key]["weight"] = 0.1
                             if target_node_data:
                                 logger.info(
-                                    f"    - PUNISHED: {subject_name} --[{relation_type}]--> {target_node_data.get('name')}",
+                                    "    - PUNISHED: %s --[%s]--> %s",
+                                    subject_name,
+                                    relation_type,
+                                    target_node_data.get("name"),
                                 )
                 self.save_brain()
 
@@ -415,8 +455,27 @@ class CognitiveAgent:
             return "I'm glad you think so!"
 
         if intent == "statement_of_fact" and relation:
-            _, response_message = self._process_statement_for_learning(relation)
-            return response_message
+            subject = relation.get("subject")
+            predicate = (
+                relation.get("predicate")
+                or relation.get("verb")
+                or relation.get("relation")
+            )
+            obj = relation.get("object")
+
+            if not subject or not predicate or not obj:
+                return "I understood this as a factual statement, but some elements were missing."
+
+            was_learned, learn_msg = self._process_statement_for_learning(relation)
+            logger.info(
+                "  [Knowledge Acquisition]: Learned = '%s'', msg = '%s'",
+                was_learned,
+                learn_msg,
+            )
+
+            if was_learned:
+                return "I understand. I have noted that."
+            return f"I tried to record that fact but something went wrong: {learn_msg}"
 
         if intent == "statement_of_correction" and relation:
             logger.info("  [Correction]: Processing user's correction...")
@@ -425,10 +484,15 @@ class CognitiveAgent:
             )
             if was_learned:
                 return "Thank you. I have corrected my knowledge."
-            return f"I understood the correction, but failed to learn the new fact. Reason: {response_message}"
+            return f"I understood the correction, but failed to learn the new fact. Reason: {
+                response_message
+            }"
 
         if intent == "command" and "show all facts" in user_input.lower():
             return self._get_all_facts_as_string()
+
+        if intent == "question_yes_no" and relation:
+            return self._answer_yes_no_question(relation)
 
         if intent in ("question_about_entity", "question_about_concept") and relation:
             start_concept = relation.get("subject")
@@ -440,13 +504,17 @@ class CognitiveAgent:
 
                 if start_node and end_node:
                     logger.debug(
-                        f"  [Multi-Hop]: Querying for path between '{start_node.name}' and '{end_node.name}'.",
+                        "  [Multi-Hop]: Querying for path between '%s' and '%s'.",
+                        start_node.name,
+                        end_node.name,
                     )
                     path = self._perform_multi_hop_query(start_node, end_node)
                     if path:
                         explanation = self._format_path_as_sentence(path)
                         return f"Based on what I know: {explanation}"
-                    return f"I don't know of a direct relationship between {start_concept} and {end_concept}."
+                    return f"I don't know of a direct relationship between {
+                        start_concept
+                    } and {end_concept}."
 
         if intent in ("question_about_entity", "question_about_concept"):
             entity_name = entities[0]["name"] if entities else user_input
@@ -508,7 +576,7 @@ class CognitiveAgent:
                 + "\n".join(all_facts)
             )
 
-        return "Despite having concepts in my knowledge base, I currently lack high-confidence facts to display."
+        return "I currently lack high-confidence facts to display."
 
     def _answer_question_about(self, entity_name: str, user_input: str) -> str:
         """Find and return known facts related to a specific entity.
@@ -556,7 +624,8 @@ class CognitiveAgent:
             return f"I don't have any information about {entity_name}."
 
         logger.info(
-            f"  [CognitiveAgent]: Starting single-hop reasoning for '{entity_name}'.",
+            "  [CognitiveAgent]: Starting single-hop reasoning for '%s',.",
+            entity_name,
         )
         facts_with_props = self._gather_facts_multihop(subject_node.id, max_hops=4)
 
@@ -570,7 +639,7 @@ class CognitiveAgent:
             facts = {fact_str for fact_str, _ in facts_with_props}
 
         if not facts:
-            return f"I know the concept of {subject_node.name.capitalize()}, but I don't have any specific details for that query."
+            return f"I dont have any details for {subject_node.name.capitalize()}."
 
         return ". ".join(sorted(facts)) + "."
 
@@ -581,22 +650,11 @@ class CognitiveAgent:
     ) -> tuple[str, bool]:
         """Convert a structured, internal response into natural language.
 
-        This method acts as the final step before replying to the user.
-        It checks if the structured response is a simple, pre-defined
-        phrase (e.g., "Hello User."). If it is, the response is returned
-        directly.
-
-        Otherwise, it passes the structured fact(s) to the LLM-based
-        synthesizer to be converted into a fluent, conversational sentence.
-
-        Args:
-            structured_response: An internal, non-natural language string
-                containing the agent's raw answer.
-            user_input: The user's original question, used for context.
-
-        Returns:
-            The final, natural language response to be sent to the user.
+        This is the final step before replying to the user.
+        It bypasses synthesis for simple canned phrases and
+        invokes the LLM synthesizer for any structured knowledge.
         """
+
         non_synthesize_triggers = [
             "Hello User",
             "Goodbye User",
@@ -614,15 +672,37 @@ class CognitiveAgent:
             "I am currently in a read-only mode",
             "I'm not familiar with the term",
         ]
+
         if any(trigger in structured_response for trigger in non_synthesize_triggers):
             return (structured_response, False)
 
-        print(f"  [Structured Response]: {structured_response}")
+        if re.match(r"^\s*(FACT:|RELATION\()", structured_response):
+            logger.debug(
+                "  [Synthesizer]: Structured input detected → %s",
+                structured_response,
+            )
+            fluent_response = self.interpreter.synthesize(
+                structured_response,
+                original_question=user_input,
+            )
+            logger.debug(
+                "  [Synthesizer]: Output → %s",
+                fluent_response,
+            )
+            return (fluent_response, True)
+
+        logger.debug(
+            "  [Structured Response]: %s",
+            structured_response,
+        )
         fluent_response = self.interpreter.synthesize(
             structured_response,
             original_question=user_input,
         )
-        print(f"  [Synthesized Response]: {fluent_response}")
+        logger.debug(
+            "  [Synthesized Response]: %s",
+            fluent_response,
+        )
         return (fluent_response, True)
 
     def _perform_multi_hop_query(
@@ -678,7 +758,9 @@ class CognitiveAgent:
 
             if i == 0:
                 parts.append(
-                    f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name}",
+                    f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {
+                        target_node.name
+                    }",
                 )
             else:
                 parts.append(
@@ -686,6 +768,33 @@ class CognitiveAgent:
                 )
 
         return ", and ".join(parts) + "."
+
+    def _answer_yes_no_question(self, relation: RelationData) -> str:
+        """Answer a yes/no question by checking for facts and contradictions."""
+        subject = relation["subject"]
+        object_ = relation["object"]
+
+        subject_node = self.graph.get_node_by_name(subject)
+        if not subject_node:
+            return f"I don't have any information about {subject}."
+
+        for edge in self.graph.get_edges_from_node(subject_node.id):
+            target_node = self.graph.get_node_by_id(edge.target)
+            if not target_node:
+                continue
+
+            if target_node.name == object_:
+                return f"Yes, based on what I know, {subject} is {object_}."
+
+            if edge.type in ["is_a", "has_property"]:
+                if target_node.name != object_:
+                    return f"No, based on what I know, {subject} is {
+                        target_node.name
+                    }, not {object_}."
+
+        return f"I'm not sure. I don't have any information about whether {subject} is {
+            object_
+        }."
 
     def _reboot_interpreter(self) -> None:
         """Destroy and recreate the UniversalInterpreter to ensure stability.
@@ -723,8 +832,9 @@ class CognitiveAgent:
         """
         self.autonomous_cycle_count += 1
         logger.debug(
-            f"  [System Health]: Autonomous cycles since last interpreter reboot: "
-            f"{self.autonomous_cycle_count}/{self.INTERPRETER_REBOOT_THRESHOLD}",
+            "  [System Health]: Autonomous cycles since last interpreter reboot: %s/%s",
+            self.autonomous_cycle_count,
+            self.INTERPRETER_REBOOT_THRESHOLD,
         )
         if self.autonomous_cycle_count >= self.INTERPRETER_REBOOT_THRESHOLD:
             self._reboot_interpreter()
@@ -739,13 +849,16 @@ class CognitiveAgent:
         """
         if os.path.exists(self.state_file):
             try:
-                with open(self.state_file) as f:
+                with open(self.state_file, encoding="utf-8") as f:
                     state_data = json.load(f)
                     self.learning_iterations = state_data.get("learning_iterations", 0)
-                logger.info(
-                    f"Agent state loaded from {self.state_file} (Learning Iterations: {self.learning_iterations}).",
+                logger.info(...)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(
+                    "Could not load or parse agent state file '%s'. Resetting state. Error: %s",
+                    self.state_file,
+                    e,
                 )
-            except Exception:
                 self.learning_iterations = 0
         else:
             self.learning_iterations = 0
@@ -757,8 +870,22 @@ class CognitiveAgent:
         the `my_agent_state.json` file for persistence between sessions.
         """
         state_data = {"learning_iterations": self.learning_iterations}
-        with open(self.state_file, "w") as f:
+        with open(self.state_file, "w", encoding="utf-8") as f:
             json.dump(state_data, f, indent=4)
+
+    def _expand_contractions(self, text: str) -> str:
+        """Expand common English contractions (e.g., "what's" -> "what is")."""
+        words = text.lower().split()
+        expanded_words = [CONTRACTION_MAP.get(word, word) for word in words]
+        expanded_text = " ".join(expanded_words)
+
+        if expanded_text != text.lower():
+            logger.info(
+                "  [Contraction Expander]: Normalized input to '%s'",
+                expanded_text,
+            )
+
+        return expanded_text
 
     def _preprocess_self_reference(self, text: str) -> str:
         """Normalize user input to replace self-references with a canonical name.
@@ -806,7 +933,10 @@ class CognitiveAgent:
             flags=re.IGNORECASE,
         )
         if processed_text != text:
-            logger.debug(f"  [Pre-processor]: Normalized input to '{processed_text}'")
+            logger.debug(
+                "  [Pre-processor]: Normalized input to '%s'",
+                processed_text,
+            )
         return processed_text
 
     @lru_cache(maxsize=256)
@@ -834,7 +964,8 @@ class CognitiveAgent:
             fact string and another tuple of its sorted properties.
         """
         logger.info(
-            f"  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: {start_node_id}",
+            "  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: %s",
+            start_node_id,
         )
         start_node_data = self.graph.graph.nodes.get(start_node_id)
         if not start_node_data:
@@ -858,7 +989,9 @@ class CognitiveAgent:
                     continue
                 target_node_data = self.graph.graph.nodes.get(edge.target)
                 if target_node_data:
-                    fact_str = f"{current_node_data.get('name').capitalize()} {edge.type.replace('_', ' ')} {target_node_data.get('name').capitalize()}"
+                    fact_str = f"{current_node_data.get('name').capitalize()} {
+                        edge.type.replace('_', ' ')
+                    } {target_node_data.get('name').capitalize()}"
                     if fact_str not in found_facts:
                         found_facts[fact_str] = edge
                     if edge.target not in visited:
@@ -870,7 +1003,9 @@ class CognitiveAgent:
                     continue
                 source_node_data = self.graph.graph.nodes.get(edge.source)
                 if source_node_data:
-                    fact_str = f"{source_node_data.get('name').capitalize()} {edge.type.replace('_', ' ')} {current_node_data.get('name').capitalize()}"
+                    fact_str = f"{source_node_data.get('name').capitalize()} {
+                        edge.type.replace('_', ' ')
+                    } {current_node_data.get('name').capitalize()}"
                     if fact_str not in found_facts:
                         found_facts[fact_str] = edge
                     if edge.source not in visited:
@@ -959,8 +1094,7 @@ class CognitiveAgent:
             The normalized phrase.
         """
         clean_phrase = phrase.lower().strip()
-
-        clean_phrase = re.sub(r"[.,!?;]+$", "", clean_phrase)
+        clean_phrase = re.sub(r"[.,!?;']+$", "", clean_phrase)
 
         words = clean_phrase.split()
 
@@ -1029,7 +1163,10 @@ class CognitiveAgent:
             return (False, "Could not determine the object(s) of the fact.")
 
         logger.info(
-            f"  [AGENT LEARNING: Processing interpreted statement: {subject_name} -> {verb} -> {objects_to_process}]",
+            "  [LEARNING: Processing statement: %s -> %s -> %s]",
+            subject_name,
+            verb,
+            objects_to_process,
         )
         self.learning_iterations += 1
 
@@ -1055,8 +1192,12 @@ class CognitiveAgent:
                                 "  [Curiosity]: CONTRADICTION DETECTED (Exclusive Relationship)!",
                             )
                             conflicting_facts_str = (
-                                f"Fact 1: {sub_node.name} {edge.type.replace('_', ' ')} {existing_target_data.get('name')}. "
-                                f"Fact 2: {sub_node.name} {relation_type.replace('_', ' ')} {object_name}."
+                                f"Fact 1: {sub_node.name} {
+                                    edge.type.replace('_', ' ')
+                                } {existing_target_data.get('name')}. "
+                                f"Fact 2: {sub_node.name} {
+                                    relation_type.replace('_', ' ')
+                                } {object_name}."
                             )
                             question = self.interpreter.synthesize(
                                 conflicting_facts_str,
@@ -1092,12 +1233,20 @@ class CognitiveAgent:
                         properties=properties,
                     )
                     logger.info(
-                        f"    Learned new fact: {sub_node.name} --[{relation_type}]--> {obj_node.name} with properties {properties}",
+                        "    Learned new fact: %s --[%s]--> %s with properties %s",
+                        sub_node.name,
+                        obj_node.name,
+                        relation_type,
+                        properties,
                     )
+
                     learned_at_least_one = True
                 else:
                     logger.debug(
-                        f"    - Fact already exists: {sub_node.name} --[{relation_type}]--> {obj_node.name}",
+                        "    - Fact already exists: %s --[%s]--> %s",
+                        sub_node.name,
+                        relation_type,
+                        obj_node.name,
                     )
 
         if learned_at_least_one:
@@ -1157,11 +1306,15 @@ class CognitiveAgent:
             logger.info("[Autonomous Learning]: Skipped. Agent is in inference mode.")
             return False
         logger.info(
-            f"[Autonomous Learning]: Attempting to learn fact: '{fact_sentence}'",
+            "[Autonomous Learning]: Attempting to learn fact: '%s'",
+            fact_sentence,
         )
         interpretation = self.interpreter.interpret(fact_sentence)
         relation = interpretation.get("relation")
-        logger.info(f"  [Autonomous Learning]: Interpreted Relation: {relation}")
+        logger.info(
+            "  [Autonomous Learning]: Interpreted Relation: %s",
+            relation,
+        )
         if interpretation.get("intent") == "statement_of_fact" and relation:
             was_learned, response_message = self._process_statement_for_learning(
                 relation,
@@ -1172,7 +1325,8 @@ class CognitiveAgent:
                 )
                 return True
             logger.warning(
-                f"[Autonomous Learning]: Failed to process fact. Reason: {response_message}",
+                "[Autonomous Learning]: Failed to process fact. Reason: %s",
+                response_message,
             )
         else:
             logger.warning(
@@ -1217,7 +1371,11 @@ class CognitiveAgent:
             node = self.graph.add_node(
                 ConceptNode(clean_name, node_type=determined_type),
             )
-            logger.info(f"    Added new concept to graph: {clean_name} ({node.type})")
+            logger.info(
+                "    Added new concept to graph: %s (%s)",
+                clean_name,
+                node.type,
+            )
         return node
 
     def manual_add_knowledge(
@@ -1246,7 +1404,10 @@ class CognitiveAgent:
         if node1 and node2:
             self.graph.add_edge(node1, node2, relation, weight)
             logger.info(
-                f"Manually added knowledge: {concept_name1} --[{relation}]--> {concept_name2}",
+                "Manually added knowledge: %s --[%s]--> %s",
+                concept_name1,
+                relation,
+                concept_name2,
             )
 
     def save_brain(self) -> None:

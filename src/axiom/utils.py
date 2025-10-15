@@ -18,10 +18,8 @@ def atomic_write(path: Path, data: bytes) -> None:
         path: The final destination path for the file.
         data: The data (in bytes) to be written.
     """
-    # Create the parent directory if it doesn't exist
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Create a temporary file in the same directory to ensure atomic rename
     fd, tmp_path_str = tempfile.mkstemp(dir=path.parent)
     tmp_path = Path(tmp_path_str)
     try:
@@ -29,7 +27,6 @@ def atomic_write(path: Path, data: bytes) -> None:
             f.write(data)
         os.replace(tmp_path, path)
     except Exception:
-        # Cleanup the temporary file on error
         tmp_path.unlink(missing_ok=True)
         raise
 
