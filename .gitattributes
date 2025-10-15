@@ -1,0 +1,14 @@
+# Set default behavior, in case people don't have core.autocrlf set.
+* text=auto
+
+# Explicitly declare files that are always text and should have LF line endings.
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.sh text eol=lf
+*.txt text eol=lf
+.gitignore text eol=lf
+.pre-commit-config.yaml text eol=lf
+pyproject.toml text eol=lf
+pytest.ini text eol=lf
+uv.lock text eol=lf
