@@ -1178,14 +1178,13 @@ class CognitiveAgent:
                             logger.warning(
                                 "  [Curiosity]: CONTRADICTION DETECTED (Exclusive Relationship)!",
                             )
-                            conflicting_facts_str = (
-                                f"Fact 1: {sub_node.name} {
-                                    edge.type.replace('_', ' ')
-                                } {existing_target_data.get('name')}. "
-                                f"Fact 2: {sub_node.name} {
-                                    relation_type.replace('_', ' ')
-                                } {object_name}."
-                            )
+                            common_relation = relation_type.replace("_", " ")
+                            existing_object = existing_target_data.get("name")
+
+                            fact1 = f"Fact 1: {sub_node.name} {common_relation} {existing_object}."
+                            fact2 = f"Fact 2: {sub_node.name} {common_relation} {object_name}."
+
+                            conflicting_facts_str = f"{fact1} {fact2}"
                             question = self.interpreter.synthesize(
                                 conflicting_facts_str,
                                 mode="clarification_question",
