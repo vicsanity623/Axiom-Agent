@@ -482,11 +482,9 @@ class CognitiveAgent:
             )
             if was_learned:
                 return "Thank you. I have corrected my knowledge."
-            return (
-                f"I understood the correction, but failed to learn the new fact. Reason: {
-                    response_message
-                }"
-            )
+            return f"I understood the correction, but failed to learn the new fact. Reason: {
+                response_message
+            }"
 
         if intent == "command" and "show all facts" in user_input.lower():
             return self._get_all_facts_as_string()
