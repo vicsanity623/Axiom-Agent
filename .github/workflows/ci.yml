@@ -33,7 +33,7 @@ jobs:
       - name: Run core tests (CI-safe)
         run: |
           echo "=== Running deterministic test suite ==="
-          pytest -q --maxfail=1 --disable-warnings -m "not introspection" --cov=axiom --cov-report=term-missing --cov-report=xml
+          pytest -q --maxfail=2 --disable-warnings -m "not introspection" --cov=axiom --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage artifact
         if: success()
