@@ -38,7 +38,8 @@ def agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
     """
     # Use monkeypatch to replace the real, slow interpreter with our fast, fake one.
     monkeypatch.setattr(
-        "axiom.cognitive_agent.UniversalInterpreter", MockUniversalInterpreter,
+        "axiom.cognitive_agent.UniversalInterpreter",
+        MockUniversalInterpreter,
     )
 
     # Create temporary brain files for a clean test environment
