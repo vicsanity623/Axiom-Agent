@@ -92,6 +92,9 @@ addopts = "-v --cov-report=term-missing --cov=axiom"
 testpaths = [
     "tests",
 ]
+markers = [
+    "introspection: tests that require a live LLM model and are skipped in standard CI",
+]
 
 [tool.coverage.run]
 branch = true

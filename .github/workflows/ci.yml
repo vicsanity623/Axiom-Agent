@@ -30,10 +30,8 @@ jobs:
       - name: Run quality checks
         run: ./check.sh
 
-      - name: Run CI-Safe Tests
-        run: |
-          echo "=== Running tests that do NOT require an LLM model ==="
-          pytest -q --disable-warnings -m "not introspection" --cov=axiom --cov-report=term-missing --cov-report=xml
+      - name: Run tests
+        run: pytest -q --cov=axiom --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage artifact
         if: success()
