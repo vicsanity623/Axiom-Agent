@@ -620,7 +620,7 @@ class CognitiveAgent:
             return f"I don't have any information about {entity_name}."
 
         logger.info(
-            "  [CognitiveAgent]: Starting single-hop reasoning for '%s',.",
+            "  [CognitiveAgent]: Starting single-hop reasoning for '%s'.",
             entity_name,
         )
         facts_with_props = self._gather_facts_multihop(subject_node.id, max_hops=4)
@@ -842,7 +842,10 @@ class CognitiveAgent:
                 with open(self.state_file, encoding="utf-8") as f:
                     state_data = json.load(f)
                     self.learning_iterations = state_data.get("learning_iterations", 0)
-                logger.info(...)
+                logger.info(
+                    "   - Successfully loaded agent state from '%s'.",
+                    self.state_file,
+                )
             except (json.JSONDecodeError, TypeError) as e:
                 logger.warning(
                     "Could not load or parse agent state file '%s'. Resetting state. Error: %s",
@@ -1221,8 +1224,8 @@ class CognitiveAgent:
                     logger.info(
                         "    Learned new fact: %s --[%s]--> %s with properties %s",
                         sub_node.name,
-                        obj_node.name,
                         relation_type,
+                        obj_node.name,
                         properties,
                     )
 

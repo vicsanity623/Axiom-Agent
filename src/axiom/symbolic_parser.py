@@ -77,7 +77,7 @@ class SymbolicParser:
         }
 
         self.agent = agent
-        print("   - Symbolic Parser initialized.")
+        logger.info("   - Symbolic Parser initialized.")
 
     def _split_into_clauses(self, text: str) -> list[str]:
         """Splits a complex text block into simpler, independent clauses."""
@@ -104,8 +104,10 @@ class SymbolicParser:
             all_clauses.extend(clauses_from_sentence)
 
         if len(all_clauses) > 1:
-            print(
-                f"  [Chunker]: Split text into {len(all_clauses)} clauses: {all_clauses}",
+            logger.debug(
+                "  [Chunker]: Split text into %s clauses: %s",
+                len(all_clauses),
+                all_clauses,
             )
 
         return all_clauses
@@ -145,7 +147,9 @@ class SymbolicParser:
     ) -> InterpretData | None:
         """Applies a prioritized sequence of rules to deconstruct a single clause."""
         if clause.lower() == "show all facts":
-            print("  [Symbolic Parser]: Successfully parsed 'show all facts' command.")
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed 'show all facts' command.",
+            )
             return InterpretData(
                 intent="command",
                 entities=[],
@@ -186,8 +190,10 @@ class SymbolicParser:
             object_ = self.agent._clean_phrase(groups["object"])
 
             action_object = f"{verb} {object_}"
-            print(
-                f"  [Symbolic Parser]: Successfully parsed Yes/No Question: '{subject}' --[has_property]--> '{action_object}'?",
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed Yes/No Question: '%s' --[has_property]--> '%s'?",
+                subject,
+                action_object,
             )
             relation = RelationData(
                 subject=subject,
@@ -206,7 +212,7 @@ class SymbolicParser:
             )
 
         if words[0] in self.QUESTION_WORDS:
-            print("  [Symbolic Parser]: Successfully parsed a wh-question.")
+            logger.info("  [Symbolic Parser]: Successfully parsed a wh-question.")
             entity_name = " ".join(words[2:]) if len(words) > 2 else " ".join(words[1:])
             entity_name = entity_name.replace("?", "").strip()
             entity_name = re.sub(r"^(is|are|was|were)\s+", "", entity_name)
@@ -311,9 +317,10 @@ class SymbolicParser:
             if self._is_part_of_speech(potential_adjective, "adjective"):
                 subject = " ".join(words[:verb_index])
                 subject = self.agent._clean_phrase(subject)
-
-                print(
-                    f"  [Symbolic Parser]: Successfully parsed S-V-Adjective structure: '{subject}' has property '{potential_adjective}'.",
+                logger.info(
+                    "  [Symbolic Parser]: Successfully parsed S-V-Adjective structure: '%s' has property '%s'.",
+                    subject,
+                    potential_adjective,
                 )
 
                 relation = RelationData(
