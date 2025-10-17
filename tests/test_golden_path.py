@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from axiom.cognitive_agent import CognitiveAgent
 
 # This test requires the LLM model to be present to test the introspection loop.
 # We can add markers to skip it if the model is not found later.
 
 
+@pytest.mark.introspection
 def test_golden_path_learning_and_introspection():
     """
     Run a full, end-to-end "golden path" test of the agent's lifecycle:
@@ -26,7 +29,10 @@ def test_golden_path_learning_and_introspection():
     if state_file.exists():
         state_file.unlink()
 
-    agent = CognitiveAgent(brain_file=brain_file, state_file=state_file)
+    agent = CognitiveAgent(
+        brain_file=brain_file,
+        state_file=state_file,
+    )
 
     # 2. Turn 1: Teach the agent a new, novel fact.
     response1 = agent.chat("a raven is a bird")

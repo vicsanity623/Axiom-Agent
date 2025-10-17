@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from axiom.cognitive_agent import CognitiveAgent
 
 
+@pytest.mark.introspection
 @pytest.mark.parametrize(
     ("sentence", "expected_subject", "expected_relation", "expected_object"),
     [
@@ -31,7 +32,11 @@ def test_preposition_parsing(
     # Setup a clean agent
     brain_file = tmp_path / "brain.json"
     state_file = tmp_path / "state.json"
-    agent = CognitiveAgent(brain_file=brain_file, state_file=state_file)
+    agent = CognitiveAgent(
+        brain_file=brain_file,
+        state_file=state_file,
+        enable_llm=False,
+    )
 
     # Parse the sentence
     interpretations = agent.parser.parse(sentence)

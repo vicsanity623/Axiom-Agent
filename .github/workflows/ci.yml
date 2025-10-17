@@ -30,10 +30,10 @@ jobs:
       - name: Run quality checks
         run: ./check.sh
 
-      - name: Run core tests (CI-safe)
+      - name: Run CI-Safe Tests
         run: |
-          echo "=== Running deterministic test suite ==="
-          pytest -q --maxfail=2 --disable-warnings -m "not introspection" --cov=axiom --cov-report=term-missing --cov-report=xml
+          echo "=== Running tests that do NOT require an LLM model ==="
+          pytest -q --disable-warnings -m "not introspection" --cov=axiom --cov-report=term-missing --cov-report=xml
 
       - name: Upload coverage artifact
         if: success()
@@ -41,25 +41,3 @@ jobs:
         with:
           name: coverage-${{ matrix.python-version }}
           path: coverage.xml
-
-      - name: Run introspection tests (optional)
-        if: always()
-        run: |
-          echo "=== Checking for local model files ==="
-          if [ -d "models" ] && ls models/*.gguf >/dev/null 2>&1; then
-            echo "Models found. Running introspection suite..."
-            pytest -q --disable-warnings -m introspection || true
-          else
-            echo "No models found. Skipping introspection tests."
-          fi
-
-      - name: Upload introspection results
-        if: always() && !cancelled()
-        uses: actions/upload-artifact@v4
-        with:
-          name: introspection-results-${{ matrix.python-version }}
-          path: |
-            .pytest_cache/
-            **/introspection_results.txt
-            tests/__pycache__/
-          if-no-files-found: ignore

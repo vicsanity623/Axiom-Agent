@@ -89,6 +89,7 @@ class UniversalInterpreter:
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,
         cache_file: str | Path = DEFAULT_CACHE_PATH,
+        enable_llm: bool = True,
         load_llm: bool = True,
     ) -> None:
         """Initialize the UniversalInterpreter and load the LLM into memory.
