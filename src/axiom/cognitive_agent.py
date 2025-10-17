@@ -466,7 +466,7 @@ class CognitiveAgent:
 
             was_learned, learn_msg = self._process_statement_for_learning(relation)
             logger.info(
-                "  [Knowledge Acquisition]: Learned = '%s'', msg = '%s'",
+                "  [Knowledge Acquisition]: Learned = '%s', msg = '%s'",
                 was_learned,
                 learn_msg,
             )

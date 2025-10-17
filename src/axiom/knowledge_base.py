@@ -857,13 +857,6 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         weight=0.9,
     )
     agent_instance.manual_add_knowledge(
-        "dolphin",
-        "mammal",
-        "lives_in",
-        "ocean",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
         "bat",
         "mammal",
         "has_ability",
