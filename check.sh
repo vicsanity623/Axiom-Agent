@@ -7,7 +7,6 @@ echo "--- 🚀 Starting Code Quality and Test Suite ---"
 
 # --- Code Formatting Check ---
 echo -e "\n[1/4] Checking code formatting with Ruff..."
-# Ruff automatically finds pyproject.toml and applies its config
 ruff format --check .
 echo "✅ Formatting looks good."
 
@@ -18,21 +17,22 @@ echo "✅ Linter found no issues."
 
 # --- Static Type Checking ---
 echo -e "\n[3/4] Static type checking with MyPy..."
-# MyPy also finds and uses the config in pyproject.toml
 mypy
 echo "✅ Type checking passed."
 
 # --- Unit & Integration Tests ---
 echo -e "\n[4/4] Running unit tests with Pytest and Coverage..."
 
-# This command creates the .coverage data file
+# 1. Run tests and create parallel coverage data files (.coverage.*)
 coverage run --source=src/axiom -m pytest
 
-# This command reads the data file and prints the report.
-# --fail-under=0 tells it not to error out if coverage is low or even zero.
-# This prevents the "No data to report" error from failing the CI.
+# 2. Combine the parallel data files into a single .coverage file
+coverage combine
+
+# 3. Print the report to the console from the combined file.
 coverage report -m --fail-under=0
 
+# 4. Create the coverage.xml file for GitHub Actions artifact upload.
 coverage xml --fail-under=0
 
 echo "✅ All tests passed."
