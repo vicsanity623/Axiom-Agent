@@ -93,3 +93,57 @@ def test_interpret_with_context_routing(monkeypatch):
     resolve_was_called = False  # Reset spy
     interpreter.interpret_with_context("what color is it?", [])
     assert resolve_was_called is False
+
+
+# Helper class to simulate a crashing LLM
+class MockFailingLlama:
+    def __call__(self, *args, **kwargs):
+        # This special method makes the object callable, like the real Llama object.
+        # We want it to crash every time it's called.
+        raise ValueError("Simulated LLM Crash")
+
+
+def test_interpreter_handles_llm_call_failures():
+    """
+    Covers the `try...except` blocks in the UniversalInterpreter.
+    Ensures that if the LLM call itself raises an exception, the interpreter
+    returns a safe, default value instead of crashing the agent.
+    """
+    # 1. Setup: Create an interpreter, but replace its 'llm' attribute
+    #    with our fake, crashing version.
+    interpreter = UniversalInterpreter(load_llm=False)
+    interpreter.llm = (
+        MockFailingLlama()
+    )  # This simulates the LLM being "loaded" but broken.
+
+    # 2. Test the interpret() method's exception handling
+    interpret_result = interpreter.interpret("this will cause a crash")
+    assert interpret_result["intent"] == "unknown"
+    assert "Could not fully interpret" in interpret_result["full_text_rephrased"]
+    print("interpret() correctly handled an LLM crash.")
+
+    # 3. Test the resolve_context() method's exception handling
+    original_input = "what about it?"
+    context_result = interpreter.resolve_context(["User: a raven"], original_input)
+    assert context_result == original_input  # Should fall back to the original input
+    print("resolve_context() correctly handled an LLM crash.")
+
+    # 4. Test the break_down_definition() method's exception handling
+    breakdown_result = interpreter.break_down_definition("bird", "a feathered animal")
+    assert breakdown_result == []  # Should fall back to an empty list
+    print("break_down_definition() correctly handled an LLM crash.")
+
+    # 5. Test the generate_curious_questions() method's exception handling
+    questions_result = interpreter.generate_curious_questions(
+        "bird",
+        "a bird has wings",
+    )
+    assert questions_result == []  # Should fall back to an empty list
+    print("generate_curious_questions() correctly handled an LLM crash.")
+
+    # 6. Test the synthesize() method's exception handling
+    synthesis_result = interpreter.synthesize("a bird is an animal")
+    assert (
+        synthesis_result == "a bird is an animal"
+    )  # Should fall back to the raw input
+    print("synthesize() correctly handled an LLM crash.")

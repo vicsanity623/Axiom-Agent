@@ -92,6 +92,9 @@ addopts = "-v --cov-report=term-missing --cov=axiom"
 testpaths = [
     "tests",
 ]
+filterwarnings = [
+        "ignore::FutureWarning:networkx",
+]
 markers = [
     "introspection: tests that require a live LLM model and are skipped in standard CI",
 ]

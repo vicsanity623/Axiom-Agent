@@ -346,3 +346,49 @@ def test_harvester_gets_fact_from_duckduckgo(
     else:
         assert result is None
         print("DuckDuckGo harvester correctly handled an empty API response.")
+
+
+def test_harvester_handles_complete_failure(harvester, agent, monkeypatch):
+    """
+    Covers the failure paths in the KnowledgeHarvester where all external
+    APIs and web searches fail to produce a result.
+    """
+    topic = "nonexistenttopic"
+    goal = f"INVESTIGATE: {topic}"
+    agent.learning_goals.append(goal)
+
+    # 1. Test _resolve_investigation_goal failure
+    # Mock all external sources to return None
+    monkeypatch.setattr(
+        "axiom.knowledge_harvester.KnowledgeHarvester.get_definition_from_api",
+        lambda self, word: None,
+    )
+    monkeypatch.setattr(
+        "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_wikipedia",
+        lambda self, topic: None,
+    )
+    monkeypatch.setattr(
+        "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_duckduckgo",
+        lambda self, topic: None,
+    )
+
+    # Action & Verification
+    resolved = harvester._resolve_investigation_goal(goal)
+    assert resolved is False, "Goal should not be resolved when all sources fail."
+    # The goal should still be in the list, as it wasn't resolved
+    assert goal in agent.learning_goals
+    print("Harvester correctly handled failure of all knowledge sources.")
+
+    # 2. Test discover_cycle failure
+    # Mock _find_new_topic to return None
+    monkeypatch.setattr(
+        "axiom.knowledge_harvester.KnowledgeHarvester._find_new_topic",
+        lambda self: None,
+    )
+
+    initial_goal_count = len(agent.learning_goals)
+    harvester.discover_cycle()
+
+    # Verification: No new goals should be added
+    assert len(agent.learning_goals) == initial_goal_count
+    print("Harvester discover_cycle correctly handled finding no new topic.")

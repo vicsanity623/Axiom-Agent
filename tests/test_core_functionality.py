@@ -613,3 +613,35 @@ def test_agent_creates_goal_for_unknown_word(agent: CognitiveAgent, monkeypatch)
 
     assert "New word 'flibbertigibbet' discovered" in response
     assert "INVESTIGATE: flibbertigibbet" in agent.learning_goals
+
+
+def test_agent_answers_question_about_entity(agent: CognitiveAgent):
+    """
+    Covers the _answer_question_about method in the agent.
+    Tests that the agent can retrieve and format all known facts for a subject.
+    """
+    # 1. Setup: Teach the agent a few related facts about a single topic.
+    agent.chat("A canary is a bird")
+    agent.chat("A canary has the color yellow")
+    agent.chat("A bird can fly")  # This is a related, but not direct, fact.
+
+    # 2. Action: Ask a question about the entity.
+    # We will call the method directly to isolate the logic.
+    response = agent._answer_question_about("canary", "what is a canary?")
+
+    # 3. Verification: Check that the response contains the direct facts.
+    response_lower = response.lower()
+
+    # It should find and format the two direct facts.
+    assert "canary is a bird" in response_lower
+    assert "canary has color yellow" in response_lower
+
+    # It should NOT include facts that are more than one hop away by default.
+    assert "bird can fly" not in response_lower
+
+    print("Agent correctly answered a question about a known entity.")
+
+    # 4. Test Failure Case: Ask about an unknown entity.
+    response_unknown = agent._answer_question_about("dragon", "what is a dragon?")
+    assert "don't have any information about dragon" in response_unknown.lower()
+    print("Agent correctly handled a question about an unknown entity.")

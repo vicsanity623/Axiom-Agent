@@ -23,9 +23,13 @@ mypy
 echo "✅ Type checking passed."
 
 # --- Unit & Integration Tests ---
-echo -e "\n[4/4] Running unit tests with Pytest..."
-# Pytest reads its configuration from the [tool.pytest.ini_options] section
-pytest
+echo -e "\n[4/4] Running unit tests with Pytest and Coverage..."
+# This command ensures coverage starts before any code is imported
+coverage run --source=src/axiom -m pytest
+
+# Display the coverage report to the console
+coverage report -m
+
 echo "✅ All tests passed."
 
 echo -e "\n--- 🎉 All checks passed successfully! ---"
