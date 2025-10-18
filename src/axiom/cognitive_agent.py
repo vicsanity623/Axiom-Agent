@@ -1436,7 +1436,46 @@ class CognitiveAgent:
             )
         return node
 
-    def manual_add_knowledge(
+    def _add_or_update_concept_quietly(
+        self,
+        name: str,
+        node_type: str = "concept",
+    ) -> ConceptNode | None:
+        """Find a concept node by name, creating it if it doesn't exist.
+
+        This is a core utility for managing concepts. It cleans the given
+        name, checks if a node with that name already exists, and returns
+        it. If not, it creates a new `ConceptNode`, attempting to infer a
+        more specific type (e.g., 'proper_noun') before adding it to the
+        graph.
+
+        Args:
+            name: The name of the concept to find or create.
+            node_type: The default node type to assign if creating a new node.
+
+        Returns:
+            The found or newly created ConceptNode, or None if the name is invalid.
+        """
+        clean_name = self._clean_phrase(name)
+        if not clean_name:
+            return None
+        node = self.graph.get_node_by_name(clean_name)
+        if not node:
+            if len(clean_name.split()) > 1:
+                determined_type = (
+                    "proper_noun" if any(c.isupper() for c in name) else "noun_phrase"
+                )
+            else:
+                determined_type = get_word_info_from_wordnet(clean_name).get(
+                    "type",
+                    node_type,
+                )
+            node = self.graph.add_node(
+                ConceptNode(clean_name, node_type=determined_type),
+            )
+        return node
+
+    def manual_add_knowledge_quietly(
         self,
         concept_name1: str,
         concept_type1: str,
@@ -1444,29 +1483,16 @@ class CognitiveAgent:
         concept_name2: str,
         weight: float = 0.5,
     ) -> None:
-        """Add a structured fact directly to the knowledge graph.
-
-        This is a helper method used primarily for seeding the brain with
-        initial knowledge. It bypasses all interpreters and directly
-        creates the specified nodes and relationship.
-
-        Args:
-            concept_name1: The name of the source concept.
-            concept_type1: The type of the source concept.
-            relation: The relationship type for the edge.
-            concept_name2: The name of the target concept.
-            weight: The confidence weight for the new fact.
+        """Add a structured fact directly to the knowledge graph WITHOUT logging."
+        Used for high-volume initial brain seeding.
         """
-        node1 = self._add_or_update_concept(concept_name1, node_type=concept_type1)
-        node2 = self._add_or_update_concept(concept_name2)
+        node1 = self._add_or_update_concept_quietly(
+            concept_name1,
+            node_type=concept_type1,
+        )
+        node2 = self._add_or_update_concept_quietly(concept_name2)
         if node1 and node2:
             self.graph.add_edge(node1, node2, relation, weight)
-            logger.info(
-                "Manually added knowledge: %s --[%s]--> %s",
-                concept_name1,
-                relation,
-                concept_name2,
-            )
 
     def save_brain(self) -> None:
         """Save the current knowledge graph to its JSON file.

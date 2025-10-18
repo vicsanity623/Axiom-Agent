@@ -476,7 +476,7 @@ def lexicon(agent):
 
 
 def test_add_linguistic_knowledge_creates_nodes(lexicon, agent):
-    lexicon.add_linguistic_knowledge("testword", "noun", "A test definition.")
+    lexicon.add_linguistic_knowledge_quietly("testword", "noun", "A test definition.")
     word_node = agent.graph.get_node_by_name("testword")
     pos_node = agent.graph.get_node_by_name("noun")
     assert word_node is not None
@@ -484,12 +484,12 @@ def test_add_linguistic_knowledge_creates_nodes(lexicon, agent):
     edges = agent.graph.get_edges_from_node(word_node.id)
     assert any(e.type == "is_a" and e.target == pos_node.id for e in edges)
     print(
-        "LexiconManager: add_linguistic_knowledge created word and POS nodes successfully.",
+        "LexiconManager: add_linguistic_knowledge_quietly created word and POS nodes successfully.",
     )
 
 
 def test_add_linguistic_knowledge_adjective_creates_property_edge(lexicon, agent):
-    lexicon.add_linguistic_knowledge("beautiful", "adjective")
+    lexicon.add_linguistic_knowledge_quietly("beautiful", "adjective")
     pos_node = agent.graph.get_node_by_name("adjective")
     property_node = agent.graph.get_node_by_name("property")
     assert pos_node is not None
@@ -508,7 +508,7 @@ def test_is_known_word_returns_correctly(lexicon, agent):
 
 def test_add_linguistic_knowledge_with_empty_word_does_nothing(lexicon, agent):
     # Should not create a node for an empty string
-    lexicon.add_linguistic_knowledge("", "noun")
+    lexicon.add_linguistic_knowledge_quietly("", "noun")
     node = agent.graph.get_node_by_name("")
     assert node is None
     print("LexiconManager: empty word is ignored gracefully.")
@@ -592,8 +592,8 @@ def test_agent_falls_back_to_llm_when_parsing_fails(agent: CognitiveAgent, monke
     )
 
     # "a" will now be known after the bug fix.
-    agent.lexicon.add_linguistic_knowledge("complex", "adjective")
-    agent.lexicon.add_linguistic_knowledge("sentence", "noun")
+    agent.lexicon.add_linguistic_knowledge_quietly("complex", "adjective")
+    agent.lexicon.add_linguistic_knowledge_quietly("sentence", "noun")
 
     response = agent.chat("a complex sentence")
 

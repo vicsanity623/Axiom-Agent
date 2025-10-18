@@ -102,7 +102,7 @@ class KnowledgeHarvester:
         if api_result:
             part_of_speech, definition = api_result
             with self.lock:
-                self.agent.lexicon.add_linguistic_knowledge(
+                self.agent.lexicon.add_linguistic_knowledge_quietly(
                     word=word_to_learn,
                     part_of_speech=part_of_speech,
                     definition=definition,
@@ -148,7 +148,7 @@ class KnowledgeHarvester:
             return False
 
         with self.lock:
-            self.agent.lexicon.add_linguistic_knowledge(
+            self.agent.lexicon.add_linguistic_knowledge_quietly(
                 word=word_to_learn,
                 part_of_speech=part_of_speech,
                 definition=full_definition,

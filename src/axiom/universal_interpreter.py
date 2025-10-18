@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-# universal_interpreter.py
 import json
+
+# universal_interpreter.py
+import os
 import re
+from contextlib import redirect_stderr
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -142,14 +145,15 @@ class UniversalInterpreter:
                     f"Interpreter model not found at {model_path}. Please download it.",
                 )
 
-            self.llm = Llama(
-                model_path=str(model_path),
-                n_gpu_layers=0,
-                n_ctx=2048,
-                n_threads=0,
-                n_batch=1024,
-                verbose=False,
-            )
+            with open(os.devnull, "w") as f, redirect_stderr(f):
+                self.llm = Llama(
+                    model_path=str(model_path),
+                    n_gpu_layers=0,
+                    n_ctx=2048,
+                    n_threads=0,
+                    n_batch=1024,
+                    verbose=False,
+                )
         else:
             print("Initializing Universal Interpreter in SYMBOLIC-ONLY mode.")
 
