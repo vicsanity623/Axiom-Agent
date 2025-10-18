@@ -4,12 +4,22 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict, cast
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Literal,
+    NotRequired,
+    TypeAlias,
+    TypedDict,
+    cast,
+)
 
 from llama_cpp import Llama
 
 if TYPE_CHECKING:
-    from typing import NotRequired
+    from axiom.graph_core import ConceptNode
+
+# === Constants ===
 
 MODELS_FOLDER: Final = Path("models")
 DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
@@ -20,16 +30,19 @@ You are a language rephrasing engine. Your task is to convert the given 'Facts' 
 1.  **ONLY use the information given in the 'Facts' string.**
 2.  **DO NOT add any extra information, commentary, or meta-analysis.**
 3.  **DO NOT apologize or mention your own limitations.**
-4.  **Your output must be ONLY the rephrased sentence and nothing else.**"""[1:]
+4.  **Your output must be ONLY the rephrased sentence and nothing else.**
+"""[1:]
 
 JSON_STRUCTURE_PROMPT: Final = """
 The JSON object must have the following fields:
 - 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
-- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object.
-If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.
-- 'key_topics': A list of the main subjects or topics...
-- 'full_text_rephrased': A neutral, one-sentence rephrasing..."""[1:]
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'predicate', 'relation', or 'properties'.
+- 'key_topics': A list of the main subjects or topics.
+- 'full_text_rephrased': A neutral, one-sentence rephrasing.
+"""[1:]
 
+
+# === Type Aliases and Structures ===
 
 Intent: TypeAlias = Literal[
     "greeting",
@@ -48,23 +61,35 @@ Intent: TypeAlias = Literal[
 ]
 
 
-class PropertyData(TypedDict):
-    effective_date: str
+class PropertyData(TypedDict, total=False):
+    """Optional metadata about a relationship, such as time or location."""
+
+    effective_date: NotRequired[str]
+    location: NotRequired[str]
+    certainty: NotRequired[float]
 
 
-class RelationData(TypedDict):
+class RelationData(TypedDict, total=False):
+    """Defines a structured relationship extracted from a sentence."""
+
     subject: str
-    verb: str
+    verb: NotRequired[str]
     object: str | dict[str, str] | list[str | dict[str, str]]
+    predicate: NotRequired[str]
+    relation: NotRequired[str]
     properties: NotRequired[PropertyData]
 
 
 class Entity(TypedDict):
+    """Represents a key concept or entity extracted from text."""
+
     name: str
     type: Literal["CONCEPT", "PERSON", "ROLE", "PROPERTY"]
 
 
 class InterpretData(TypedDict):
+    """Structured result from the interpretation step."""
+
     intent: Intent
     entities: list[Entity]
     relation: RelationData | None
@@ -84,6 +109,14 @@ class UniversalInterpreter:
     to perform structured interpretation, context resolution, and natural
     language synthesis.
     """
+
+    def _is_pronoun_present(self, text: str) -> bool:
+        """Check if any pronoun exists as a whole word in the text."""
+        # \b ensures we match whole words only, e.g., "it" but not "bite"
+        for pronoun in PRONOUNS:
+            if re.search(rf"\b{pronoun}\b", text, re.IGNORECASE):
+                return True
+        return False
 
     def __init__(
         self,
@@ -368,10 +401,9 @@ class UniversalInterpreter:
         """
         contextual_input = user_input
 
-        if history and any(
-            f" {pronoun} " in f" {user_input.lower()} " for pronoun in PRONOUNS
-        ):
+        if history and self._is_pronoun_present(user_input):
             contextual_input = self.resolve_context(history, user_input)
+
         return self.interpret(contextual_input)
 
     def break_down_definition(self, subject: str, chunky_definition: str) -> list[str]:
@@ -527,7 +559,7 @@ class UniversalInterpreter:
 
     def synthesize(
         self,
-        structured_facts: str,
+        structured_facts: str | list[dict] | list[str] | list[ConceptNode],
         original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
@@ -548,7 +580,13 @@ class UniversalInterpreter:
             A natural language string representing the synthesized response.
         """
         if self.llm is None:
-            return structured_facts
+            return str(structured_facts)
+
+        if isinstance(structured_facts, list):
+            try:
+                structured_facts = json.dumps([str(f) for f in structured_facts])
+            except Exception:
+                structured_facts = str(structured_facts)
 
         cache_key = f"{mode}|{original_question}|{structured_facts}"
 

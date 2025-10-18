@@ -15,14 +15,14 @@ if TYPE_CHECKING:
     from pathlib import Path
     from typing import Self
 
-    from axiom.unversal_extractor import PropertyData
+    from axiom.universal_interpreter import PropertyData, RelationData
 
 
 class ConceptNodeData(TypedDict):
     id: str
     name: str
     type: str
-    properties: PropertyData
+    properties: PropertyData | None
     value: float
     activation: float
 
@@ -52,9 +52,9 @@ class ConceptNode:
         self.id = id_ or str(uuid.uuid4())
         self.name = name.lower()
         self.type = node_type
-        self.properties = properties or {}
         self.value = value
         self.activation = activation
+        self.properties: PropertyData = properties or {}
 
     def to_dict(self) -> ConceptNodeData:
         """Serialize the ConceptNode instance to a dictionary.
@@ -88,7 +88,7 @@ class ConceptNode:
             id_=data.get("id"),
             name=data["name"],
             node_type=data["type"],
-            properties=data.get("properties", {}),
+            properties=data.get("properties"),
             value=data.get("value", 0.5),
             activation=data.get("activation", 0.0),
         )
@@ -471,3 +471,33 @@ class ConceptGraph:
         else:
             print(f"No saved brain found at {filename}. Creating a fresh brain.")
             return cls()
+
+    def get_conflicting_facts(self, relation: RelationData) -> list[ConceptNode]:
+        """
+        Return a list of nodes that conflict with the given subject & relation type.
+        This is used for exclusive relationships, to generate clarification questions.
+        """
+        subject_name = relation.get("subject")
+        relation_type = (
+            relation.get("predicate")
+            or relation.get("verb")
+            or relation.get("relation")
+        )
+        if not subject_name or not relation_type:
+            return []
+
+        subject_node = self.get_node_by_name(subject_name)
+        if not subject_node:
+            return []
+
+        conflicts: list[ConceptNode] = []
+        for _, v, key, data in self.graph.out_edges(
+            subject_node.id,
+            keys=True,
+            data=True,
+        ):
+            if data.get("type") == relation_type:
+                target_node_data = self.graph.nodes.get(v)
+                if target_node_data:
+                    conflicts.append(ConceptNode.from_dict(target_node_data))
+        return conflicts

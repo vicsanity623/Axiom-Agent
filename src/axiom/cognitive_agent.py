@@ -12,7 +12,7 @@ import re
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar, Final, NotRequired, TypedDict
+from typing import ClassVar, Final, NotRequired, TypedDict, cast
 
 from nltk.stem import WordNetLemmatizer
 
@@ -47,6 +47,7 @@ class ClarificationContext(TypedDict):
 
     subject: NotRequired[str]
     conflicting_relation: NotRequired[str]
+    conflicting_nodes: NotRequired[list[str]]
 
 
 RELATION_TYPE_MAP: Final[dict[str, str]] = {
@@ -370,15 +371,12 @@ class CognitiveAgent:
         return text
 
     def _handle_clarification(self, user_input: str) -> str:
-        """Handle the user's response after a contradiction was detected.
+        """
+        Handle the user's response after a contradiction was detected.
 
-        This method is triggered when the agent is in a special state,
-        `is_awaiting_clarification`, which occurs after it has identified
-        conflicting facts and asked the user for help.
-
-        It interprets the user's input to determine the correct fact,
-        then reinforces the correct relationship in the knowledge graph
-        while punishing the incorrect ones by reducing their weights.
+        Interprets the user's input to determine the correct fact,
+        reinforces the correct relationship in the knowledge graph,
+        and punishes incorrect ones by reducing their weights.
 
         Args:
             user_input: The user's message, expected to be the correct
@@ -391,49 +389,106 @@ class CognitiveAgent:
         interpretation = self.interpreter.interpret(user_input)
         entities = interpretation.get("entities", [])
 
-        if entities:
-            correct_answer_name = self._clean_phrase(entities[0]["name"])
-            subject_name: str | None = self.clarification_context.get("subject")
-            relation_type = self.clarification_context.get("conflicting_relation")
-            subject_node: ConceptNode | None = None
-            if subject_name is not None:
-                subject_node = self.graph.get_node_by_name(subject_name)
+        if not entities:
+            logger.warning(
+                "  [Curiosity]: No entities found in user's clarification. No update applied.",
+            )
+            return "I'm sorry, I couldn't understand your clarification."
 
-            if subject_node and relation_type:
-                self._gather_facts_multihop.cache_clear()
-                logger.info(
-                    "  [Cache]: Cleared reasoning cache due to knowledge correction.",
-                )
-                for u, v, key, data in list(
-                    self.graph.graph.out_edges(subject_node.id, keys=True, data=True),
+        correct_answer_name = self._clean_phrase(entities[0]["name"])
+        subject_name: str | None = self.clarification_context.get("subject")
+        relation_type = self.clarification_context.get("conflicting_relation")
+
+        if not subject_name or not relation_type:
+            logger.warning(
+                "  [Curiosity]: Clarification context incomplete (subject=%s, relation=%s).",
+                subject_name,
+                relation_type,
+            )
+            return "I'm sorry, I cannot process this clarification."
+
+        # Ensure subject node exists
+        subject_node = self.graph.get_node_by_name(subject_name)
+        if not subject_node:
+            logger.warning(
+                "  [Curiosity]: Subject node '%s' not found in graph. Creating it.",
+                subject_name,
+            )
+            subject_node = ConceptNode(name=subject_name)
+            self.graph.add_node(subject_node)
+
+        # Ensure correct answer node exists
+        correct_node = self.graph.get_node_by_name(correct_answer_name)
+        if not correct_node:
+            logger.info(
+                "  [Curiosity]: Creating node for correct answer '%s'.",
+                correct_answer_name,
+            )
+            correct_node = ConceptNode(name=correct_answer_name)
+            self.graph.add_node(correct_node)
+
+        self._gather_facts_multihop.cache_clear()
+        logger.info("  [Cache]: Cleared reasoning cache due to knowledge correction.")
+
+        updated_any = False
+        for u, v, key, data in list(
+            self.graph.graph.out_edges(subject_node.id, keys=True, data=True),
+        ):
+            if data.get("type") == relation_type:
+                target_node_data = self.graph.graph.nodes.get(v)
+                if (
+                    target_node_data
+                    and self._clean_phrase(target_node_data.get("name", ""))
+                    == correct_answer_name
                 ):
-                    if data.get("type") == relation_type:
-                        target_node_data = self.graph.graph.nodes.get(v)
-                        if (
-                            target_node_data
-                            and target_node_data.get("name") == correct_answer_name
-                        ):
-                            self.graph.graph[u][v][key]["weight"] = 1.0
-                            logger.info(
-                                "    - REINFORCED: %s --[%s]--> %s",
-                                subject_name,
-                                relation_type,
-                                correct_answer_name,
-                            )
-                        else:
-                            self.graph.graph[u][v][key]["weight"] = 0.1
-                            if target_node_data:
-                                logger.info(
-                                    "    - PUNISHED: %s --[%s]--> %s",
-                                    subject_name,
-                                    relation_type,
-                                    target_node_data.get("name"),
-                                )
-                self.save_brain()
+                    self.graph.graph[u][v][key]["weight"] = 1.0
+                    logger.info(
+                        "    - REINFORCED: %s --[%s]--> %s",
+                        subject_name,
+                        relation_type,
+                        correct_answer_name,
+                    )
+                    updated_any = True
+                else:
+                    self.graph.graph[u][v][key]["weight"] = 0.1
+                    if target_node_data:
+                        logger.info(
+                            "    - PUNISHED: %s --[%s]--> %s",
+                            subject_name,
+                            relation_type,
+                            target_node_data.get("name"),
+                        )
+                    updated_any = True
 
-        self.is_awaiting_clarification = False
-        self.clarification_context = {}
-        return "Thank you for the clarification. I have updated my knowledge."
+        # Add the edge if it did not exist
+        if not any(
+            self._clean_phrase(self.graph.graph.nodes.get(v, {}).get("name", ""))
+            == correct_answer_name
+            and data.get("type") == relation_type
+            for u, v, key, data in self.graph.graph.out_edges(
+                subject_node.id,
+                keys=True,
+                data=True,
+            )
+        ):
+            logger.info(
+                "  [Curiosity]: Adding missing edge for clarification: %s --[%s]--> %s",
+                subject_name,
+                relation_type,
+                correct_answer_name,
+            )
+            self.graph.add_edge(subject_node, correct_node, relation_type, weight=1.0)
+            updated_any = True
+
+        if updated_any:
+            self.save_brain()
+            self.is_awaiting_clarification = False
+            self.clarification_context = {}
+            return "Thank you for the clarification. I have updated my knowledge."
+        logger.warning(
+            "  [Curiosity]: No updates were applied despite clarification.",
+        )
+        return "I could not update my knowledge from your clarification."
 
     def _process_intent(
         self,
@@ -473,16 +528,26 @@ class CognitiveAgent:
 
             if was_learned:
                 return "I understand. I have noted that."
-            return f"I tried to record that fact but something went wrong: {learn_msg}"
 
-        if intent == "statement_of_correction" and relation:
-            logger.info("  [Correction]: Processing user's correction...")
-            was_learned, response_message = self._process_statement_for_learning(
-                relation,
-            )
-            if was_learned:
-                return "Thank you. I have corrected my knowledge."
-            return f"I understood the correction, but failed to learn the new fact. Reason: {response_message}"
+            if learn_msg == "exclusive_conflict":
+                conflicting_nodes = self.graph.get_conflicting_facts(relation)
+                clarification_question = self.interpreter.synthesize(
+                    structured_facts=conflicting_nodes,
+                    mode="clarification",
+                )
+
+                # Save context for _handle_clarification
+                self.is_awaiting_clarification = True
+                self.clarification_context = {
+                    "subject": relation["subject"],
+                    "conflicting_relation": relation["predicate"]
+                    or relation["verb"]
+                    or relation["relation"],
+                    "conflicting_nodes": [node.name for node in conflicting_nodes],
+                }
+                return clarification_question
+
+            return f"I tried to record that fact but something went wrong: {learn_msg}"
 
         if intent == "command" and "show all facts" in user_input.lower():
             return self._get_all_facts_as_string()
@@ -912,7 +977,7 @@ class CognitiveAgent:
             flags=re.IGNORECASE,
         )
         processed_text = re.sub(
-            r"\byour\b",
+            r"(?<!thank you for )\byour\b",
             "the agent's",
             processed_text,
             flags=re.IGNORECASE,
@@ -1014,7 +1079,7 @@ class CognitiveAgent:
             all_facts_items = all_facts_items[:10]
 
         return tuple(
-            (fact_str, tuple(sorted(edge.properties.items())))
+            (fact_str, tuple(sorted(cast("list", edge.properties.items()))))
             for fact_str, edge in all_facts_items
         )
 
@@ -1085,7 +1150,7 @@ class CognitiveAgent:
 
         words = clean_phrase.split()
 
-        if words and words[0] in ["a", "an", "the"]:
+        if len(words) > 1 and words[0] in ["a", "an", "the"]:
             words = words[1:]
 
         return " ".join(words).strip()
@@ -1162,12 +1227,17 @@ class CognitiveAgent:
         sub_node = self._add_or_update_concept(subject_name)
 
         for object_name in objects_to_process:
-            relation_type = self._get_relation_type(
+            relation_type = self.get_relation_type(
                 verb_cleaned,
                 subject_name,
                 object_name,
             )
-            exclusive_relations = ["has_name", "is_capital_of", "is_located_in"]
+            exclusive_relations = [
+                "has_name",
+                "is_capital_of",
+                "has_capital",
+                "is_located_in",
+            ]
             if relation_type in exclusive_relations and sub_node:
                 for edge in self.graph.get_edges_from_node(sub_node.id):
                     if edge.type == relation_type:
@@ -1198,7 +1268,7 @@ class CognitiveAgent:
 
         learned_at_least_one = False
         for object_name in objects_to_process:
-            relation_type = self._get_relation_type(
+            relation_type = self.get_relation_type(
                 verb_cleaned,
                 subject_name,
                 object_name,
@@ -1244,7 +1314,7 @@ class CognitiveAgent:
 
         return (True, "I have processed that information.")
 
-    def _get_relation_type(self, verb: str, subject: str, object_: str) -> str:
+    def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.
 
         This function converts a simple verb (like "is" or "locate in")
