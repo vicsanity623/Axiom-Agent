@@ -14,7 +14,7 @@ import re
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar, Final, NotRequired, TypedDict, cast
+from typing import ClassVar, Final, NotRequired, TypedDict
 
 from nltk.stem import WordNetLemmatizer
 from thefuzz import process
@@ -138,8 +138,8 @@ class CognitiveAgent:
             logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
         self.interpreter = UniversalInterpreter(load_llm=enable_llm)
-        self.lexicon = LexiconManager(self)
-        self.parser = SymbolicParser(self)
+        self.lexicon: LexiconManager = LexiconManager(self)
+        self.parser: SymbolicParser = SymbolicParser(self)
         self.lemmatizer = WordNetLemmatizer()
         self.learning_goals: list[str] = []
 
@@ -1103,24 +1103,7 @@ class CognitiveAgent:
         start_node_id: str,
         max_hops: int,
     ) -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...]:
-        """Gather all facts related to a starting node via graph traversal.
-
-        This method performs a Breadth-First Search (BFS) starting from a
-        given node to find all connected facts up to a specified depth.
-        It traverses both outgoing and incoming relationships.
-
-        The results are cached using `lru_cache` for performance. If more
-        than 10 facts are found, it applies heuristics to filter for
-        relevance and salience before returning.
-
-        Args:
-            start_node_id: The unique ID of the node to start the traversal from.
-            max_hops: The maximum number of relationships (depth) to traverse.
-
-        Returns:
-            A tuple of fact tuples. Each inner tuple contains the formatted
-            fact string and another tuple of its sorted properties.
-        """
+        """Gather all facts related to a starting node via graph traversal."""
         logger.info(
             "  [Cache]: MISS! Executing full multi-hop graph traversal for node ID: %s",
             start_node_id,
@@ -1147,19 +1130,18 @@ class CognitiveAgent:
                     continue
                 target_node_data = self.graph.graph.nodes.get(edge.target)
                 if target_node_data:
-                    fact_str = f"{current_node_data.get('name').capitalize()} {edge.type.replace('_', ' ')} {target_node_data.get('name').capitalize()}"
+                    fact_str = f"{current_node_data.get('name')} {edge.type.replace('_', ' ')} {target_node_data.get('name')}"
                     if fact_str not in found_facts:
                         found_facts[fact_str] = edge
                     if edge.target not in visited:
                         visited.add(edge.target)
                         queue.append((edge.target, current_hop + 1))
-
             for edge in self.graph.get_edges_to_node(current_node_id):
                 if edge.type == "might_relate":
                     continue
                 source_node_data = self.graph.graph.nodes.get(edge.source)
                 if source_node_data:
-                    fact_str = f"{source_node_data.get('name').capitalize()} {edge.type.replace('_', ' ')} {current_node_data.get('name').capitalize()}"
+                    fact_str = f"{source_node_data.get('name')} {edge.type.replace('_', ' ')} {current_node_data.get('name')}"
                     if fact_str not in found_facts:
                         found_facts[fact_str] = edge
                     if edge.source not in visited:
@@ -1169,21 +1151,29 @@ class CognitiveAgent:
         all_facts_items = list(found_facts.items())
 
         if len(all_facts_items) > 10:
-            original_subject = start_node_data.get("name", "").capitalize()
+            original_subject = start_node_data.get("name", "")
             relevance_filtered = [
-                (f, e) for f, e in all_facts_items if f.startswith(original_subject)
+                (f, e)
+                for f, e in all_facts_items
+                if f.lower().startswith(original_subject)
             ]
             if relevance_filtered:
                 all_facts_items = relevance_filtered
-
         if len(all_facts_items) > 10:
             all_facts_items.sort(key=lambda item: item[1].access_count, reverse=True)
             all_facts_items = all_facts_items[:10]
 
-        return tuple(
-            (fact_str, tuple(sorted(cast("list", edge.properties.items()))))
-            for fact_str, edge in all_facts_items
-        )
+        final_results = []
+
+        for fact_str, edge in all_facts_items:
+            stringified_items = [
+                (str(key), str(value)) for key, value in edge.properties.items()
+            ]
+            sorted_items = sorted(stringified_items)
+
+            final_results.append((fact_str, tuple(sorted_items)))
+
+        return tuple(final_results)
 
     def _filter_facts_for_temporal_query(
         self,
@@ -1483,7 +1473,7 @@ class CognitiveAgent:
             return None
         node = self.graph.get_node_by_name(clean_name)
         if not node:
-            if len(clean_name.split()) > 1:
+            if " " in clean_name:
                 determined_type = (
                     "proper_noun" if any(c.isupper() for c in name) else "noun_phrase"
                 )
@@ -1527,7 +1517,7 @@ class CognitiveAgent:
             return None
         node = self.graph.get_node_by_name(clean_name)
         if not node:
-            if len(clean_name.split()) > 1:
+            if " " in clean_name:
                 determined_type = (
                     "proper_noun" if any(c.isupper() for c in name) else "noun_phrase"
                 )
@@ -1550,6 +1540,7 @@ class CognitiveAgent:
         weight: float = 0.5,
     ) -> None:
         """Add a structured fact directly to the knowledge graph WITHOUT logging."
+
         Used for high-volume initial brain seeding.
         """
         node1 = self._add_or_update_concept_quietly(

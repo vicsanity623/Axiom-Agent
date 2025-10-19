@@ -1,8 +1,31 @@
 # in tests/test_interpreter.py
 
 from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
 
 from axiom.universal_interpreter import UniversalInterpreter
+
+
+def test_interpreter_init_raises_error_for_missing_model(monkeypatch, tmp_path):
+    """
+    Covers the FileNotFoundError branch in UniversalInterpreter.__init__.
+    Ensures the agent crashes gracefully if the LLM model file is missing.
+    """
+    # 1. GIVEN: A path to a model file that does not exist.
+    non_existent_path = tmp_path / "this_model_does_not_exist.gguf"
+
+    # We mock the Llama class so the test doesn't actually try to load anything,
+    # it just lets us test the file existence check before it.
+    monkeypatch.setattr("axiom.universal_interpreter.Llama", MagicMock())
+
+    # 2. WHEN: We try to initialize the interpreter with this bad path.
+    # 3. THEN: We assert that a FileNotFoundError is raised.
+    with pytest.raises(FileNotFoundError, match="Interpreter model not found"):
+        _ = UniversalInterpreter(model_path=non_existent_path, load_llm=True)
+
+    print("Correctly raised FileNotFoundError for missing model file.")
 
 
 def test_interpreter_graceful_failure_without_llm():

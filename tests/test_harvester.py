@@ -1,41 +1,14 @@
-# in tests/test_extras.py
-
 import threading
-from pathlib import Path
 
 import pytest
 import requests
 import wikipedia
 
-# --- Imports for the classes we are testing/mocking ---
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.graph_core import ConceptNode
 from axiom.knowledge_harvester import KnowledgeHarvester
 
-
-# --- This is a simplified Mock Interpreter just for this file's needs ---
-class MockUniversalInterpreter:
-    def __init__(self, *args, **kwargs):
-        self.llm = None
-        pass
-
-    def generate_curious_questions(self, topic, fact):
-        return []  # Default safe behavior
-
-
-# --- Fixtures needed by the tests in this file ---
-
-
-@pytest.fixture
-def agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
-    """Creates a fresh, clean CognitiveAgent for the harvester tests."""
-    monkeypatch.setattr(
-        "axiom.cognitive_agent.UniversalInterpreter",
-        MockUniversalInterpreter,
-    )
-    brain_file = tmp_path / "test_brain.json"
-    state_file = tmp_path / "test_state.json"
-    return CognitiveAgent(brain_file=brain_file, state_file=state_file)
+# --- Fixtures needed ONLY by the tests in this file ---
 
 
 @pytest.fixture

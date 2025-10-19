@@ -2,7 +2,7 @@
 
 [project]
 name = "axiom"
-version = "0.4.0"
+version = "0.4.1"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },

@@ -23,17 +23,10 @@ echo "✅ Type checking passed."
 # --- Unit & Integration Tests ---
 echo -e "\n[4/4] Running unit tests with Pytest and Coverage..."
 
-# 1. Run tests and create parallel coverage data files (.coverage.*)
-coverage run --source=src/axiom -m pytest
-
-# 2. Combine the parallel data files into a single .coverage file
-coverage combine
-
-# 3. Print the report to the console from the combined file.
-coverage report -m --fail-under=0
-
-# 4. Create the coverage.xml file for GitHub Actions artifact upload.
-coverage xml --fail-under=0
+pytest --cov=src/axiom \
+       --cov-report=term-missing \
+       --cov-report=xml \
+       --cov-fail-under=0
 
 echo "✅ All tests passed."
 
