@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -27,9 +28,22 @@ class MockUniversalInterpreter:
         print("--- Initialized MockUniversalInterpreter (No LLM Loaded) ---")
         pass
 
-    def synthesize(self, structured_response: str, **kwargs) -> str:
-        # For tests, we don't need a real LLM. Just return the input.
-        return structured_response
+    def synthesize(
+        self,
+        structured_facts: str | list,
+        original_question: str | None = None,
+        mode: str = "statement",
+        **kwargs,
+    ) -> str:
+        """
+        A mock synthesizer. For clarification questions, it returns a simple
+        question. Otherwise, it returns the structured facts as a string.
+        """
+        if mode == "clarification_question":
+            return f"Which is correct regarding {structured_facts}?"
+
+        # For tests, just returning the input as a string is usually sufficient.
+        return str(structured_facts)
 
     def interpret(self, user_input: str) -> InterpretData:
         # This is needed for tests that fall back to the LLM.
@@ -131,7 +145,7 @@ def test_parser_handles_show_all_facts_command(agent: CognitiveAgent):
 
     # 2. Verification: Check for the correct intent.
     interpretation = interpretations[0]
-    assert interpretation.get("intent") == "command"
+    assert interpretation.get("intent") == "command_show_all_facts"
     assert "show all facts" in interpretation.get("key_topics", [])
     print("Parser correctly identified 'show all facts' command.")
 
@@ -645,3 +659,46 @@ def test_agent_answers_question_about_entity(agent: CognitiveAgent):
     response_unknown = agent._answer_question_about("dragon", "what is a dragon?")
     assert "don't have any information about dragon" in response_unknown.lower()
     print("Agent correctly handled a question about an unknown entity.")
+
+
+def test_agent_diverts_to_clarification_handler_when_awaiting(
+    agent: CognitiveAgent,
+    monkeypatch,
+):
+    """
+    Covers the 'if self.is_awaiting_clarification:' branch in the chat method.
+    Ensures that when the agent is in this state, the input is correctly
+    routed to the _handle_clarification method.
+    """
+    # 1. GIVEN: Put the agent into an awaiting clarification state.
+    # We do this by creating a factual conflict. Let's assume 'is_capital_of' is an exclusive relationship.
+    agent.chat("Paris is the capital of France")
+    clarification_question = agent.chat("Lyon is the capital of France")
+
+    # Verify the setup was successful.
+    assert agent.is_awaiting_clarification is True
+    assert "?" in clarification_question, "Agent should have asked a question."
+
+    # 2. MOCK: Replace the real _handle_clarification method with a "spy"
+    # that will record if it gets called.
+    mock_handler = MagicMock(return_value="Thank you for the clarification.")
+    monkeypatch.setattr(agent, "_handle_clarification", mock_handler)
+
+    # We can also spy on a method from the NORMAL chat flow to prove it's SKIPPED.
+    mock_normal_flow_spy = MagicMock()
+    monkeypatch.setattr(agent, "_expand_contractions", mock_normal_flow_spy)
+
+    # 3. WHEN: The user provides an answer to the clarification question.
+    user_answer = "Paris"
+    final_response = agent.chat(user_answer)
+
+    # 4. THEN: Verify the correct path was taken.
+    # Assert that our special handler was called with the user's answer.
+    mock_handler.assert_called_once_with(user_answer)
+
+    # Assert that the normal chat flow was bypassed.
+    mock_normal_flow_spy.assert_not_called()
+
+    # Assert that the response from our mock handler was returned to the user.
+    assert final_response == "Thank you for the clarification."
+    print("Agent correctly diverted input to the clarification handler.")

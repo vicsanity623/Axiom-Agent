@@ -13,8 +13,6 @@ get_word_info_from_wordnet = lru_cache(maxsize=None)(get_word_info_from_wordnet)
 if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
 
-# --- Data is now stored in a single list of tuples ---
-# Format: (subject_name, subject_type, relation, object_name, weight)
 
 ALL_KNOWLEDGE = [
     # --- Self-Identity Knowledge ---
@@ -272,7 +270,6 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
     """Seed the agent's brain with a foundational set of facts using progress bars."""
     print("   - Seeding a vast initial world knowledge base...")
 
-    # --- Step 1: Process the main knowledge list with a single progress bar ---
     for subject, s_type, relation, obj, weight in tqdm(
         ALL_KNOWLEDGE,
         desc="     - Seeding knowledge facts ",
@@ -285,24 +282,19 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
             weight,
         )
 
-    # --- Step 2: Procedurally enrich the graph with WordNet definitions ---
     print("     - Integrating WordNet definitions for seeded concepts...")
 
-    # Get all single words that were just added to the graph
     seeded_words = {
         data["name"]
         for _, data in agent_instance.graph.graph.nodes(data=True)
         if " " not in data["name"]
     }
 
-    # Loop through the words with a new progress bar
     for word in tqdm(list(seeded_words), desc="     - Integrating WordNet     "):
         word_info = get_word_info_from_wordnet(word)
         if word_info["hypernyms_raw"]:
             main_node = agent_instance.graph.get_node_by_name(word)
-            # Add the top hypernym (parent concept) from WordNet
             for hypernym_word in word_info["hypernyms_raw"][:1]:
-                # CHANGE THIS LINE TO THE QUIET VERSION
                 hypernym_node = agent_instance._add_or_update_concept_quietly(
                     hypernym_word,
                 )

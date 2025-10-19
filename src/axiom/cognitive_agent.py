@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import ClassVar, Final, NotRequired, TypedDict, cast
 
 from nltk.stem import WordNetLemmatizer
+from thefuzz import process
 
 from axiom.dictionary_utils import get_word_info_from_wordnet
 from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
@@ -225,7 +226,21 @@ class CognitiveAgent:
             normalized_input,
         )
 
-        if not interpretations:
+        is_bad_parse = False
+        if interpretations:
+            entities_list = interpretations[0].get("entities")
+            if entities_list:
+                primary_entity: Entity | dict = entities_list[0]
+                entity_name = primary_entity.get("name", "")
+
+                if len(entity_name.split()) > 5:
+                    is_bad_parse = True
+                    logger.warning(
+                        "  [Cognitive Flow]: Symbolic parse produced a nonsensical entity ('%s'). Forcing fallback to LLM.",
+                        entity_name,
+                    )
+
+        if not interpretations or is_bad_parse:
             words = normalized_input.lower().split()
             unknown_words = [
                 re.sub(r"[^\w\s]", "", w)
@@ -243,9 +258,11 @@ class CognitiveAgent:
                     )
                 return f"New word '{word_to_learn}' discovered, I must research it before I can understand."
 
-            logger.warning(
-                "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter.",
-            )
+            if not is_bad_parse:
+                logger.warning(
+                    "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter.",
+                )
+
             llm_interpretation = self.interpreter.interpret(normalized_input)
             if llm_interpretation:
                 interpretations = [llm_interpretation]
@@ -409,7 +426,6 @@ class CognitiveAgent:
             )
             return "I'm sorry, I cannot process this clarification."
 
-        # Ensure subject node exists
         subject_node = self.graph.get_node_by_name(subject_name)
         if not subject_node:
             logger.warning(
@@ -419,7 +435,6 @@ class CognitiveAgent:
             subject_node = ConceptNode(name=subject_name)
             self.graph.add_node(subject_node)
 
-        # Ensure correct answer node exists
         correct_node = self.graph.get_node_by_name(correct_answer_name)
         if not correct_node:
             logger.info(
@@ -462,7 +477,6 @@ class CognitiveAgent:
                         )
                     updated_any = True
 
-        # Add the edge if it did not exist
         if not any(
             self._clean_phrase(self.graph.graph.nodes.get(v, {}).get("name", ""))
             == correct_answer_name
@@ -492,6 +506,31 @@ class CognitiveAgent:
         )
         return "I could not update my knowledge from your clarification."
 
+    def _get_corrected_entity(self, entity_name: str) -> str:
+        """Uses fuzzy matching to correct potential typos in an entity name."""
+        all_concepts = list(self.graph.get_all_node_names())
+        if not all_concepts:
+            return entity_name
+
+        match_result = process.extractOne(entity_name, all_concepts)
+        if not match_result:
+            return entity_name
+
+        best_match: str = match_result[0]
+        score: int = match_result[1]
+
+        if score > 85:
+            if entity_name != best_match:
+                logger.info(
+                    "  [Cognitive Reflex]: Corrected entity '%s' to '%s' (confidence: %d%%).",
+                    entity_name,
+                    best_match,
+                    score,
+                )
+            return best_match
+
+        return entity_name
+
     def _process_intent(
         self,
         intent: str | None,
@@ -509,6 +548,33 @@ class CognitiveAgent:
         if intent == "positive_affirmation":
             return "I'm glad you think so!"
 
+        if intent == "meta_question_self":
+            response: str | None = self._answer_question_about("agent", user_input)
+            return (
+                response
+                if response is not None
+                else "I am a cognitive agent designed to learn and assist users."
+            )
+
+        if intent == "meta_question_purpose":
+            response = self._find_specific_fact("agent", "has_purpose")
+            return (
+                response
+                if response is not None
+                else "I am an AI assistant designed to learn and help users."
+            )
+
+        if intent == "meta_question_abilities":
+            response = self._find_specific_fact("agent", "has_ability")
+            return (
+                response
+                if response is not None
+                else "I can learn new facts, answer questions, and reason about information."
+            )
+
+        if intent == "command_show_all_facts":
+            return self._get_all_facts_as_string()
+
         if intent == "statement_of_fact" and relation:
             subject = relation.get("subject")
             predicate = (
@@ -517,42 +583,43 @@ class CognitiveAgent:
                 or relation.get("relation")
             )
             obj = relation.get("object")
-
             if not subject or not predicate or not obj:
                 return "I understood this as a factual statement, but some elements were missing."
-
             was_learned, learn_msg = self._process_statement_for_learning(relation)
             logger.info(
                 "  [Knowledge Acquisition]: Learned = '%s', msg = '%s'",
                 was_learned,
                 learn_msg,
             )
-
             if was_learned:
                 return "I understand. I have noted that."
-
             if learn_msg == "exclusive_conflict":
                 conflicting_nodes = self.graph.get_conflicting_facts(relation)
                 clarification_question = self.interpreter.synthesize(
-                    structured_facts=conflicting_nodes,
-                    mode="clarification",
+                    structured_facts=[node.name for node in conflicting_nodes],
+                    mode="clarification_question",
                 )
 
-                # Save context for _handle_clarification
+                relation_type = (
+                    relation.get("predicate")
+                    or relation.get("verb")
+                    or relation.get("relation")
+                )
+                if relation_type is None:
+                    logger.error(
+                        "Could not determine relation type during conflict resolution.",
+                    )
+                    relation_type = "related to"
+
                 self.is_awaiting_clarification = True
                 self.clarification_context = {
                     "subject": relation["subject"],
-                    "conflicting_relation": relation["predicate"]
-                    or relation["verb"]
-                    or relation["relation"],
+                    "conflicting_relation": relation_type,
                     "conflicting_nodes": [node.name for node in conflicting_nodes],
                 }
                 return clarification_question
 
             return f"I tried to record that fact but something went wrong: {learn_msg}"
-
-        if intent == "command" and "show all facts" in user_input.lower():
-            return self._get_all_facts_as_string()
 
         if intent == "question_yes_no" and relation:
             return self._answer_yes_no_question(relation)
@@ -560,11 +627,11 @@ class CognitiveAgent:
         if intent in ("question_about_entity", "question_about_concept") and relation:
             start_concept = relation.get("subject")
             end_concept = relation.get("object")
-
             if isinstance(start_concept, str) and isinstance(end_concept, str):
+                start_concept = self._get_corrected_entity(start_concept)
+                end_concept = self._get_corrected_entity(end_concept)
                 start_node = self.graph.get_node_by_name(start_concept)
                 end_node = self.graph.get_node_by_name(end_concept)
-
                 if start_node and end_node:
                     logger.debug(
                         "  [Multi-Hop]: Querying for path between '%s' and '%s'.",
@@ -579,9 +646,42 @@ class CognitiveAgent:
 
         if intent in ("question_about_entity", "question_about_concept"):
             entity_name = entities[0]["name"] if entities else user_input
-            return self._answer_question_about(entity_name, user_input)
+            corrected_entity_name = self._get_corrected_entity(entity_name)
+            response = self._answer_question_about(corrected_entity_name, user_input)
+            return (
+                response
+                if response is not None
+                else f"I don't have any specific information about '{corrected_entity_name}' right now."
+            )
 
         return "I'm not sure how to process that. Could you rephrase?"
+
+    def _find_specific_fact(self, subject_name: str, relation_type: str) -> str | None:
+        """Finds all facts of a specific type related to a subject and formats them."""
+        subject_node = self.graph.get_node_by_name(subject_name)
+        if not subject_node:
+            return None
+
+        edges = self.graph.get_edges_from_node(subject_node.id)
+
+        relevant_edges = [edge for edge in edges if edge.type == relation_type]
+
+        if not relevant_edges:
+            return None
+
+        object_names = []
+        for edge in relevant_edges:
+            target_node = self.graph.get_node_by_id(edge.target)
+            if target_node:
+                object_names.append(target_node.name)
+
+        if not object_names:
+            return None
+
+        if len(object_names) == 1:
+            return f"My {relation_type.replace('_', ' ')} is to {object_names[0]}."
+        formatted_list = ", ".join(object_names[:-1]) + f", and {object_names[-1]}"
+        return f"My abilities include: {formatted_list}."
 
     def _get_all_facts_as_string(self) -> str:
         """Retrieve, filter, and format all facts from the knowledge graph.
@@ -1161,25 +1261,7 @@ class CognitiveAgent:
         self,
         relation: RelationData,
     ) -> tuple[bool, str]:
-        """Process a structured fact to learn and integrate it into the graph.
-
-        This is the primary method for adding new knowledge. It takes a
-        structured `RelationData` object, cleans the subject and object,
-        determines the semantic relationship type, and adds the new nodes
-        and edge to the knowledge graph.
-
-        It also contains the core "curiosity" logic: if a new fact
-        contradicts an existing exclusive relationship (e.g., a person
-        can only have one name), it will trigger the clarification state.
-
-        Args:
-            relation: A TypedDict containing the subject, verb, and object
-                of the fact to be learned.
-
-        Returns:
-            A tuple containing a boolean indicating if a new fact was
-            learned, and a string message for the user.
-        """
+        """Process a structured fact to learn and integrate it into the graph."""
         if self.inference_mode:
             return (
                 False,
@@ -1250,23 +1332,7 @@ class CognitiveAgent:
                             logger.warning(
                                 "  [Curiosity]: CONTRADICTION DETECTED (Exclusive Relationship)!",
                             )
-                            common_relation = relation_type.replace("_", " ")
-                            existing_object = existing_target_data.get("name")
-
-                            fact1 = f"Fact 1: {sub_node.name} {common_relation} {existing_object}."
-                            fact2 = f"Fact 2: {sub_node.name} {common_relation} {object_name}."
-
-                            conflicting_facts_str = f"{fact1} {fact2}"
-                            question = self.interpreter.synthesize(
-                                conflicting_facts_str,
-                                mode="clarification_question",
-                            )
-                            self.is_awaiting_clarification = True
-                            self.clarification_context = {
-                                "subject": sub_node.name,
-                                "conflicting_relation": relation_type,
-                            }
-                            return (False, question)
+                            return (False, "exclusive_conflict")
 
         learned_at_least_one = False
         for object_name in objects_to_process:

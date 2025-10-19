@@ -133,6 +133,64 @@ class SymbolicParser:
         """
         logger.debug(f"  [Symbolic Parser]: Attempting to parse sentence: '{text}'")
 
+        clean_text = text.lower().strip().rstrip("?")
+
+        if clean_text in ("who are you", "what are you"):
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed a 'who are you' meta-question.",
+            )
+            return [
+                {
+                    "intent": "meta_question_self",
+                    "entities": [{"name": "agent", "type": "CONCEPT"}],
+                    "relation": None,
+                    "key_topics": [],
+                    "full_text_rephrased": "",
+                },
+            ]
+
+        if clean_text in ("what is your purpose", "what's your purpose"):
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed a 'purpose' meta-question.",
+            )
+            return [
+                {
+                    "intent": "meta_question_purpose",
+                    "entities": [{"name": "agent", "type": "CONCEPT"}],
+                    "relation": None,
+                    "key_topics": [],
+                    "full_text_rephrased": "",
+                },
+            ]
+
+        if clean_text in ("what can you do", "what are your abilities"):
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed an 'abilities' meta-question.",
+            )
+            return [
+                {
+                    "intent": "meta_question_abilities",
+                    "entities": [{"name": "agent", "type": "CONCEPT"}],
+                    "relation": None,
+                    "key_topics": [],
+                    "full_text_rephrased": "",
+                },
+            ]
+
+        if clean_text == "show all facts":
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed 'show all facts' command.",
+            )
+            return [
+                {
+                    "intent": "command_show_all_facts",
+                    "entities": [],
+                    "relation": None,
+                    "key_topics": ["show all facts"],
+                    "full_text_rephrased": "User has issued a command to show all facts.",  # Optional but good practice
+                },
+            ]
+
         clauses = self._split_into_clauses(text)
         all_interpretations: list[InterpretData] = []
 
@@ -140,10 +198,12 @@ class SymbolicParser:
             interpretation = self._parse_single_clause(clause, context_subject)
             if interpretation:
                 all_interpretations.append(interpretation)
+
         if context_subject:
             logger.debug(
                 f"  [Introspection Parse]: Context='{context_subject}', text='{text}'",
             )
+
         if all_interpretations:
             return all_interpretations
 

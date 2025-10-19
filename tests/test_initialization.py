@@ -126,3 +126,44 @@ def test_agent_handles_corrupt_state_file(monkeypatch, tmp_path):
     # Check that the agent correctly reset its state to the default.
     assert agent.learning_iterations == 0
     print("Agent successfully handled a corrupt state file and reset its state.")
+
+
+def test_agent_reseeds_corrupt_brain_file(monkeypatch, tmp_path):
+    """
+    Covers the __init__ "health check" failure path for a corrupt brain file.
+    Ensures that the brain IS re-seeded if the agent's core identity is missing.
+    """
+    # 1. Setup: Create a "corrupt" brain file. It's valid JSON, but
+    # it's missing the crucial 'has_name' relationship.
+    brain_file = tmp_path / "corrupt_brain.json"
+    state_file = tmp_path / "corrupt_state.json"
+
+    # Create a temporary graph that has an 'agent' node but no name.
+    temp_graph = ConceptGraph()
+    temp_graph.add_node(ConceptNode(name="agent"))
+    temp_graph.save_to_file(brain_file)
+
+    # 2. Mock: We don't want to run the actual slow seeding process.
+    # Instead, we create a "spy" (a MagicMock) to watch if the seeding
+    # functions are called.
+    monkeypatch.setattr("axiom.cognitive_agent.UniversalInterpreter", MagicMock())
+    mock_seed_domain = MagicMock()
+    mock_seed_vocab = MagicMock()
+    monkeypatch.setattr(
+        "axiom.cognitive_agent.seed_domain_knowledge",
+        mock_seed_domain,
+    )
+    monkeypatch.setattr(
+        "axiom.cognitive_agent.seed_core_vocabulary",
+        mock_seed_vocab,
+    )
+
+    # 3. Action: Initialize the agent from our pre-made "corrupt" brain file.
+    _ = CognitiveAgent(brain_file=brain_file, state_file=state_file)
+
+    # 4. Verification:
+    # Prove that the health check failed by asserting that the seeding functions
+    # were called exactly once.
+    mock_seed_domain.assert_called_once()
+    mock_seed_vocab.assert_called_once()
+    print("Agent correctly detected a corrupt brain and triggered a re-seed.")

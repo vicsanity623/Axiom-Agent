@@ -22,7 +22,6 @@ from llama_cpp import Llama
 if TYPE_CHECKING:
     from axiom.graph_core import ConceptNode
 
-# === Constants ===
 
 MODELS_FOLDER: Final = Path("models")
 DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
@@ -45,8 +44,6 @@ The JSON object must have the following fields:
 """[1:]
 
 
-# === Type Aliases and Structures ===
-
 Intent: TypeAlias = Literal[
     "greeting",
     "farewell",
@@ -61,6 +58,10 @@ Intent: TypeAlias = Literal[
     "unknown",
     "unknown_verb_failure",
     "question_yes_no",
+    "meta_question_self",
+    "meta_question_purpose",
+    "meta_question_abilities",
+    "command_show_all_facts",
 ]
 
 
@@ -115,7 +116,6 @@ class UniversalInterpreter:
 
     def _is_pronoun_present(self, text: str) -> bool:
         """Check if any pronoun exists as a whole word in the text."""
-        # \b ensures we match whole words only, e.g., "it" but not "bite"
         for pronoun in PRONOUNS:
             if re.search(rf"\b{pronoun}\b", text, re.IGNORECASE):
                 return True
@@ -618,7 +618,7 @@ class UniversalInterpreter:
             if original_question:
                 task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
 
-        full_prompt = f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
+        full_prompt = f"[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
             output = cast(
                 "dict[str, list[dict[str, str]]]",

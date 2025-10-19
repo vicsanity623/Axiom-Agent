@@ -258,6 +258,17 @@ class ConceptGraph:
             return ConceptNode.from_dict(node_data)
         return None
 
+    def get_all_node_names(self) -> list[str]:
+        """Retrieve a list of all concept names in the graph.
+
+        This is useful for fuzzy matching, as it provides a complete
+        "vocabulary" of known entities to match against.
+
+        Returns:
+            A list of strings, where each string is the name of a node.
+        """
+        return list(self.name_to_id.keys())
+
     def add_edge(
         self,
         source_node: ConceptNode,
