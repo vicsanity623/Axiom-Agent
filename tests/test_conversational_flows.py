@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 
 def test_agent_diverts_to_clarification_handler_when_awaiting(
-    agent: CognitiveAgent,  # <-- FIX: Use string forward-reference
+    agent: CognitiveAgent,
     monkeypatch,
 ):
     """

@@ -6,7 +6,6 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-# A simple file to store the current version number
 VERSION_FILE = Path("brain/model_version.txt")
 RENDERED_FOLDER = Path("rendered")
 
@@ -19,14 +18,12 @@ def get_next_version() -> str:
     if VERSION_FILE.exists():
         try:
             version_str = VERSION_FILE.read_text(encoding="utf-8")
-            # Use regex to safely find version numbers
             match = re.search(r"(\d+)\.(\d+)", version_str)
             if match:
                 major, minor = map(int, match.groups())
         except Exception:
             print("   - Warning: Could not parse version file. Starting from 0.0.")
 
-    # Increment the version (e.g., 1.0 -> 1.1, or 1.9 -> 2.0)
     minor += 1
     if minor >= 10:
         major += 1
@@ -34,7 +31,6 @@ def get_next_version() -> str:
 
     next_version = f"{major}.{minor}"
 
-    # Save the new version back to the file for the next run
     VERSION_FILE.write_text(next_version, encoding="utf-8")
 
     return next_version
@@ -73,13 +69,11 @@ def render_axiom_model() -> None:
         )
         return
 
-    # --- NEW VERSIONING LOGIC ---
     version_str = get_next_version()
     print(f"--- Starting Axiom Mind Renderer [Version: {version_str}] ---")
 
     RENDERED_FOLDER.mkdir(exist_ok=True)
     output_filename = RENDERED_FOLDER / f"Axiom_{version_str}.axm"
-    # --- END NEW LOGIC ---
 
     print("✅ Found required source files.")
 
@@ -107,9 +101,7 @@ def render_axiom_model() -> None:
 
         print(f"\n✅ Successfully rendered model: {output_filename}")
 
-        # --- NEW CLEANUP LOGIC ---
         clear_old_models(version_str)
-        # --- END NEW LOGIC ---
 
     except Exception as e:
         print(f"❌ CRITICAL ERROR: Failed to create the .axm package. Error: {e}")
