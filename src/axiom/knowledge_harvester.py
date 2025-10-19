@@ -102,7 +102,7 @@ class KnowledgeHarvester:
         if api_result:
             part_of_speech, definition = api_result
             with self.lock:
-                self.agent.lexicon.add_linguistic_knowledge(
+                self.agent.lexicon.add_linguistic_knowledge_quietly(
                     word=word_to_learn,
                     part_of_speech=part_of_speech,
                     definition=definition,
@@ -148,7 +148,7 @@ class KnowledgeHarvester:
             return False
 
         with self.lock:
-            self.agent.lexicon.add_linguistic_knowledge(
+            self.agent.lexicon.add_linguistic_knowledge_quietly(
                 word=word_to_learn,
                 part_of_speech=part_of_speech,
                 definition=full_definition,
@@ -278,7 +278,7 @@ class KnowledgeHarvester:
         for edge in all_edges:
             if edge.type == "is_a" and edge.weight > 0.8:
                 target_node = self.agent.graph.get_node_by_id(edge.target)
-                if target_node and len(target_node.name.split()) > 5:
+                if target_node and len(target_node.name.split()) >= 5:
                     source_node = self.agent.graph.get_node_by_id(edge.source)
                     if source_node:
                         potential_facts.append((source_node, target_node, edge))

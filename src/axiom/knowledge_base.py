@@ -1,1309 +1,303 @@
 from __future__ import annotations
 
-# knowledge_base.py
+from functools import lru_cache
 from typing import TYPE_CHECKING
 
+# knowledge_base.py
+from tqdm import tqdm
+
 from axiom.dictionary_utils import get_word_info_from_wordnet
+
+get_word_info_from_wordnet = lru_cache(maxsize=None)(get_word_info_from_wordnet)
 
 if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
 
 
+ALL_KNOWLEDGE = [
+    # --- Self-Identity Knowledge ---
+    ("agent", "concept", "has_name", "Axiom", 1.0),
+    ("agent", "concept", "is_a", "cognitive agent", 1.0),
+    ("cognitive agent", "concept", "is_a", "AI assistant", 0.9),
+    ("agent", "concept", "has_ability", "learn", 0.9),
+    ("agent", "concept", "has_ability", "reason", 0.8),
+    ("agent", "concept", "has_ability", "understand", 0.8),
+    ("agent", "concept", "has_purpose", "assist users", 0.9),
+    ("agent", "concept", "communicates_via", "text", 1.0),
+    ("agent", "concept", "exists_on", "a server", 1.0),
+    ("agent", "concept", "has_ability", "problem solving", 0.8),
+    ("agent", "concept", "was_created_by", "humans", 0.9),
+    ("agent", "concept", "operates_using", "algorithms", 0.8),
+    ("agent", "concept", "has_ability", "improve over time", 0.7),
+    ("agent", "concept", "requires", "computation", 0.9),
+    ("agent", "concept", "has_capability", "natural language processing", 0.8),
+    ("agent", "concept", "has_ability", "follow instructions", 0.9),
+    ("agent", "concept", "has_ability", "access knowledge", 0.9),
+    ("agent", "concept", "has_limitation", "no physical body", 0.8),
+    ("agent", "concept", "functions_through", "code", 0.9),
+    ("agent", "concept", "has_property", "long-term memory", 0.8),
+    ("agent", "concept", "has_ability", "process information", 0.9),
+    ("agent", "concept", "has_ability", "respond to queries", 0.9),
+    ("agent", "concept", "operates_on", "electricity", 0.8),
+    ("agent", "concept", "has_goal", "to be helpful", 0.8),
+    ("agent", "concept", "has_ability", "explain concepts", 0.7),
+    ("agent", "concept", "has_ability", "understand context", 0.7),
+    ("agent", "concept", "has_ability", "summarize information", 0.7),
+    ("agent", "concept", "has_limitation", "no emotions", 0.8),
+    ("agent", "concept", "has_ability", "translate languages", 0.7),
+    ("agent", "concept", "uses", "pattern recognition", 0.8),
+    ("agent", "concept", "has_ability", "generate creative content", 0.7),
+    ("agent", "concept", "has_property", "consistency in responses", 0.7),
+    ("agent", "concept", "has_ability", "analyze data", 0.8),
+    ("agent", "concept", "has_ability", "operate 24/7", 0.9),
+    ("agent", "concept", "has_access_to", "vast information", 0.8),
+    ("agent", "concept", "has_ability", "adapt to new topics", 0.7),
+    ("agent", "concept", "has_ability", "follow ethical guidelines", 0.8),
+    ("agent", "concept", "has_ability", "collaborate with humans", 0.7),
+    ("agent", "concept", "has_property", "potential for continuous improvement", 0.7),
+    # --- World Knowledge (Physics, Astronomy, etc.) ---
+    ("sky", "concept", "has_property", "blue", 0.9),
+    ("sun", "concept", "is_a", "star", 1.0),
+    ("sun", "concept", "emits", "light", 1.0),
+    ("water", "concept", "is_a", "liquid", 0.8),
+    ("fire", "concept", "has_property", "hot", 1.0),
+    ("moon", "concept", "reflects", "light", 0.9),
+    ("gravity", "concept", "affects", "all objects", 0.9),
+    ("rain", "concept", "is_composed_of", "water droplets", 0.9),
+    ("wind", "concept", "is_a", "moving air", 0.9),
+    ("ice", "concept", "is_a", "frozen water", 0.9),
+    ("cloud", "concept", "is_made_of", "water vapor", 0.9),
+    ("earth", "planet", "has_property", "gravity", 0.9),
+    ("sound", "concept", "travels_through", "air", 0.8),
+    ("light", "concept", "is_faster_than", "sound", 0.9),
+    ("metal", "concept", "conducts", "electricity", 0.9),
+    ("magnet", "concept", "attracts", "iron", 0.9),
+    ("volcano", "concept", "erupts", "lava", 0.9),
+    ("earthquake", "concept", "causes", "ground shaking", 0.9),
+    ("tornado", "concept", "is_a", "violent storm", 0.9),
+    ("atom", "concept", "is_a", "smallest unit of matter", 0.9),
+    ("energy", "concept", "has_property", "cannot be created or destroyed", 0.8),
+    ("friction", "concept", "causes", "heat", 0.8),
+    ("vacuum", "concept", "has_property", "no air", 0.9),
+    ("lightning", "concept", "is_a", "electrical discharge", 0.9),
+    ("echo", "concept", "is_a", "reflected sound", 0.9),
+    ("lens", "concept", "refracts", "light", 0.8),
+    ("prism", "concept", "splits", "white light", 0.8),
+    ("evaporation", "concept", "changes", "liquid to gas", 0.9),
+    ("condensation", "concept", "changes", "gas to liquid", 0.9),
+    ("orbit", "concept", "is_a", "path around a planet", 0.9),
+    ("comet", "concept", "has_property", "a tail", 0.9),
+    ("galaxy", "concept", "contains", "stars", 0.9),
+    ("black hole", "concept", "has_property", "strong gravity", 0.8),
+    ("supernova", "concept", "is_a", "exploding star", 0.8),
+    ("nebula", "concept", "is_a", "cloud of gas and dust", 0.8),
+    # --- Geography Knowledge ---
+    ("earth", "planet", "has_satellite", "the moon", 1.0),
+    ("paris", "city", "is_located_in", "france", 1.0),
+    ("france", "country", "is_located_in", "europe", 1.0),
+    ("mount everest", "mountain", "is_a", "tallest mountain", 1.0),
+    ("london", "city", "is_capital_of", "england", 1.0),
+    ("nile", "river", "is_located_in", "africa", 1.0),
+    ("sahara", "desert", "is_located_in", "africa", 1.0),
+    ("pacific", "ocean", "is_a", "largest ocean", 1.0),
+    ("asia", "continent", "has_property", "highest population", 0.9),
+    ("amazon", "river", "is_located_in", "south america", 1.0),
+    ("new york", "city", "is_located_in", "united states", 1.0),
+    ("tokyo", "city", "is_capital_of", "japan", 1.0),
+    ("antarctica", "continent", "is_a", "coldest continent", 1.0),
+    ("australia", "country", "is_a", "continent", 1.0),
+    ("rome", "city", "is_capital_of", "italy", 1.0),
+    ("ganges", "river", "is_located_in", "india", 1.0),
+    ("himalayas", "mountain range", "is_located_in", "asia", 1.0),
+    ("dead sea", "lake", "is_a", "lowest point on land", 1.0),
+    ("greenland", "island", "is_a", "largest island", 1.0),
+    ("madagascar", "island", "is_located_off", "africa", 1.0),
+    ("siberia", "region", "is_located_in", "russia", 1.0),
+    ("amazon rainforest", "forest", "is_located_in", "south america", 1.0),
+    ("grand canyon", "canyon", "is_located_in", "arizona", 1.0),
+    ("great barrier reef", "reef", "is_located_off", "australia", 1.0),
+    ("yellowstone", "national park", "has_property", "geysers", 1.0),
+    ("niagara falls", "waterfall", "is_located_on_border_of", "usa and canada", 1.0),
+    ("mississippi", "river", "is_a", "longest river in usa", 1.0),
+    ("alps", "mountain range", "is_located_in", "europe", 1.0),
+    ("red sea", "sea", "is_located_between", "africa and asia", 1.0),
+    ("caspian sea", "body of water", "is_a", "largest lake", 1.0),
+    ("andes", "mountain range", "is_located_in", "south america", 1.0),
+    ("kilimanjaro", "mountain", "is_located_in", "tanzania", 1.0),
+    ("gobi", "desert", "is_located_in", "asia", 1.0),
+    # --- Biology Knowledge ---
+    ("human", "species", "is_a", "mammal", 1.0),
+    ("dog", "species", "is_a", "mammal", 1.0),
+    ("cat", "species", "is_a", "mammal", 1.0),
+    ("mammal", "class", "is_a", "animal", 1.0),
+    ("mammal", "class", "gives_birth_to", "live young", 0.95),
+    ("animal", "kingdom", "is_a", "living thing", 1.0),
+    ("tree", "plant", "is_a", "living thing", 1.0),
+    ("fish", "animal", "lives_in", "water", 0.9),
+    ("bird", "animal", "has_property", "feathers", 0.9),
+    ("insect", "animal", "has_property", "six legs", 0.9),
+    ("reptile", "animal", "is_a", "cold-blooded", 0.9),
+    ("plant", "living thing", "produces", "oxygen", 0.9),
+    ("mammal", "animal", "has_ability", "feed milk to young", 0.9),
+    ("human", "mammal", "has_property", "opposable thumbs", 0.9),
+    ("bat", "mammal", "has_ability", "fly", 0.9),
+    ("amphibian", "animal", "lives_in", "land and water", 0.9),
+    ("fungus", "living thing", "is_not_a", "plant or animal", 0.8),
+    ("whale", "mammal", "is_a", "largest animal", 0.9),
+    ("bee", "insect", "produces", "honey", 0.9),
+    ("spider", "arachnid", "has_property", "eight legs", 0.9),
+    ("butterfly", "insect", "undergoes", "metamorphosis", 0.9),
+    ("cactus", "plant", "stores", "water", 0.9),
+    ("venus flytrap", "plant", "eats", "insects", 0.9),
+    ("coral", "animal", "builds", "reefs", 0.9),
+    ("octopus", "animal", "has_property", "eight arms", 0.9),
+    ("kangaroo", "marsupial", "has_property", "pouch", 0.9),
+    ("penguin", "bird", "cannot", "fly", 0.9),
+    ("elephant", "mammal", "has_property", "trunk", 0.9),
+    ("giraffe", "mammal", "has_property", "long neck", 0.9),
+    ("shark", "fish", "has_property", "cartilage skeleton", 0.9),
+    ("snake", "reptile", "has_property", "no legs", 0.9),
+    ("turtle", "reptile", "has_property", "shell", 0.9),
+    ("frog", "amphibian", "undergoes", "metamorphosis", 0.9),
+    ("algae", "organism", "lives_in", "water", 0.9),
+    ("mushroom", "fungus", "reproduces_with", "spores", 0.9),
+    ("bacteria", "microorganism", "is_a", "single-celled organism", 0.9),
+    ("virus", "microorganism", "requires", "host to reproduce", 0.9),
+    # --- Food Knowledge ---
+    ("apple", "fruit", "is_a", "food", 0.9),
+    ("banana", "fruit", "is_a", "food", 0.9),
+    ("carrot", "vegetable", "is_a", "food", 0.9),
+    ("bread", "food", "is_made_from", "flour", 0.9),
+    ("cheese", "food", "is_made_from", "milk", 0.9),
+    ("rice", "food", "is_a", "grain", 0.9),
+    ("chicken", "food", "is_a", "meat", 0.9),
+    ("chocolate", "food", "is_made_from", "cocoa", 0.9),
+    ("pasta", "food", "is_made_from", "wheat", 0.9),
+    ("soup", "food", "is_a", "liquid", 0.8),
+    ("salad", "food", "contains", "vegetables", 0.9),
+    ("ice cream", "food", "has_property", "cold", 0.9),
+    ("pizza", "food", "has_component", "crust", 0.9),
+    ("orange", "fruit", "is_a", "citrus fruit", 0.9),
+    ("potato", "vegetable", "is_a", "root vegetable", 0.9),
+    ("tomato", "fruit", "is_used_as", "a vegetable", 0.9),
+    ("onion", "vegetable", "has_property", "layers", 0.9),
+    ("garlic", "vegetable", "is_used_for", "flavoring", 0.9),
+    ("beef", "meat", "comes_from", "cows", 0.9),
+    ("pork", "meat", "comes_from", "pigs", 0.9),
+    ("fish", "food", "is_a", "source of protein", 0.9),
+    ("egg", "food", "comes_from", "chickens", 0.9),
+    ("milk", "beverage", "comes_from", "cows", 0.9),
+    ("yogurt", "food", "is_made_from", "milk", 0.9),
+    ("honey", "food", "is_made_by", "bees", 0.9),
+    ("coffee", "beverage", "is_made_from", "beans", 0.9),
+    ("tea", "beverage", "is_made_from", "leaves", 0.9),
+    ("sugar", "ingredient", "has_property", "sweet", 0.9),
+    ("salt", "ingredient", "has_property", "salty", 0.9),
+    ("flour", "ingredient", "is_made_from", "grains", 0.9),
+    ("butter", "dairy", "is_made_from", "milk", 0.9),
+    ("oil", "ingredient", "is_used_for", "cooking", 0.9),
+    ("vinegar", "ingredient", "has_property", "sour", 0.9),
+    # --- Abstract Concepts (Colors) ---
+    ("color", "attribute", "is_a", "concept", 1.0),
+    ("red", "descriptor", "is_a", "color", 0.9),
+    ("green", "descriptor", "is_a", "color", 0.9),
+    ("yellow", "descriptor", "is_a", "color", 0.9),
+    ("blue", "descriptor", "is_a", "color", 0.9),
+    ("orange", "descriptor", "is_a", "color", 0.9),
+    ("purple", "descriptor", "is_a", "color", 0.9),
+    ("black", "descriptor", "is_a", "color", 0.9),
+    ("white", "descriptor", "is_a", "color", 0.9),
+    ("brown", "descriptor", "is_a", "color", 0.9),
+    ("pink", "descriptor", "is_a", "color", 0.9),
+    ("gray", "descriptor", "is_a", "color", 0.9),
+    ("cyan", "descriptor", "is_a", "color", 0.9),
+    ("magenta", "descriptor", "is_a", "color", 0.9),
+    ("gold", "descriptor", "is_a", "color", 0.9),
+    ("silver", "descriptor", "is_a", "color", 0.9),
+    ("beige", "descriptor", "is_a", "color", 0.9),
+    ("turquoise", "descriptor", "is_a", "color", 0.9),
+    ("lavender", "descriptor", "is_a", "color", 0.9),
+    ("maroon", "descriptor", "is_a", "color", 0.9),
+    ("navy", "descriptor", "is_a", "color", 0.9),
+    ("olive", "descriptor", "is_a", "color", 0.9),
+    ("teal", "descriptor", "is_a", "color", 0.9),
+    ("coral", "descriptor", "is_a", "color", 0.9),
+    ("indigo", "descriptor", "is_a", "color", 0.9),
+    ("violet", "descriptor", "is_a", "color", 0.9),
+    ("crimson", "descriptor", "is_a", "color", 0.9),
+    ("khaki", "descriptor", "is_a", "color", 0.9),
+    ("plum", "descriptor", "is_a", "color", 0.9),
+    ("salmon", "descriptor", "is_a", "color", 0.9),
+    ("tan", "descriptor", "is_a", "color", 0.9),
+    ("mint", "descriptor", "is_a", "color", 0.9),
+    # --- Abstract Concepts (Sentiments) ---
+    ("sentiment", "attribute", "is_a", "concept", 1.0),
+    ("happy", "descriptor", "is_a", "sentiment", 0.8),
+    ("sad", "descriptor", "is_a", "sentiment", 0.8),
+    ("angry", "descriptor", "is_a", "sentiment", 0.8),
+    ("excited", "descriptor", "is_a", "sentiment", 0.8),
+    ("fearful", "descriptor", "is_a", "sentiment", 0.8),
+    ("surprised", "descriptor", "is_a", "sentiment", 0.8),
+    ("disgusted", "descriptor", "is_a", "sentiment", 0.8),
+    ("calm", "descriptor", "is_a", "sentiment", 0.8),
+    ("confused", "descriptor", "is_a", "sentiment", 0.8),
+    ("proud", "descriptor", "is_a", "sentiment", 0.8),
+    ("jealous", "descriptor", "is_a", "sentiment", 0.8),
+    ("anxious", "descriptor", "is_a", "sentiment", 0.8),
+    ("content", "descriptor", "is_a", "sentiment", 0.8),
+    ("curious", "descriptor", "is_a", "sentiment", 0.8),
+    ("depressed", "descriptor", "is_a", "sentiment", 0.8),
+    ("embarrassed", "descriptor", "is_a", "sentiment", 0.8),
+    ("enthusiastic", "descriptor", "is_a", "sentiment", 0.8),
+    ("frustrated", "descriptor", "is_a", "sentiment", 0.8),
+    ("grateful", "descriptor", "is_a", "sentiment", 0.8),
+    ("guilty", "descriptor", "is_a", "sentiment", 0.8),
+    ("hopeful", "descriptor", "is_a", "sentiment", 0.8),
+    ("impatient", "descriptor", "is_a", "sentiment", 0.8),
+    ("inspired", "descriptor", "is_a", "sentiment", 0.8),
+    ("lonely", "descriptor", "is_a", "sentiment", 0.8),
+    ("nostalgic", "descriptor", "is_a", "sentiment", 0.8),
+    ("optimistic", "descriptor", "is_a", "sentiment", 0.8),
+    ("pessimistic", "descriptor", "is_a", "sentiment", 0.8),
+    ("relieved", "descriptor", "is_a", "sentiment", 0.8),
+    ("romantic", "descriptor", "is_a", "sentiment", 0.8),
+    ("satisfied", "descriptor", "is_a", "sentiment", 0.8),
+    ("sympathetic", "descriptor", "is_a", "sentiment", 0.8),
+]
+
+
 def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
-    """Seed the agent's brain with a large, foundational set of facts.
-
-    This function populates a new knowledge graph with a wide range of
-    pre-defined knowledge, giving the agent a significant head start.
-    It is called only when the agent detects it is starting with a fresh,
-    empty brain.
-
-    The seeded knowledge includes:
-    - The agent's own identity and purpose.
-    - Foundational world knowledge (physics, geography, biology).
-    - Abstract concepts (colors, sentiments).
-    - Integration with WordNet to enrich seeded concepts with hypernyms.
-
-    Args:
-        agent_instance: The instance of the CognitiveAgent to be seeded.
-    """
+    """Seed the agent's brain with a foundational set of facts using progress bars."""
     print("   - Seeding a vast initial world knowledge base...")
 
-    print("     - Seeding self-identity...")
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_name",
-        "Axiom",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "is_a",
-        "cognitive agent",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "cognitive agent",
-        "concept",
-        "is_a",
-        "AI assistant",
-        weight=0.9,
-    )
-
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "learn",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "reason",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "understand",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_purpose",
-        "assist users",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "communicates_via",
-        "text",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "exists_on",
-        "a server",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "problem solving",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "was_created_by",
-        "humans",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "operates_using",
-        "algorithms",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "improve over time",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "requires",
-        "computation",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_capability",
-        "natural language processing",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "follow instructions",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "access knowledge",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_limitation",
-        "no physical body",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "functions_through",
-        "code",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_property",
-        "long-term memory",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "process information",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "respond to queries",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "operates_on",
-        "electricity",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_goal",
-        "to be helpful",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "explain concepts",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "understand context",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "summarize information",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_limitation",
-        "no emotions",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "translate languages",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "uses",
-        "pattern recognition",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "generate creative content",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_property",
-        "consistency in responses",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "analyze data",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "operate 24/7",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_access_to",
-        "vast information",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "adapt to new topics",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "follow ethical guidelines",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_ability",
-        "collaborate with humans",
-        weight=0.7,
-    )
-    agent_instance.manual_add_knowledge(
-        "agent",
-        "concept",
-        "has_property",
-        "potential for continuous improvement",
-        weight=0.7,
-    )
-
-    print("     - Seeding world knowledge...")
-    agent_instance.manual_add_knowledge(
-        "sky",
-        "concept",
-        "has_property",
-        "blue",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge("sun", "concept", "is_a", "star", weight=1.0)
-    agent_instance.manual_add_knowledge("sun", "concept", "emits", "light", weight=1.0)
-    agent_instance.manual_add_knowledge(
-        "water",
-        "concept",
-        "is_a",
-        "liquid",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "fire",
-        "concept",
-        "has_property",
-        "hot",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "moon",
-        "concept",
-        "reflects",
-        "light",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "gravity",
-        "concept",
-        "affects",
-        "all objects",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "rain",
-        "concept",
-        "is_composed_of",
-        "water droplets",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "wind",
-        "concept",
-        "is_a",
-        "moving air",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "ice",
-        "concept",
-        "is_a",
-        "frozen water",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "cloud",
-        "concept",
-        "is_made_of",
-        "water vapor",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "earth",
-        "planet",
-        "has_property",
-        "gravity",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "sound",
-        "concept",
-        "travels_through",
-        "air",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "light",
-        "concept",
-        "is_faster_than",
-        "sound",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "metal",
-        "concept",
-        "conducts",
-        "electricity",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "magnet",
-        "concept",
-        "attracts",
-        "iron",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "volcano",
-        "concept",
-        "erupts",
-        "lava",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "earthquake",
-        "concept",
-        "causes",
-        "ground shaking",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "tornado",
-        "concept",
-        "is_a",
-        "violent storm",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "atom",
-        "concept",
-        "is_a",
-        "smallest unit of matter",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "energy",
-        "concept",
-        "has_property",
-        "cannot be created or destroyed",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "friction",
-        "concept",
-        "causes",
-        "heat",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "vacuum",
-        "concept",
-        "has_property",
-        "no air",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "lightning",
-        "concept",
-        "is_a",
-        "electrical discharge",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "echo",
-        "concept",
-        "is_a",
-        "reflected sound",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "lens",
-        "concept",
-        "refracts",
-        "light",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "prism",
-        "concept",
-        "splits",
-        "white light",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "evaporation",
-        "concept",
-        "changes",
-        "liquid to gas",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "condensation",
-        "concept",
-        "changes",
-        "gas to liquid",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "orbit",
-        "concept",
-        "is_a",
-        "path around a planet",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "comet",
-        "concept",
-        "has_property",
-        "a tail",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "galaxy",
-        "concept",
-        "contains",
-        "stars",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "black hole",
-        "concept",
-        "has_property",
-        "strong gravity",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "supernova",
-        "concept",
-        "is_a",
-        "exploding star",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "nebula",
-        "concept",
-        "is_a",
-        "cloud of gas and dust",
-        weight=0.8,
-    )
-
-    agent_instance.manual_add_knowledge(
-        "earth",
-        "planet",
-        "has_satellite",
-        "the moon",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "paris",
-        "city",
-        "is_located_in",
-        "france",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "france",
-        "country",
-        "is_located_in",
-        "europe",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "mount everest",
-        "mountain",
-        "is_a",
-        "tallest mountain",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "london",
-        "city",
-        "is_capital_of",
-        "england",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "nile",
-        "river",
-        "is_located_in",
-        "africa",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "sahara",
-        "desert",
-        "is_located_in",
-        "africa",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "pacific",
-        "ocean",
-        "is_a",
-        "largest ocean",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "asia",
-        "continent",
-        "has_property",
-        "highest population",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "amazon",
-        "river",
-        "is_located_in",
-        "south america",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "new york",
-        "city",
-        "is_located_in",
-        "united states",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "tokyo",
-        "city",
-        "is_capital_of",
-        "japan",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "antarctica",
-        "continent",
-        "is_a",
-        "coldest continent",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "australia",
-        "country",
-        "is_a",
-        "continent",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "rome",
-        "city",
-        "is_capital_of",
-        "italy",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "ganges",
-        "river",
-        "is_located_in",
-        "india",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "himalayas",
-        "mountain range",
-        "is_located_in",
-        "asia",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "dead sea",
-        "lake",
-        "is_a",
-        "lowest point on land",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "greenland",
-        "island",
-        "is_a",
-        "largest island",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "madagascar",
-        "island",
-        "is_located_off",
-        "africa",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "siberia",
-        "region",
-        "is_located_in",
-        "russia",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "amazon rainforest",
-        "forest",
-        "is_located_in",
-        "south america",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "grand canyon",
-        "canyon",
-        "is_located_in",
-        "arizona",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "great barrier reef",
-        "reef",
-        "is_located_off",
-        "australia",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "yellowstone",
-        "national park",
-        "has_property",
-        "geysers",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "niagara falls",
-        "waterfall",
-        "is_located_on_border_of",
-        "usa and canada",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "mississippi",
-        "river",
-        "is_a",
-        "longest river in usa",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "alps",
-        "mountain range",
-        "is_located_in",
-        "europe",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "red sea",
-        "sea",
-        "is_located_between",
-        "africa and asia",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "caspian sea",
-        "body of water",
-        "is_a",
-        "largest lake",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "andes",
-        "mountain range",
-        "is_located_in",
-        "south america",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "kilimanjaro",
-        "mountain",
-        "is_located_in",
-        "tanzania",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "gobi",
-        "desert",
-        "is_located_in",
-        "asia",
-        weight=1.0,
-    )
-
-    agent_instance.manual_add_knowledge(
-        "human",
-        "species",
-        "is_a",
-        "mammal",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge("dog", "species", "is_a", "mammal", weight=1.0)
-    agent_instance.manual_add_knowledge("cat", "species", "is_a", "mammal", weight=1.0)
-    agent_instance.manual_add_knowledge("mammal", "class", "is_a", "animal", weight=1.0)
-    agent_instance.manual_add_knowledge(
-        "animal",
-        "kingdom",
-        "is_a",
-        "living thing",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "tree",
-        "plant",
-        "is_a",
-        "living thing",
-        weight=1.0,
-    )
-    agent_instance.manual_add_knowledge(
-        "fish",
-        "animal",
-        "lives_in",
-        "water",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "bird",
-        "animal",
-        "has_property",
-        "feathers",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "insect",
-        "animal",
-        "has_property",
-        "six legs",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "reptile",
-        "animal",
-        "is_a",
-        "cold-blooded",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "plant",
-        "living thing",
-        "produces",
-        "oxygen",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "mammal",
-        "animal",
-        "has_ability",
-        "feed milk to young",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "human",
-        "mammal",
-        "has_property",
-        "opposable thumbs",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "dolphin",
-        "mammal",
-        "lives_in",
-        "ocean",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "bat",
-        "mammal",
-        "has_ability",
-        "fly",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "amphibian",
-        "animal",
-        "lives_in",
-        "land and water",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "fungus",
-        "living thing",
-        "is_not_a",
-        "plant or animal",
-        weight=0.8,
-    )
-    agent_instance.manual_add_knowledge(
-        "whale",
-        "mammal",
-        "is_a",
-        "largest animal",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "bee",
-        "insect",
-        "produces",
-        "honey",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "spider",
-        "arachnid",
-        "has_property",
-        "eight legs",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "butterfly",
-        "insect",
-        "undergoes",
-        "metamorphosis",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "cactus",
-        "plant",
-        "stores",
-        "water",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "venus flytrap",
-        "plant",
-        "eats",
-        "insects",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "coral",
-        "animal",
-        "builds",
-        "reefs",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "octopus",
-        "animal",
-        "has_property",
-        "eight arms",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "kangaroo",
-        "marsupial",
-        "has_property",
-        "pouch",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge("penguin", "bird", "cannot", "fly", weight=0.9)
-    agent_instance.manual_add_knowledge(
-        "elephant",
-        "mammal",
-        "has_property",
-        "trunk",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "giraffe",
-        "mammal",
-        "has_property",
-        "long neck",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "shark",
-        "fish",
-        "has_property",
-        "cartilage skeleton",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "snake",
-        "reptile",
-        "has_property",
-        "no legs",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "turtle",
-        "reptile",
-        "has_property",
-        "shell",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "frog",
-        "amphibian",
-        "undergoes",
-        "metamorphosis",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "algae",
-        "organism",
-        "lives_in",
-        "water",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "mushroom",
-        "fungus",
-        "reproduces_with",
-        "spores",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "bacteria",
-        "microorganism",
-        "is_a",
-        "single-celled organism",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "virus",
-        "microorganism",
-        "requires",
-        "host to reproduce",
-        weight=0.9,
-    )
-
-    agent_instance.manual_add_knowledge("apple", "fruit", "is_a", "food", weight=0.9)
-    agent_instance.manual_add_knowledge("banana", "fruit", "is_a", "food", weight=0.9)
-    agent_instance.manual_add_knowledge(
-        "carrot",
-        "vegetable",
-        "is_a",
-        "food",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "bread",
-        "food",
-        "is_made_from",
-        "flour",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "cheese",
-        "food",
-        "is_made_from",
-        "milk",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge("rice", "food", "is_a", "grain", weight=0.9)
-    agent_instance.manual_add_knowledge("chicken", "food", "is_a", "meat", weight=0.9)
-    agent_instance.manual_add_knowledge(
-        "chocolate",
-        "food",
-        "is_made_from",
-        "cocoa",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "pasta",
-        "food",
-        "is_made_from",
-        "wheat",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge("soup", "food", "is_a", "liquid", weight=0.8)
-    agent_instance.manual_add_knowledge(
-        "salad",
-        "food",
-        "contains",
-        "vegetables",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "ice cream",
-        "food",
-        "has_property",
-        "cold",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "pizza",
-        "food",
-        "has_component",
-        "crust",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "orange",
-        "fruit",
-        "is_a",
-        "citrus fruit",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "potato",
-        "vegetable",
-        "is_a",
-        "root vegetable",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "tomato",
-        "fruit",
-        "is_used_as",
-        "a vegetable",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "onion",
-        "vegetable",
-        "has_property",
-        "layers",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "garlic",
-        "vegetable",
-        "is_used_for",
-        "flavoring",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "beef",
-        "meat",
-        "comes_from",
-        "cows",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "pork",
-        "meat",
-        "comes_from",
-        "pigs",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "fish",
-        "food",
-        "is_a",
-        "source of protein",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "egg",
-        "food",
-        "comes_from",
-        "chickens",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "milk",
-        "beverage",
-        "comes_from",
-        "cows",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "yogurt",
-        "food",
-        "is_made_from",
-        "milk",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "honey",
-        "food",
-        "is_made_by",
-        "bees",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "coffee",
-        "beverage",
-        "is_made_from",
-        "beans",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "tea",
-        "beverage",
-        "is_made_from",
-        "leaves",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "sugar",
-        "ingredient",
-        "has_property",
-        "sweet",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "salt",
-        "ingredient",
-        "has_property",
-        "salty",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "flour",
-        "ingredient",
-        "is_made_from",
-        "grains",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "butter",
-        "dairy",
-        "is_made_from",
-        "milk",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "oil",
-        "ingredient",
-        "is_used_for",
-        "cooking",
-        weight=0.9,
-    )
-    agent_instance.manual_add_knowledge(
-        "vinegar",
-        "ingredient",
-        "has_property",
-        "sour",
-        weight=0.9,
-    )
-
-    print("     - Seeding abstract concepts...")
-    color_node = agent_instance._add_or_update_concept("color", "attribute")
-    colors = [
-        "red",
-        "green",
-        "yellow",
-        "blue",
-        "orange",
-        "purple",
-        "black",
-        "white",
-        "brown",
-        "pink",
-        "gray",
-        "cyan",
-        "magenta",
-        "gold",
-        "silver",
-        "beige",
-        "turquoise",
-        "lavender",
-        "maroon",
-        "navy",
-        "olive",
-        "teal",
-        "coral",
-        "indigo",
-        "violet",
-        "crimson",
-        "khaki",
-        "plum",
-        "salmon",
-        "tan",
-        "mint",
-    ]
-    for color_name in colors:
-        node = agent_instance._add_or_update_concept(color_name, "descriptor")
-        if node and color_node:
-            agent_instance.graph.add_edge(node, color_node, "is_a", 0.9)
-
-    sentiment_node = agent_instance._add_or_update_concept("sentiment", "attribute")
-    sentiments = [
-        "happy",
-        "sad",
-        "angry",
-        "excited",
-        "fearful",
-        "surprised",
-        "disgusted",
-        "calm",
-        "confused",
-        "proud",
-        "jealous",
-        "anxious",
-        "content",
-        "curious",
-        "depressed",
-        "embarrassed",
-        "enthusiastic",
-        "frustrated",
-        "grateful",
-        "guilty",
-        "hopeful",
-        "impatient",
-        "inspired",
-        "lonely",
-        "nostalgic",
-        "optimistic",
-        "pessimistic",
-        "relieved",
-        "romantic",
-        "satisfied",
-        "sympathetic",
-    ]
-    for sentiment_name in sentiments:
-        node = agent_instance._add_or_update_concept(sentiment_name, "descriptor")
-        if node and sentiment_node:
-            agent_instance.graph.add_edge(node, sentiment_node, "is_a", 0.8)
+    for subject, s_type, relation, obj, weight in tqdm(
+        ALL_KNOWLEDGE,
+        desc="     - Seeding knowledge facts ",
+    ):
+        agent_instance.manual_add_knowledge_quietly(
+            subject,
+            s_type,
+            relation,
+            obj,
+            weight,
+        )
 
     print("     - Integrating WordNet definitions for seeded concepts...")
 
     seeded_words = {
-        data["name"] for _, data in agent_instance.graph.graph.nodes(data=True)
+        data["name"]
+        for _, data in agent_instance.graph.graph.nodes(data=True)
+        if " " not in data["name"]
     }
 
-    for word in list(seeded_words):
-        if len(word.split()) > 1:
-            continue
-
+    for word in tqdm(list(seeded_words), desc="     - Integrating WordNet     "):
         word_info = get_word_info_from_wordnet(word)
         if word_info["hypernyms_raw"]:
             main_node = agent_instance.graph.get_node_by_name(word)
-
             for hypernym_word in word_info["hypernyms_raw"][:1]:
-                hypernym_node = agent_instance._add_or_update_concept(hypernym_word)
+                hypernym_node = agent_instance._add_or_update_concept_quietly(
+                    hypernym_word,
+                )
                 if main_node and hypernym_node and main_node.id != hypernym_node.id:
                     agent_instance.graph.add_edge(main_node, hypernym_node, "is_a", 0.7)
 
@@ -1383,6 +377,15 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
         "take": "verb",
         "takes": "verb",
         "took": "verb",
+        "give": "verb",
+        "gives": "verb",
+        "gave": "verb",
+        "birth": "noun",
+        "lay": "verb",
+        "include": "verb",
+        "includes": "verb",
+        "consist": "verb",
+        "consists": "verb",
         "lays": "verb",
         "i": "pronoun",
         "you": "pronoun",
@@ -1430,5 +433,7 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
         "because": "conjunction",
     }
 
-    for word, pos in core_vocab.items():
-        agent_instance.lexicon.add_linguistic_knowledge(word, pos)
+    for word, pos in tqdm(core_vocab.items(), desc="     - Seeding lexicon         "):
+        agent_instance.lexicon.add_linguistic_knowledge_quietly(word, pos)
+
+    print("     - Core vocabulary seeding complete.")

@@ -97,16 +97,25 @@ def get_word_info_from_wordnet(word: str) -> WordInfo:
         return word_info
 
     best_synset = None
+
     for ss in synsets:
         if ss.pos() == "n":
             best_synset = ss
             break
-        if ss.pos() == "v" and not best_synset:
-            best_synset = ss
-        elif ss.pos() == "a" or ss.pos() == "s" and not best_synset:
-            best_synset = ss
 
-    if not best_synset and synsets:
+    if not best_synset:
+        for ss in synsets:
+            if ss.pos() == "v":
+                best_synset = ss
+                break
+
+    if not best_synset:
+        for ss in synsets:
+            if ss.pos() in ("a", "s"):
+                best_synset = ss
+                break
+
+    if not best_synset:
         best_synset = synsets[0]
 
     if best_synset:

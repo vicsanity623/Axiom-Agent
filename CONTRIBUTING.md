@@ -1,16 +1,16 @@
-# Contributing to the Axiom Agent
+## Contributing to the Axiom Agent
 
 Thank you for your interest in contributing to the Axiom Agent project! This is not just another chatbot; it's an exploration into a new kind of cognitive architecture. By contributing, you are helping to cultivate a mind and push the boundaries of what AI can be.
 
-We welcome contributions of all kinds, from bug fixes and performance improvements to new features and documentation enhancements.
+We welcome contributions of all kinds, from bug fixes and documentation enhancements to major new features.
 
 ## Code of Conduct
 
-This project and everyone participating in it is governed by a standard Code of Conduct. By participating, you are expected to uphold this code.
+This project and everyone participating in it is governed by a standard Code of Conduct. By participating, you are expected to uphold this code. Please read our **[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**.
 
 ## Development Environment Setup
 
-The following steps will guide you through setting up a complete and stable development environment using modern Python standards.
+The following steps will guide you through setting up a complete and stable development environment.
 
 ### Step 1: Clone the Repository & Setup Environment
 First, get the code, create an isolated virtual environment, and activate it.
@@ -23,13 +23,13 @@ source venv/bin/activate
 
 ### Step 2: Install All Dependencies
 This project uses a `pyproject.toml` file to manage all dependencies. This single command installs the core application libraries *and* all the development tools (like Ruff, MyPy, and Pytest) needed for contributing.
-```bash
 # The quotes are important to prevent errors in some shells like Zsh
+```bash
 pip install -e '.[dev]'
 ```
 
 ### Step 3: Download the LLM Model (Optional, for Full Functionality)
-The agent uses a local LLM as a fallback for complex sentences and for its introspective learning loop.
+The agent uses a local LLM as a fallback for complex sentences.
 1.  Download the **`mistral-7b-instruct-v0.2.Q4_K_M.gguf`** model from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
 2.  Create a `models/` directory in the root of the project.
 3.  Place the downloaded `.gguf` file inside the `models/` directory.
@@ -45,41 +45,35 @@ The project is structured around a professional **Check -> Code/Train -> Check -
 ```bash
 ./check.sh
 ```
-If the script reports formatting or linting issues, you can often fix them automatically with these commands:
-```bash
-# Auto-format all code
-ruff format .
+This script runs formatting, linting, static type checking (MyPy), and the full unit test suite. If it passes, you can be confident your changes are high-quality.
 
-# Auto-fix all simple linting issues
-ruff check . --fix
-```
-Run `./check.sh` again to confirm everything passes.
-
-### 2. Train and Develop (Offline)
-This is where you'll do your work. The agent's memory is stored in the `brain/` directory. For most development, you'll want a clean slate to test new features.
+### 2. Train and Develop
+The agent's memory is stored in the `brain/` directory. For most development, you'll want a clean slate to test new features.
 ```bash
 # To start fresh for a test session
 rm -f brain/*
 ```
--   **For direct, interactive testing:** `python setup/cnt.py`
--   **For testing autonomous cycles:** `python setup/autonomous_trainer.py`
+*   **For manual training and chat:** `python setup/cnt.py`
+*   **For rendering a chat model:** `python setup/render_model.py`
+*   **For interactive chat and testing on latest chat model:** `python setup/app_model.py`
+*   **For testing autonomous cycles / endless learning:** `python setup/autonomous_trainer.py`
 
 ---
 
 ## How to Contribute
 
-We are thrilled that you want to help build this new kind of mind. The current focus of the project is on **Phase 4: Advanced Symbolic Reasoning**. Our goal is to expand the agent's native language understanding to handle more complex grammar and make its knowledge base more unified.
+We are thrilled that you want to help build this new kind of mind. The current focus of the project is on **Phase 4: Semantic Mastery**. Our goal is to deepen the agent's understanding of language and make its knowledge base more robust and verifiable.
 
-### Your First Contribution: Expanding the Parser's Grammar (Prepositions)
+### Your First Contribution: Adding Knowledge Provenance
 
-The best way to get started is to help the agent overcome one of its next big limitations: it doesn't understand prepositional phrases.
+A great way to get started is to help the agent track *where* its knowledge comes from. This is a critical feature called "provenance."
 
 **The Challenge:**
-1.  Fork the repository and create a new branch (e.g., `feature/parser-prepositions`).
-2.  Your mission is to upgrade the `SymbolicParser` in `src/axiom/symbolic_parser.py` to correctly parse a sentence like **"Paris is in France"**.
-3.  The parser should recognize "in" as a preposition and create a semantic relationship like `Paris --[is_located_in]--> France`. This will likely require creating a mapping from common prepositions to relationship types in the parser (e.g., "in" -> "is_located_in", "of" -> "is_part_of").
-4.  You will need to update the `knowledge_base.py` to seed the agent with knowledge of common prepositions.
-5.  Add a test case to the `tests/` directory to verify your new functionality.
+1.  Fork the repository and create a new branch (e.g., `feature/knowledge-provenance`).
+2.  Your mission is to upgrade the `RelationshipEdge` class in `src/axiom/graph_core.py`. Add a new field to its `__init__` method and `to_dict` method, such as `source_of_knowledge: str`.
+3.  Modify the `CognitiveAgent.add_knowledge` method (and similar learning methods) to accept a `source` argument (e.g., `"user_input"`, `"wordnet"`, `"introspection"`). This source should be passed down and stored on the `RelationshipEdge` when it's created.
+4.  Update the `_get_all_facts_as_string` method in `CognitiveAgent` to include the source when it prints out facts (e.g., `(sky --[has_property]--> blue) [Source: seeded_knowledge]`).
+5.  Add or update a test case in the `tests/` directory to verify that the source is correctly saved and retrieved.
 6.  Ensure all checks in `./check.sh` are passing.
 7.  Submit a Pull Request with a clear description of your changes!
 

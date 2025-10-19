@@ -1,15 +1,27 @@
 from __future__ import annotations
 
-# universal_interpreter.py
 import json
+
+# universal_interpreter.py
+import os
 import re
+from contextlib import redirect_stderr
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal, TypeAlias, TypedDict, cast
+from typing import (
+    TYPE_CHECKING,
+    Final,
+    Literal,
+    NotRequired,
+    TypeAlias,
+    TypedDict,
+    cast,
+)
 
 from llama_cpp import Llama
 
 if TYPE_CHECKING:
-    from typing import NotRequired
+    from axiom.graph_core import ConceptNode
+
 
 MODELS_FOLDER: Final = Path("models")
 DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
@@ -20,15 +32,16 @@ You are a language rephrasing engine. Your task is to convert the given 'Facts' 
 1.  **ONLY use the information given in the 'Facts' string.**
 2.  **DO NOT add any extra information, commentary, or meta-analysis.**
 3.  **DO NOT apologize or mention your own limitations.**
-4.  **Your output must be ONLY the rephrased sentence and nothing else.**"""[1:]
+4.  **Your output must be ONLY the rephrased sentence and nothing else.**
+"""[1:-1]
 
 JSON_STRUCTURE_PROMPT: Final = """
 The JSON object must have the following fields:
 - 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
-- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and an optional 'properties' object.
-If the sentence contains temporal information, extract it into a 'properties' object with an 'effective_date' field in YYYY-MM-DD format.
-- 'key_topics': A list of the main subjects or topics...
-- 'full_text_rephrased': A neutral, one-sentence rephrasing..."""[1:]
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'predicate', 'relation', or 'properties'.
+- 'key_topics': A list of the main subjects or topics.
+- 'full_text_rephrased': A neutral, one-sentence rephrasing.
+"""[1:-1]
 
 
 Intent: TypeAlias = Literal[
@@ -43,26 +56,44 @@ Intent: TypeAlias = Literal[
     "positive_affirmation",
     "command",
     "unknown",
+    "unknown_verb_failure",
+    "question_yes_no",
+    "meta_question_self",
+    "meta_question_purpose",
+    "meta_question_abilities",
+    "command_show_all_facts",
 ]
 
 
-class PropertyData(TypedDict):
-    effective_date: str
+class PropertyData(TypedDict, total=False):
+    """Optional metadata about a relationship, such as time or location."""
+
+    effective_date: NotRequired[str]
+    location: NotRequired[str]
+    certainty: NotRequired[float]
 
 
-class RelationData(TypedDict):
+class RelationData(TypedDict, total=False):
+    """Defines a structured relationship extracted from a sentence."""
+
     subject: str
-    verb: str
+    verb: NotRequired[str]
     object: str | dict[str, str] | list[str | dict[str, str]]
+    predicate: NotRequired[str]
+    relation: NotRequired[str]
     properties: NotRequired[PropertyData]
 
 
 class Entity(TypedDict):
+    """Represents a key concept or entity extracted from text."""
+
     name: str
     type: Literal["CONCEPT", "PERSON", "ROLE", "PROPERTY"]
 
 
 class InterpretData(TypedDict):
+    """Structured result from the interpretation step."""
+
     intent: Intent
     entities: list[Entity]
     relation: RelationData | None
@@ -87,6 +118,7 @@ class UniversalInterpreter:
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,
         cache_file: str | Path = DEFAULT_CACHE_PATH,
+        enable_llm: bool = True,
         load_llm: bool = True,
     ) -> None:
         """Initialize the UniversalInterpreter and load the LLM into memory.
@@ -106,14 +138,15 @@ class UniversalInterpreter:
                     f"Interpreter model not found at {model_path}. Please download it.",
                 )
 
-            self.llm = Llama(
-                model_path=str(model_path),
-                n_gpu_layers=0,
-                n_ctx=2048,
-                n_threads=0,
-                n_batch=1024,
-                verbose=False,
-            )
+            with open(os.devnull, "w") as f, redirect_stderr(f):
+                self.llm = Llama(
+                    model_path=str(model_path),
+                    n_gpu_layers=0,
+                    n_ctx=2048,
+                    n_threads=0,
+                    n_batch=1024,
+                    verbose=False,
+                )
         else:
             print("Initializing Universal Interpreter in SYMBOLIC-ONLY mode.")
 
@@ -123,6 +156,13 @@ class UniversalInterpreter:
         self._load_cache()
 
         print("Universal Interpreter loaded successfully.")
+
+    def _is_pronoun_present(self, text: str) -> bool:
+        """Check if any pronoun exists as a whole word in the text."""
+        for pronoun in PRONOUNS:
+            if re.search(rf"\b{pronoun}\b", text, re.IGNORECASE):
+                return True
+        return False
 
     def _load_cache(self) -> None:
         """Load the interpretation and synthesis caches from a JSON file."""
@@ -365,10 +405,9 @@ class UniversalInterpreter:
         """
         contextual_input = user_input
 
-        if history and any(
-            f" {pronoun} " in f" {user_input.lower()} " for pronoun in PRONOUNS
-        ):
+        if history and self._is_pronoun_present(user_input):
             contextual_input = self.resolve_context(history, user_input)
+
         return self.interpret(contextual_input)
 
     def break_down_definition(self, subject: str, chunky_definition: str) -> list[str]:
@@ -524,7 +563,7 @@ class UniversalInterpreter:
 
     def synthesize(
         self,
-        structured_facts: str,
+        structured_facts: str | list[RelationData] | list[str] | list[ConceptNode],
         original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
@@ -545,7 +584,13 @@ class UniversalInterpreter:
             A natural language string representing the synthesized response.
         """
         if self.llm is None:
-            return structured_facts
+            return str(structured_facts)
+
+        if isinstance(structured_facts, list):
+            try:
+                structured_facts = json.dumps([str(f) for f in structured_facts])
+            except Exception:
+                structured_facts = str(structured_facts)
 
         cache_key = f"{mode}|{original_question}|{structured_facts}"
 
@@ -573,7 +618,7 @@ class UniversalInterpreter:
             if original_question:
                 task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
 
-        full_prompt = f"<s>[INST] {system_prompt}\n\n{task_prompt}[/INST]"
+        full_prompt = f"[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
             output = cast(
                 "dict[str, list[dict[str, str]]]",

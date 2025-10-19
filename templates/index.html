@@ -3,21 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-
-    <!-- PWA and iOS Fullscreen Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Axiom Agent">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <meta name="theme-color" content="#121212">
-    <!-- End PWA Tags -->
-
     <title>Axiom Agent Interface</title>
-
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Oldenburg&display=swap" rel="stylesheet">
-
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
 </head>
@@ -40,11 +34,9 @@
             <button id="new-chat-button" class="icon-button">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             </button>
-            <!-- UPDATED: Removed initial text from the div -->
             <div id="status-indicator" class="status-indicator"></div>
         </header>
         <div class="chat-messages" id="chat-messages">
-             <!-- Initial message will be added by JS -->
         </div>
         <div class="chat-input-area">
             <textarea id="user-input" placeholder="Loading models, please wait..." rows="1" disabled></textarea>
@@ -80,7 +72,6 @@
 
         function copyTextToClipboard(text, successCallback) {
             if (navigator.clipboard && window.isSecureContext) {
-                // Modern, secure method
                 navigator.clipboard.writeText(text).then(() => {
                     console.log('Copied using modern API');
                     if(successCallback) successCallback();
@@ -89,7 +80,6 @@
                     fallbackCopyTextToClipboard(text, successCallback);
                 });
             } else {
-                // Fallback for insecure contexts (like http on iOS) or older browsers
                 console.log('Using fallback copy method.');
                 fallbackCopyTextToClipboard(text, successCallback);
             }
@@ -99,7 +89,6 @@
             const textArea = document.createElement("textarea");
             textArea.value = text;
 
-            // Avoid scrolling to bottom
             textArea.style.top = "0";
             textArea.style.left = "0";
             textArea.style.position = "fixed";
@@ -144,7 +133,6 @@
                 copyButton.addEventListener('click', (e) => {
                     e.preventDefault();
                     copyTextToClipboard(text, () => {
-                        // This is the success callback
                         copyButton.textContent = 'Copied!';
                         setTimeout(() => { copyButton.textContent = 'Copy'; }, 1500);
                     });
@@ -287,7 +275,6 @@
                 const response = await fetch('/status');
                 const data = await response.json();
                 if (data.status === "ready") {
-                    // UPDATED: No longer setting textContent
                     statusIndicator.style.backgroundColor = 'var(--status-ready-bg)';
                     userInput.placeholder = "Message Axiom Agent...";
                     userInput.disabled = false;
@@ -302,18 +289,15 @@
                     }
 
                 } else if (data.status.startsWith("error")) {
-                    // UPDATED: No longer setting textContent
                     statusIndicator.style.backgroundColor = 'var(--status-error-bg)';
                     userInput.placeholder = "Error loading models.";
                     userInput.disabled = true;
                     sendButton.disabled = true;
                 } else {
-                    // UPDATED: No longer setting textContent
                     statusIndicator.style.backgroundColor = 'var(--status-loading-bg)';
                     setTimeout(checkModelStatus, 3000);
                 }
             } catch (error) {
-                // UPDATED: No longer setting textContent
                 statusIndicator.style.backgroundColor = 'var(--status-error-bg)';
                 userInput.placeholder = "Server connection lost.";
                 userInput.disabled = true;

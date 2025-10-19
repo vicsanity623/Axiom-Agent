@@ -1,55 +1,56 @@
+---
 <p align="center"><img src="static/Axiom.png" alt="Axiom Agent Banner"></p>
 
-# Axiom Agent
 
 Axiom is a **cognitive architecture**—a framework for a new type of artificial intelligence designed to achieve genuine understanding by building its own internal, logical model of reality from the ground up.
 
-This project's core philosophy is that true intelligence cannot be achieved by statistical mimicry (like in traditional LLMs). It must be built on a foundation of verifiable, interconnected knowledge. Axiom is an experiment to cultivate such a mind.
+This project’s core philosophy is that true intelligence requires more than just statistical mimicry (like in traditional LLMs). It must be built on a foundation of verifiable, interconnected knowledge. **Axiom is an experiment to create that engine.**
 
 ---
 
-## The Core Architecture: Symbolic-First, LLM-Assisted
+## 🧠 The Core Architecture: Symbolic-First, LLM-Assisted
 
-Axiom's design is a radical departure from LLM-centric AI. It operates on a **symbolic-first** principle, where the core of the agent is a deterministic, logical brain.
+Axiom’s design is a hybrid model that combines the strengths of classical, symbolic AI with the fluency of modern large language models. It operates on a **symbolic-first** principle, where the core of the agent is a deterministic, logical brain.
 
-1.  **The Symbolic Brain (The Knowledge Graph):** At its heart, Axiom has a structured `ConceptGraph`—its long-term memory. This is a logical map of concepts and their relationships (`Paris --[is_located_in]--> France`). This architecture **prevents hallucinations** by ensuring the agent's knowledge is grounded in verifiable facts it has learned.
+1.  **The Symbolic Brain (Knowledge Graph):**
+    At its heart, Axiom has a `ConceptGraph`—its long-term memory. This structured map of concepts and relationships (e.g., `Paris --[is_located_in]--> France`) grounds the agent’s knowledge in verifiable facts, **preventing hallucinations** and enabling true reasoning.
 
-2.  **The Symbolic Senses (The Multi-Stage Parser):** Axiom has its own native ability to understand language. It uses a `SymbolicParser` that operates as a multi-stage pipeline, first splitting complex sentences into simpler clauses, then applying a series of grammatical rules to extract atomic facts. For a growing number of sentences, it can achieve understanding **without any external models.**
+2.  **The Symbolic Senses (Parser & Core Logic):**
+    Axiom’s `SymbolicParser` and core logic deconstruct user input into structured commands. For a growing class of sentences, it achieves understanding **without any LLM intervention**, making it fast, efficient, and explainable.
 
-3.  **The LLM as a Tool (The Fallback Interpreter):** When the agent's native parser encounters a sentence too complex for its current understanding, it uses a local LLM as a fallback tool. The LLM's only job is to translate the complex sentence into a structured format that the agent's symbolic brain can then process. **The LLM is a temporary crutch, not the mind itself.**
+3.  **The LLM as a Tool (Interpreter & Synthesizer):**
+    When the agent’s symbolic logic encounters a sentence too complex for its rules, or a concept it doesn't understand, it intelligently falls back to a local LLM. The LLM acts as a powerful **translation tool**—converting messy human language into the structured data the symbolic brain can use, or converting factual data into fluent, natural language. **The LLM is a tool the agent uses, not the mind itself.**
 
 ---
 
-## ✅ Key Capabilities: A New Path to Understanding
+## ✅ Key Capabilities: A Robust and Resilient Mind
 
-This architecture allows the agent to learn, reason, and grow in a way that is fundamentally different from static models.
+This architecture enables the agent to learn, reason, and evolve in a verifiable, self-contained way. The latest version focuses on stability, resilience, and a smarter cognitive flow.
 
 ### Cognitive & Reasoning Abilities
-*   **Multi-Stage Symbolic Parsing:** The agent's `SymbolicParser` can deconstruct complex, multi-sentence text into individual clauses and learn multiple, distinct facts from a single input.
-*   **Contextual Conversation:** The agent possesses a deterministic **coreference resolution** mechanism for short-term memory, allowing it to understand what pronouns like `it` and `they` refer to based on the recent conversation history.
-*   **Introspective Learning:** The agent can **learn from its own output**. If its LLM synthesizer "leaks" a new fact while answering a question, the agent parses its own response and integrates that new knowledge into its symbolic brain, creating a powerful self-improvement loop.
-*   **Intelligent Autonomous Learning:** The agent operates 24/7 with two focused learning cycles:
-    -   **The Discovery Cycle:** Explores curated subjects and uses a popularity heuristic to find relevant new topics.
-    -   **The Study Cycle:** Prioritizes researching unknown words from its learning queue using a high-precision **Dictionary API**. When the queue is empty, it proactively **deepens its knowledge** by researching concepts it already knows to find new, related facts.
-    -   **Refinement Phase** Agent spends hours introspectively consolidate and improve what it has learned.
-
-<br/>
-
-### Professional Development & Deployment
-*   **Automated Quality Assurance (`./check.sh`):** A full suite of tools (Ruff, MyPy, Pytest) ensures the codebase is clean, consistent, and reliable.
-*   **Modern Python Packaging (`pyproject.toml`):** The project uses the latest standards for managing dependencies and configuration.
-*   **Robust Train -> Render -> Deploy Workflow:** A professional toolchain separates offline training (in `cnt.py` or `autonomous_trainer.py`) from online, read-only deployment (in `app_model.py`), ensuring stability.
+*   **Multi-Stage Symbolic Parsing:** Understands and deconstructs complex user input.
+*   **Robust Parser Fallback:** Intelligently detects when the symbolic parser fails and automatically switches to the LLM for deeper understanding.
+*   **Conversational Resilience:** Handles user typos and minor variations in language using fuzzy matching, making interaction feel more natural and forgiving.
+*   **Self-Awareness:** Possesses dedicated, fast routines to answer questions about its own purpose, abilities, and identity.
+*   **Contextual Conversation:** Tracks pronouns (`it`, `they`) to maintain short-term memory across conversational turns.
+*   **Introspective Learning:** Can **learn from its own output**—if the LLM "leaks" a new fact in a response, the agent parses and absorbs it, creating a feedback loop for self-improvement.
+*   **Autonomous Learning Cycles:** Can operate independently to expand its knowledge:
+    *   **Discovery Cycle:** Finds and explores new topics.
+    *   **Study Cycle:** Researches unknown concepts to build its knowledge graph.
+    *   **Refinement Phase:** Consolidates and clarifies existing knowledge.
 
 ---
 
-## 🛠️ Setup and Installation
+## 🔬 Local Verification (Quickstart)
+
+The agent's architecture is fully testable and reproducible on your local machine.
 
 ### Prerequisites
 - Python 3.11+
 - Git
 
 ### Step 1: Clone and Install
-This single command clones the repository, sets up a virtual environment, and installs all project and development dependencies.
+This single command clones the repository, sets up a virtual environment, and installs all dependencies.
 ```bash
 git clone https://github.com/vicsanity623/Axiom-Agent.git
 cd Axiom-Agent
@@ -59,30 +60,36 @@ pip install -e '.[dev]'
 ```
 
 ### Step 2: Download the LLM Model (Optional, for full functionality)
-The agent uses a local LLM for complex sentences and introspective learning.
+The agent uses a local LLM for complex language tasks.
 1.  Download **`mistral-7b-instruct-v0.2.Q4_K_M.gguf`** from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
 2.  Create a `models/` directory in the project root and place the downloaded file inside it.
 
-<br/>
+*   **Note on Symbolic-Only Mode:** If the LLM model is not found, the agent will automatically start in a **symbolic-only mode**. This is perfect for testing the core logic and requires significantly less memory.
 
-*   **Note on Symbolic-Only Mode:** If the LLM model is not found, the agent will automatically start in a **symbolic-only mode**. This is perfect for testing the core logic and requires significantly less memory, though some fallback and creative features will be disabled.
+### Step 3: Run the Tests
+Verify your setup by running the full test suite. The `check.sh` script runs formatting, linting, type checking, and unit tests.
+```bash
+./check.sh
+```
 
-<br/>
-
-### Step 3: Run the Agent
-The project is designed around a clean development cycle.
-1.  **Train:** Use `python setup/cnt.py` to interactively teach the agent
-2.  or `python setup/autonomous_trainer.py` to let it learn on its own.
-3.  **Render:** Use `python setup/render_model.py` to package the trained brain into a stable `.axm` model.
-4.  **Deploy:** Use `python setup/app_model.py` to launch the web UI, which will serve the latest rendered model.
+### Step 4: Run the Agent
+The project supports a clean development and deployment cycle.
+1.  **Train:** Use `python setup/autonomous_trainer.py` to let the agent learn on its own.
+2.  **Chat:** Use `python setup/app_model.py` to launch a web UI and interact with the agent's current brain state.
 
 ---
 
 ## 🚀 The Vision: Intellectual Escape Velocity
 
-The goal is to continue expanding the sophistication of the `SymbolicParser` until the LLM fallback is no longer needed. As the agent's internal, verifiable `ConceptGraph` and `Lexicon` grow, it will build its own comprehensive, high-fidelity model of reality and language. This creates a path toward a truly autonomous cognitive entity built on a foundation of verifiable truth, not just probabilistic mimicry.
+The ultimate goal of this project is to achieve **intellectual escape velocity** from the LLM.
+
+The vision is to continuously expand the sophistication of the `SymbolicParser` and the richness of the `ConceptGraph` through autonomous learning. As the agent's internal, verifiable model of reality grows, its reliance on the LLM for language understanding will diminish. The end goal is a cognitive entity whose own symbolic brain is so comprehensive that the LLM fallback for interpretation becomes obsolete.
+
+Beyond language mastery, the agent's evolution will continue by integrating a **Tool Use Framework**. This will allow it to move beyond what it *knows* (semantic knowledge) to what it can *do* (procedural knowledge)—calling on specialized tools for tasks like mathematical calculations, real-time web searches, or code execution.
+
+This creates a path toward a truly autonomous AI, built on a foundation of verifiable truth, not just probabilistic mimicry, and augmented with powerful, specialized capabilities.
 
 ---
 
 ## 🗺️ Project Roadmap
-For a detailed list of planned features and future development goals, please see the **[ROADMAP.md](ROADMAP.md)** file.
+For a detailed list of completed phases, planned features, and future development goals, please see the **[ROADMAP.md](ROADMAP.md)** file.

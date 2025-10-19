@@ -1,228 +1,119 @@
-# Axiom‑Agent — Refactor & Recovery Roadmap
+# Axiom Agent — Evolving Mind Roadmap
 
-This roadmap turns the static‑analysis findings into a concrete, phased plan you (or contributors) can act on. It’s organized by **phases** (quick wins → deep refactor → hardening → launch/maintain). Each item includes **deliverables**, **acceptance criteria**, and **practical tasks** (files to add or change). Use this as a living plan: mark checklist items done, attach PR links, and iterate. 
+This roadmap documents the evolution of the Axiom Agent, from its foundational architecture to its future as a sophisticated, autonomous reasoner. It's organized by **phases of evolution**. Each phase represents a significant leap in capability and includes **goals**, **deliverables**, and **key features**.
 
 ***
 
-The Axiom Agent has successfully evolved through its first three foundational phases, transforming from a basic cognitive engine into a sophisticated, conversational learner. It began with the **"Genesis Engine,"** establishing a stable core for knowledge. Next, the **"Intelligent Learner"** phase enabled the agent to learn with purpose, autonomously expanding its vocabulary and discovering new topics. Most recently, the **"Conversational & Introspective Mind"** gave it the ability to parse complex sentences, use short-term memory, and even learn from its own responses to continuously refine its knowledge base.
+The Axiom Agent has successfully evolved through its foundational phases. It began with the **"Genesis Engine,"** establishing a stable knowledge graph. The **"Intelligent Learner"** phase enabled autonomous discovery, while the **"Conversational Mind"** gave it the ability to parse complex sentences and learn from its own responses.
 
-This rapid progress has proven the agent's core concepts, but now it is time to solidify the foundation for future growth. The following **"Refactor & Recovery Roadmap"** is a detailed engineering plan to address the technical debt incurred during this period of rapid innovation. By focusing on repository hygiene, testing, and targeted refactoring, we are building a more stable, robust, and maintainable platform. This essential work will pave the way for the agent's next major functional leaps: achieving a **"Hardened Mind"** with a deeper understanding of language, becoming an **"Autonomous Scholar"** with strategic learning, and finally, evolving into a **"Distributed Mind"** for massive scalability.
+Following this rapid innovation, the axiom agent has now completed a critical **"Stabilization & Hardening"** phase. This engineering-focused effort addressed technical debt, dramatically improved the user experience during startup, and fortified the agent's core logic with a comprehensive test suite. This essential work has created a robust and maintainable platform, paving the way for the agent's next major functional leaps: achieving true **"Semantic Mastery"** with a deeper understanding of language, becoming an **"Autonomous Scholar"** with strategic learning, and finally, evolving into a **"Logical Reasoner"** capable of procedural thought and tool use.
 
 ---
 
 ## How to use this roadmap
 
-* Treat each bullet as a discrete ticket/issue. Keep PRs small and focused (one major refactor or 3–5 small fixes per PR).
-* Each phase has *must‑do* items (required before moving on) and *nice‑to‑have* items (optional, high ROI).
-* For each completed item, add a one‑line note with a link to the PR that resolves it.
+*   Treat each phase as a major strategic goal.
+*   The features within each phase can be broken down into discrete tickets/issues.
+*   For each completed phase, its summary serves as a record of the agent's growth.
 
 ---
 
-# Phase 0 — Repository hygiene (must do first)
+# Phase 0 — Genesis Engine (COMPLETE)
 
-**Goal:** make the repo safe, reproducible, and instrumented so all later work is testable and visible.
+**Goal:** Establish the core symbolic-first architecture and knowledge representation.
 
-### Deliverables
-
-* `.github/workflows/ci.yml` that runs tests, linters, mypy, radon and uploads coverage artifacts.
-* `Makefile` or `setup.sh` with `make setup`, `make test`, `make lint`, `make report` targets.
-* `setup/download_model.sh` that supports `AXIOM_MODEL_PATH` env var and verifies checksums.
-* `SECURITY.md`, `CODE_OF_CONDUCT.md`, and issue/PR templates.
-
-### Tasks
-
-* Create CI workflow file at `.github/workflows/ci.yml` (include steps to run `./check.sh` and `pytest --cov`).
-* Add `Makefile` with common targets. Example: `setup`, `lint`, `test`, `coverage`, `format`.
-* Implement `setup/download_model.sh` and document `AXIOM_MODEL_PATH` in `README.md`.
-* Add `SECURITY.md` and templates in `.github/ISSUE_TEMPLATE/` and `.github/PULL_REQUEST_TEMPLATE.md`.
-
-### Acceptance criteria
-
-* CI runs on every push/PR and shows pass/fail for lint/tests.
-* `make setup` boots dev environment (venv) and `make test` runs without fatal errors (tests may fail but command exists).
-* Project has clear contribution/security guidelines.
+### Key Features
+*   `ConceptGraph` implemented using NetworkX for in-memory knowledge storage.
+*   Basic `SymbolicParser` for simple sentence structures.
+*   Initial brain seeding process to provide foundational knowledge.
+*   Core `CognitiveAgent` class to orchestrate the basic chat loop.
 
 ---
 
-# Phase 1 — Quick wins (low effort, high impact)
+# Phase 1 — Intelligent Learner (COMPLETE)
 
-**Goal:** remove noise and reduce immediate technical debt so you can make bigger changes with confidence.
+**Goal:** Enable autonomous, self-directed learning and knowledge expansion.
 
-### Must‑do
-
-* Run formatting: `black` + `ruff --fix` and commit as a single PR.
-* Fix trivial `pylint` issues: add missing module docstrings, shorten long lines, and add small helper functions for repeated code.
-* Remove or annotate dead code found by `vulture` (either delete or add `# pragma: no cover` + TODO comment).
-* Add basic smoke tests and an `examples/symbolic_demo.sh` that boots symbolic-only mode and runs a short scenario.
-
-### Deliverables
-
-* `tools/format_and_lint.sh` (idempotent) and a PR applying formatting.
-* `examples/symbolic_demo.sh` and `examples/README.md` showing how to run the demo.
-
-### Acceptance criteria
-
-* `ruff` and `black` report no diffs in CI run.
-* `examples/symbolic_demo.sh` runs end‑to‑end in symbolic‑only mode on a fresh checkout (document any env setup required).
+### Key Features
+*   `KnowledgeHarvester` implementation for autonomous study and discovery cycles.
+*   `CycleManager` to switch between learning and refinement phases.
+*   Integration with WordNet to enrich the agent's vocabulary and conceptual understanding.
+*   Curiosity mechanism to generate follow-up questions for study.
 
 ---
 
-# Phase 2 — Tests, coverage, and core stabilization
+# Phase 2 — Conversational & Introspective Mind (COMPLETE)
 
-**Goal:** raise confidence by adding tests and reducing core module complexity so regressions are caught early.
+**Goal:** Enhance conversational fluency and the ability to learn from interaction.
 
-### Must‑do
-
-* Add focused unit tests for these core modules (start here):
-
-  * `src/axiom/symbolic_parser.py`
-  * `src/axiom/graph_core.py`
-  * `src/axiom/cognitive_agent.py` (high-level flows only, mock external deps)
-  * `src/axiom/dictionary_utils.py` (after initial refactor into helpers)
-* Add `conftest.py` fixtures to mock LLM calls and model IO.
-* Configure coverage threshold in CI (baseline: require coverage gating for new code; overall target to be achieved later).
-
-### Deliverables
-
-* `tests/test_parser.py`, `tests/test_graph.py`, `tests/test_agent_flow.py` (mocked).
-* `conftest.py` with fixtures: `tmp_cache`, `mock_llm`, `minimal_knowledge_base`.
-* Coverage configuration in `pyproject.toml` or `coverage.rc`.
-
-### Acceptance criteria
-
-* Tests run in CI and create `coverage.xml` artifact.
-* New tests prove the basic learn/query flows and reduce flakiness in developer runs.
+### Key Features
+*   `UniversalInterpreter` integration, using an LLM for complex language understanding.
+*   Coreference resolution to handle pronouns and maintain conversational context.
+*   Introspection loop allowing the agent to parse its own synthesized responses to learn new facts.
+*   Conflict detection and clarification mechanism for exclusive relationships.
 
 ---
 
-# Phase 3 — Refactor hotspots (high‑impact code restructuring)
+# Phase 3 — Stabilization & Hardening (COMPLETE)
 
-**Goal:** reduce cyclomatic complexity and split large modules into smaller, testable components.
+**Goal:** Solidify the foundation, improve user experience, and make the agent more robust and resilient.
 
-### Top targets (from analysis)
-
-* `src/axiom/dictionary_utils.py::get_word_info_from_wordnet` → **extract helpers**: `_fetch`, `_normalize`, `_extract_relations`, `_assemble`.
-* `src/axiom/cognitive_agent.py` → **split into smaller modules**: `agent/preprocessing.py`, `agent/intent.py`, `agent/learning.py`, `agent/query.py`, `agent/dialog.py`.
-* `src/axiom/lexicon_manager.py::add_linguistic_knowledge` → split responsibilities: parsing vs persistence.
-
-### Strategy & tasks
-
-* For each hotspot: create a branch `refactor/<module>-split` and open a PR with:
-
-  1. small extraction commits (only helpers, no behavior change),
-  2. unit tests for each helper,
-  3. integration tests ensuring original behavior still holds.
-* Add type hints to any newly extracted helper functions; run `mypy` on them.
-* Replace `if/elif` chains with table-driven dispatch, strategy pattern, or small classes where appropriate.
-
-### Deliverables
-
-* PRs: `refactor/dictionary-utils`, `refactor/cognitive-agent-split-1`, `refactor/cognitive-agent-split-2` etc.
-* Test coverage for refactored parts and CI passing.
-
-### Acceptance criteria
-
-* Each refactor PR reduces CC for targeted function(s) below threshold (CC < 10 preferred), and tests ensure no behavior regression.
+### Key Features
+*   **Silent Startup & Progress Bars:** Replaced verbose startup logging with clean `tqdm` progress bars for brain seeding, dramatically improving UX.
+*   **Robust Parser Fallback:** Implemented a "sanity check" in the cognitive loop to intelligently fall back to the LLM interpreter when the symbolic parser fails on complex or nonsensical input.
+*   **Enhanced Self-Awareness:** Created specific `meta-` intents and handlers for questions about the agent itself ("who are you?", "what is your purpose?"), making it more responsive and knowledgeable about its own state.
+*   **Conversational Resilience:** Integrated fuzzy matching (`thefuzz`) to handle user typos and minor variations in entity names, making the agent more forgiving.
+*   **Comprehensive Test Suite:** Achieved high test coverage (>70%) and a passing CI/CD pipeline (Ruff, MyPy, Pytest), ensuring all core functionality is verified and stable.
 
 ---
 
-# Phase 4 — Observability, provenance, and conflict handling
+# Phase 4 — Semantic Mastery
 
-**Goal:** make the system debuggable and safe: reasoning traces, fact provenance, and deterministic conflict resolution.
+**Goal:** Deepen the agent's understanding of language nuance, context, and complex relationships.
 
-### Must‑do
-
-* Add structured reasoning traces (JSON) and an optional `--trace` flag to queries.
-* Add provenance metadata to facts: `{source, timestamp, confidence, version}`.
-* Implement a conflict detection and lightweight belief revision strategy (e.g., confidence scores, timestamps, source precedence).
-* Add an exporter: `tools/export_graph.py` → Graphviz + JSON formats.
-
-### Deliverables
-
-* `src/axiom/tracing.py` + integration points in agent and graph operations.
-* `tools/export_graph.py` and a demo script `examples/visualize_graph.sh`.
-
-### Acceptance criteria
-
-* Running a query with `--trace` emits a JSON trace that can be consumed to visualize reasoning paths.
-* Conflicting facts create a human‑review queue entry (or clear resolution action) and are recorded with provenance.
+### Key Features
+*   **Advanced Relationship Extraction:** Enhance the `KnowledgeHarvester` and `UniversalInterpreter` to extract and represent multi-part relationships (e.g., `(person, born_in, city, on_date, date)`).
+*   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly.
+*   **Knowledge Provenance:** Add metadata to all learned facts, tracking their source (e.g., Wikipedia, user input), timestamp, and confidence score. This is a prerequisite for belief revision.
+*   **Belief Revision System:** Implement a strategy for resolving conflicting facts based on source reliability, confidence, and recency.
 
 ---
 
-# Phase 5 — Performance, scalability, and optional graph backends
+# Phase 5 — Autonomous Scholar
 
-**Goal:** ensure the concept graph and reasoning scale and remain responsive.
+**Goal:** Transform the agent from a passive learner into a strategic researcher with long-term goals.
 
-### Investigation steps (do before heavy migration)
-
-* Add benchmarks: `bench/graph_insert.py` and `bench/graph_query.py` to test insert/query at scale (10k/100k facts). Use synthetic data.
-* Profile hot paths using `pyinstrument` or `cProfile` and gather flamegraphs.
-
-### If needed
-
-* Introduce an optional graph DB backend (Neo4j, RedisGraph, or SQLite-based adjacency indices) behind an adapter interface. Keep native in‑memory implementation for small deployments.
-
-### Acceptance criteria
-
-* Benchmarks and profiling show where to optimize. If a DB backend is added, it should be pluggable and optional.
+### Key Features
+*   **Goal-Oriented Learning:** Introduce a `GoalManager` that allows the agent to be given high-level learning objectives (e.g., "Become an expert on ancient Rome").
+*   **Strategic Study Plans:** The `KnowledgeHarvester` will use its learning goals to generate and execute multi-step study plans (e.g., find a Wikipedia page, read it, identify key entities, generate curious questions for each entity, then research those questions).
+*   **Dynamic Knowledge Pruning:** Implement a "forgetting" mechanism where facts that are consistently low-activation and low-confidence are periodically removed to keep the graph relevant.
 
 ---
 
-# Phase 6 — Hardening, docs, and release
+# Phase 6 — The Logical Reasoner (Procedural Thought)
 
-**Goal:** ship a stable, documented release and create a repeating maintenance plan.
+**Goal:** Evolve beyond semantic knowledge to incorporate procedural and logical reasoning by introducing "Tools."
 
-### Deliverables
-
-* `CHANGELOG.md` and a `v1.0.0` tag when core features are stable.
-* `docs/` (mkdocs) with architecture diagram, developer guide, and contributor onboarding.
-* Release checklist in `.github/RELEASE_CHECKLIST.md`.
-
-### Acceptance criteria
-
-* A tagged release with a release note that documents what changed, known limitations, and migration notes.
-
----
-
-# Ongoing & maintenance
-
-* Weekly/biweekly: triage issues, run smoke tests, review PRs for complexity (radon check in CI to block big increases).
-* Monthly: run performance benchmarks and update `ROADMAP.md` with new priorities.
-* Keep a `TECH_DEBT.md` file listing known technical debt items and status.
+### Key Features
+*   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use. Each tool will be a specialized function for tasks the knowledge graph cannot perform.
+*   **Mathematical Capability (First Tool):**
+    *   **Deliverable:** A `MathTool` that integrates a symbolic math library like `SymPy`.
+    *   **Logic:** The `SymbolicParser` and `UniversalInterpreter` will be trained to recognize a new `question_math` intent.
+    *   **Flow:** When this intent is detected, `_process_intent` will route the mathematical expression to the `MathTool` for execution, and the result will be returned to the user.
+*   **Real-Time Data (Second Tool):**
+    *   **Deliverable:** A `WebSearchTool` (e.g., using a Google/DuckDuckGo API) and a `CurrentDateTool`.
+    *   **Logic:** The agent will be taught to recognize questions it cannot answer from its static knowledge (e.g., "What is the weather in New York?", "Who won the game last night?").
+    *   **Flow:** The agent will learn to route these questions to the appropriate tool to fetch live data from the internet.
+*   **Code Execution (Advanced Tool):**
+    *   **Deliverable:** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
+    *   **Flow:** For questions like "What are the first 10 prime numbers?", the agent will learn to write and execute a small script instead of trying to find the answer in its knowledge graph.
 
 ---
 
-# Quick PR / task templates (copy/paste)
+# Phase 7 — Distributed Mind
 
-**Refactor PR template**
+**Goal:** Prepare the agent for massive scalability and collaborative learning.
 
-```
-Title: refactor: <module> — split <function> into helpers
-Summary: what changed and why
-Files changed: list
-Testing: tests added/modified (list)
-Checklist:
-- [ ] Unit tests added
-- [ ] Mypy passes
-- [ ] Radon CC reduced for target function
-- [ ] CI passes
-```
-
-**Bug / fix PR template**
-
-```
-Title: fix: <short description>
-Summary: what broke and how fixed
-Testing: tests added/modified (list)
-Notes: any migration or compatibility notes
-```
-
----
-
-# Ready‑to‑run next actions (pick any and mark it done here)
-
-* DONE `.github/workflows/ci.yml` and commit a first version.
-* Create `examples/symbolic_demo.sh` and add to README quickstart.
-* Open `refactor/dictionary-utils` branch and extract helpers for `get_word_info_from_wordnet`.
-
----
+### Key Features
+*   **Pluggable Graph Backends:** Refactor `ConceptGraph` to be an interface, with the current in-memory NetworkX implementation as the default and a new implementation for a graph database (e.g., Neo4j, RedisGraph) as an option for large-scale deployments.
+*   **Agent Federation:** Design a protocol that allows multiple Axiom Agents to query each other's knowledge, share facts, and collaborate on learning goals.
