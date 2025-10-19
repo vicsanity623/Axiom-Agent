@@ -550,22 +550,7 @@ class KnowledgeHarvester:
         return None
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
-        """Retrieve the first sentence of a Wikipedia article for a given topic.
-
-        This function acts as a general-purpose information source. It
-        searches Wikipedia for a topic, gets the summary of the top result,
-        and extracts the first sentence.
-
-        It uses a simplicity filter to reject sentences that are too long
-        or complex for the agent's current parsing abilities.
-
-        Args:
-            topic: The search topic.
-
-        Returns:
-            A tuple containing the actual page title and the extracted
-            sentence, or None on failure.
-        """
+        """Retrieve the first sentence of a Wikipedia article for a given topic."""
         print(f"[Knowledge Source]: Searching Wikipedia for '{topic}'...")
         try:
             search_results = wikipedia.search(topic, results=1)
@@ -582,11 +567,13 @@ class KnowledgeHarvester:
 
             if page and page.summary:
                 first_sentence = page.summary.split(". ")[0].strip() + "."
+
                 if self._is_sentence_simple_enough(first_sentence):
                     print(
                         f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'",
                     )
                     return page.title, first_sentence
+
         except wikipedia.exceptions.DisambiguationError:
             print(
                 f"  [Knowledge Source]: Wikipedia search for '{topic}' was ambiguous.",
@@ -596,20 +583,7 @@ class KnowledgeHarvester:
         return None
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
-        """Retrieve a definition from DuckDuckGo's Instant Answer API.
-
-        This function serves as a fast, reliable source for simple facts
-        and definitions, acting as a fallback to the Wikipedia search.
-        It extracts the first sentence from the 'AbstractText' or
-        'Definition' field of the API response.
-
-        Args:
-            topic: The search topic.
-
-        Returns:
-            A tuple containing the original topic and the extracted
-            sentence, or None on failure.
-        """
+        """Retrieve a definition from DuckDuckGo's Instant Answer API."""
         print(f"[Knowledge Source]: Searching DuckDuckGo for '{topic}'...")
         try:
             url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
@@ -620,11 +594,13 @@ class KnowledgeHarvester:
             definition = data.get("AbstractText") or data.get("Definition")
             if definition:
                 first_sentence = definition.split(". ")[0].strip() + "."
+
                 if self._is_sentence_simple_enough(first_sentence):
                     print(
                         f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{first_sentence}'",
                     )
                     return topic, first_sentence
+
         except Exception:
             pass
         return None

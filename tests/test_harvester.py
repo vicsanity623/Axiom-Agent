@@ -84,7 +84,6 @@ def test_discover_cycle_adds_goal(harvester, agent, monkeypatch):
 
 
 def test_resolve_investigation_goal_with_api_success(harvester, agent, monkeypatch):
-    # CORRECT: Patch the class, not the instance
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_definition_from_api",
         lambda self, word: ("noun", "A test definition."),
@@ -103,14 +102,12 @@ def test_resolve_investigation_goal_fallback_web(
     harvester,
     agent,
     monkeypatch,
-):  # Add monkeypatch
-    # CORRECT: Patch the class to simulate API failure
+):
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_definition_from_api",
         lambda self, word: None,
     )
 
-    # Patch Wikipedia and DuckDuckGo (these are fine as they are not __slots__)
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_wikipedia",
         lambda self, topic: (topic, f"{topic} is a test noun."),
@@ -134,7 +131,7 @@ def test_resolve_investigation_goal_fallback_web(
 def test_study_cycle_resolves_goal(harvester, agent, monkeypatch):
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester._resolve_investigation_goal",
-        lambda self, goal: False,  # Mock failure to trigger removal logic
+        lambda self, goal: False,
     )
     agent.learning_goals.append("INVESTIGATE: someword")
     harvester.study_cycle()
@@ -143,7 +140,6 @@ def test_study_cycle_resolves_goal(harvester, agent, monkeypatch):
 
 
 def test_refinement_cycle_no_chunky_fact(harvester, agent, monkeypatch):
-    # CORRECT: Patch the class
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester._find_chunky_fact",
         lambda self: None,
@@ -176,7 +172,7 @@ def test_deepen_knowledge_of_random_concept_adds_goal(
     for name, node_type in graph_nodes:
         agent.graph.add_node(ConceptNode(name=name, node_type=node_type))
 
-    # KEY FIX: Mock the external web search to return a predictable fact.
+    # KEY: Mock the external web search to return a predictable fact.
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_wikipedia",
         lambda self, topic: (topic, f"{topic} is a test concept."),
@@ -224,7 +220,7 @@ def test_find_chunky_fact_returns_edge_with_highest_weight(
     agent.graph.graph.clear()
     node_a = agent.graph.add_node(ConceptNode(name="A"))
 
-    # KEY FIX: The name must have MORE THAN 5 words to be "chunky".
+    # KEY: The name must have MORE THAN 5 words to be "chunky".
     # We will use a 6-word phrase.
     long_name_node = agent.graph.add_node(
         ConceptNode(name="a very very long definition phrase"),
@@ -365,3 +361,42 @@ def test_harvester_handles_complete_failure(harvester, agent, monkeypatch):
     # Verification: No new goals should be added
     assert len(agent.learning_goals) == initial_goal_count
     print("Harvester discover_cycle correctly handled finding no new topic.")
+
+
+@pytest.mark.parametrize(
+    ("raw_sentence", "expected_clean_sentence"),
+    [
+        # Test case 1: Introductory phrase
+        (
+            "In psychology, confusion is a state of being unclear.",
+            "confusion is a state of being unclear.",
+        ),
+        # Test case 2: Parenthetical text and leading junk
+        (
+            ": supernovae) is a powerful and luminous stellar explosion.",
+            "is a powerful and luminous stellar explosion.",
+        ),
+        # Test case 3: Semicolon splitting
+        (
+            "Comprise the kingdom plantae; landmass is a region.",
+            "Comprise the kingdom plantae",
+        ),
+        # Test case 4: A clean sentence that should be mostly unchanged
+        ("The sun is a star.", "The sun is a star."),
+        # Test case 5: Leading hyphen
+        ("- A fact with a leading hyphen.", "A fact with a leading hyphen."),
+    ],
+)
+def test_agent_sanitizes_sentences_correctly(  # <-- Renamed function for clarity
+    agent: CognitiveAgent,  # <-- Use the 'agent' fixture now
+    raw_sentence: str,
+    expected_clean_sentence: str,
+):
+    """
+    Covers the _sanitize_sentence_for_learning helper method, now in CognitiveAgent.
+    """
+    # 1. WHEN: We call the sanitizer method on the AGENT object.
+    clean_sentence = agent._sanitize_sentence_for_learning(raw_sentence)
+
+    # 2. THEN: Assert that the output matches the expected clean version.
+    assert clean_sentence == expected_clean_sentence

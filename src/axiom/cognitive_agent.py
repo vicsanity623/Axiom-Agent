@@ -219,7 +219,11 @@ class CognitiveAgent:
         if self.is_awaiting_clarification:
             return self._handle_clarification(user_input)
 
-        expanded_input = self._expand_contractions(user_input)
+        sanitized_input = self._sanitize_sentence_for_learning(user_input)
+        if sanitized_input != user_input:
+            logger.info("  [Cognitive Flow]: Sanitized input -> '%s'", sanitized_input)
+
+        expanded_input = self._expand_contractions(sanitized_input)
         contextual_input = self._resolve_references(expanded_input)
         normalized_input = self._preprocess_self_reference(contextual_input)
         interpretations: list[InterpretData] | None = self.parser.parse(
@@ -1224,6 +1228,28 @@ class CognitiveAgent:
             if not props.get("effective_date")
         }
 
+    def _sanitize_sentence_for_learning(self, sentence: str) -> str:
+        """
+        Pre-processes a raw sentence from any source to make it easier for the
+        symbolic parser to understand. This is the main gatekeeper for knowledge.
+        """
+        sanitized = re.sub(r"\s*\(.*?\)\s*", " ", sentence).strip()
+
+        sanitized = re.sub(r"^.*?\)\s*", "", sanitized)
+
+        sanitized = re.sub(
+            r"^(In|According to)\s+[\w\s]+,\s*",
+            "",
+            sanitized,
+            flags=re.IGNORECASE,
+        )
+
+        sanitized = sanitized.split(";")[0]
+
+        sanitized = re.sub(r"^\s*[:\-\–]+\s*", "", sanitized)
+
+        return sanitized.strip()
+
     def _clean_phrase(self, phrase: str) -> str:
         """Clean and normalize a phrase for use as a concept in the graph.
 
@@ -1239,13 +1265,12 @@ class CognitiveAgent:
         """
         clean_phrase = phrase.lower().strip()
         clean_phrase = re.sub(r"[.,!?;']+$", "", clean_phrase)
-
         words = clean_phrase.split()
 
         if len(words) > 1 and words[0] in ["a", "an", "the"]:
-            words = words[1:]
+            return " ".join(words[1:]).strip()
 
-        return " ".join(words).strip()
+        return clean_phrase
 
     def _process_statement_for_learning(
         self,
@@ -1402,7 +1427,11 @@ class CognitiveAgent:
                 return "has_name"
         return RELATION_TYPE_MAP.get(verb, verb.replace(" ", "_"))
 
-    def learn_new_fact_autonomously(self, fact_sentence: str) -> bool:
+    def learn_new_fact_autonomously(
+        self,
+        fact_sentence: str,
+        source_topic: str | None = None,
+    ) -> bool:
         """Process and learn a fact from a raw sentence string.
 
         This is a high-level wrapper used by the KnowledgeHarvester. It
@@ -1430,6 +1459,8 @@ class CognitiveAgent:
             relation,
         )
         if interpretation.get("intent") == "statement_of_fact" and relation:
+            if source_topic:
+                relation["subject"] = self._clean_phrase(source_topic)
             was_learned, response_message = self._process_statement_for_learning(
                 relation,
             )

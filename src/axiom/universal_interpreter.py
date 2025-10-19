@@ -24,8 +24,9 @@ if TYPE_CHECKING:
 
 
 MODELS_FOLDER: Final = Path("models")
+BRAIN_FOLDER: Final = Path("brain")
 DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
-DEFAULT_CACHE_PATH: Final = "interpreter_cache.json"
+DEFAULT_CACHE_PATH: Final = BRAIN_FOLDER / "interpreter_cache.json"
 
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
