@@ -52,6 +52,7 @@ class LexiconManager:
         definition: str | None = None,
     ) -> None:
         """Add a new word and its linguistic properties WITHOUT printing.
+
         Used for high-volume initial vocabulary seeding.
 
         This method creates the necessary nodes and edges to represent a

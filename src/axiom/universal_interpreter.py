@@ -33,7 +33,7 @@ You are a language rephrasing engine. Your task is to convert the given 'Facts' 
 2.  **DO NOT add any extra information, commentary, or meta-analysis.**
 3.  **DO NOT apologize or mention your own limitations.**
 4.  **Your output must be ONLY the rephrased sentence and nothing else.**
-"""[1:]
+"""[1:-1]
 
 JSON_STRUCTURE_PROMPT: Final = """
 The JSON object must have the following fields:
@@ -41,7 +41,7 @@ The JSON object must have the following fields:
 - 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'predicate', 'relation', or 'properties'.
 - 'key_topics': A list of the main subjects or topics.
 - 'full_text_rephrased': A neutral, one-sentence rephrasing.
-"""[1:]
+"""[1:-1]
 
 
 Intent: TypeAlias = Literal[
@@ -114,13 +114,6 @@ class UniversalInterpreter:
     language synthesis.
     """
 
-    def _is_pronoun_present(self, text: str) -> bool:
-        """Check if any pronoun exists as a whole word in the text."""
-        for pronoun in PRONOUNS:
-            if re.search(rf"\b{pronoun}\b", text, re.IGNORECASE):
-                return True
-        return False
-
     def __init__(
         self,
         model_path: str | Path = DEFAULT_MODEL_PATH,
@@ -163,6 +156,13 @@ class UniversalInterpreter:
         self._load_cache()
 
         print("Universal Interpreter loaded successfully.")
+
+    def _is_pronoun_present(self, text: str) -> bool:
+        """Check if any pronoun exists as a whole word in the text."""
+        for pronoun in PRONOUNS:
+            if re.search(rf"\b{pronoun}\b", text, re.IGNORECASE):
+                return True
+        return False
 
     def _load_cache(self) -> None:
         """Load the interpretation and synthesis caches from a JSON file."""
@@ -563,7 +563,7 @@ class UniversalInterpreter:
 
     def synthesize(
         self,
-        structured_facts: str | list[dict] | list[str] | list[ConceptNode],
+        structured_facts: str | list[RelationData] | list[str] | list[ConceptNode],
         original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
