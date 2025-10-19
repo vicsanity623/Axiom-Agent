@@ -18,6 +18,8 @@ dependencies = [
     "nltk",
     "requests",
     "wikipedia",
+    "thefuzz>=0.22.1",
+    "python-Levenshtein>=0.25.1",
 ]
 
 [project.optional-dependencies]
