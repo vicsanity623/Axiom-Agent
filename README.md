@@ -79,13 +79,15 @@ The project supports a clean development and deployment cycle.
 
 ---
 
-## 🚀 The Vision: From Semantic Knowledge to Procedural Reasoning
+## 🚀 The Vision: Intellectual Escape Velocity
 
-The immediate goal is to deepen the agent's semantic understanding through autonomous learning. As its `ConceptGraph` grows, it will build its own comprehensive model of reality and language.
+The ultimate goal of this project is to achieve **intellectual escape velocity** from the LLM.
 
-The long-term vision is to evolve beyond what it *knows* (semantic knowledge) to what it can *do* (procedural knowledge). By integrating a **Tool Use Framework**, the agent will learn to recognize questions it cannot answer from memory and delegate them to specialized tools—a calculator for math, a search engine for current events, or even a code interpreter for complex logic.
+The vision is to continuously expand the sophistication of the `SymbolicParser` and the richness of the `ConceptGraph` through autonomous learning. As the agent's internal, verifiable model of reality grows, its reliance on the LLM for language understanding will diminish. The end goal is a cognitive entity whose own symbolic brain is so comprehensive that the LLM fallback for interpretation becomes obsolete.
 
-This creates a path toward a truly general and capable AI, built on a foundation of verifiable truth and augmented with powerful, specialized capabilities.
+Beyond language mastery, the agent's evolution will continue by integrating a **Tool Use Framework**. This will allow it to move beyond what it *knows* (semantic knowledge) to what it can *do* (procedural knowledge)—calling on specialized tools for tasks like mathematical calculations, real-time web searches, or code execution.
+
+This creates a path toward a truly autonomous AI, built on a foundation of verifiable truth, not just probabilistic mimicry, and augmented with powerful, specialized capabilities.
 
 ---
 
