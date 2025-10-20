@@ -557,6 +557,72 @@ class UniversalInterpreter:
             )
             return []
 
+    def verify_and_reframe_fact(
+        self,
+        original_topic: str,
+        raw_sentence: str,
+    ) -> str | None:
+        """
+        Uses the LLM to verify if a raw sentence is relevant to a topic and,
+        if so, reframes it into a simple, atomic S-V-O sentence for learning.
+        """
+        if self.llm is None:
+            print("  [Fact Verifier Error]: LLM is disabled. Cannot verify/reframe.")
+            if original_topic.lower() in raw_sentence.lower():
+                return raw_sentence
+            return None
+
+        print(
+            f"  [Fact Verifier]: Asking LLM to verify and reframe fact for '{original_topic}'...",
+        )
+        system_prompt = (
+            "You are a precise fact verification and reframing engine. Your task is to analyze a 'Raw Sentence' "
+            "to see if it is a direct, useful fact about the 'Original Topic'. If it is, you MUST rephrase it into a "
+            "single, simple, declarative sentence (Subject-Verb-Object). If it is not relevant, you MUST output ONLY the word 'None'."
+        )
+        examples_prompt = (
+            "Here are some examples:\n"
+            "Original Topic: fabric\n"
+            "Raw Sentence: A textile is a flexible material made by creating an interlocking network of yarns or threads.\n"
+            "Output: A fabric is a flexible material.\n\n"
+            "Original Topic: history of bitcoin\n"
+            "Raw Sentence: Bitcoin is a cryptocurrency, a digital asset that uses cryptography to control its creation and management.\n"
+            "Output: None\n\n"
+            "Original Topic: bees\n"
+            "Raw Sentence: Bees are flying insects closely related to wasps and ants, known for their role in pollination.\n"
+            "Output: Bees are flying insects."
+        )
+        full_prompt = (
+            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"Original Topic: {original_topic}\nRaw Sentence: {raw_sentence}\n"
+            f"Output:[/INST]"
+        )
+        try:
+            output = cast(
+                "dict[str, list[dict[str, str]]]",
+                self.llm(
+                    full_prompt,
+                    max_tokens=64,
+                    stop=["</s>", "\n"],
+                    echo=False,
+                    temperature=0.0,
+                ),
+            )
+            rephrased_fact = output["choices"][0]["text"].strip()
+
+            if "none" in rephrased_fact.lower():
+                print("    - LLM rejected the fact as irrelevant.")
+                return None
+
+            print(f"    - LLM verified and reframed: '{rephrased_fact}'")
+            return rephrased_fact
+
+        except Exception as e:
+            print(
+                f"  [Fact Verifier Error]: Could not process fact with LLM. Error: {e}",
+            )
+            return None
+
     def synthesize(
         self,
         structured_facts: str | list[RelationData] | list[str] | list[ConceptNode],

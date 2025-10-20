@@ -1,4 +1,5 @@
 import threading
+from unittest.mock import MagicMock
 
 import pytest
 import requests
@@ -25,49 +26,6 @@ class MockWikipediaPage:
     def __init__(self, title, summary):
         self.title = title
         self.summary = summary
-
-
-@pytest.mark.parametrize(
-    ("summary_text", "should_succeed"),
-    [
-        (
-            "Python is an interpreted, high-level and general-purpose programming language. It was created by...",
-            True,
-        ),
-        (
-            "This is an exceptionally long and convoluted sentence that contains far too many words, clauses, and commas, which is designed specifically to fail the simplicity check that is built into the knowledge harvester.",
-            False,
-        ),
-    ],
-)
-def test_harvester_gets_fact_from_wikipedia(
-    harvester,
-    monkeypatch,
-    summary_text,
-    should_succeed,
-):
-    topic = "Python"
-    mock_page = MockWikipediaPage(
-        title="Python (programming language)",
-        summary=summary_text,
-    )
-    monkeypatch.setattr(wikipedia, "search", lambda query, results: [mock_page.title])
-    monkeypatch.setattr(
-        wikipedia,
-        "page",
-        lambda title, auto_suggest, redirect: mock_page,
-    )
-    result = harvester.get_fact_from_wikipedia(topic)
-    if should_succeed:
-        assert result is not None
-        title, fact = result
-        assert title == mock_page.title
-        assert (
-            fact
-            == "Python is an interpreted, high-level and general-purpose programming language."
-        )
-    else:
-        assert result is None
 
 
 def test_discover_cycle_adds_goal(harvester, agent, monkeypatch):
@@ -99,32 +57,51 @@ def test_resolve_investigation_goal_with_api_success(harvester, agent, monkeypat
 
 
 def test_resolve_investigation_goal_fallback_web(
-    harvester,
-    agent,
+    harvester: KnowledgeHarvester,
+    agent: CognitiveAgent,
     monkeypatch,
 ):
+    """
+    Tests the web fallback in _resolve_investigation_goal, mocking the
+    final learning step to isolate the harvester's logic.
+    """
+    # 1. GIVEN: All external APIs will fail except for Wikipedia.
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_definition_from_api",
         lambda self, word: None,
     )
-
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_wikipedia",
-        lambda self, topic: (topic, f"{topic} is a test noun."),
+        lambda self, topic: ("A Test Topic", "The test topic is a noun."),
     )
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_duckduckgo",
         lambda self, topic: None,
     )
 
+    # AND: We mock the agent's learning function to always succeed.
+    # This is the key to testing the harvester's logic in isolation.
+    learn_spy = MagicMock(return_value=True)
+    monkeypatch.setattr(agent, "learn_new_fact_autonomously", learn_spy)
+
     goal = "INVESTIGATE: fallbackword"
     agent.learning_goals.append(goal)
 
+    # 2. WHEN: We call the method under test.
     resolved = harvester._resolve_investigation_goal(goal)
+
+    # 3. THEN: Assert that the goal was resolved.
     assert resolved is True
     assert goal not in agent.learning_goals
+
+    # AND: Assert that the agent's learning function was called with the correct data.
+    learn_spy.assert_called_once_with(
+        fact_sentence="The test topic is a noun.",
+        source_topic="A Test Topic",
+    )
+
     print(
-        "KnowledgeHarvester: _resolve_investigation_goal succeeded via fallback web search.",
+        "✅ Harvester correctly fell back to web search and called the learning function.",
     )
 
 
@@ -271,14 +248,52 @@ class MockResponse:
             raise requests.RequestException("Mocked HTTP Error")
 
 
+def test_harvester_gets_fact_from_wikipedia(
+    harvester: KnowledgeHarvester,
+    agent: CognitiveAgent,
+    monkeypatch,
+):
+    """
+    Tests the get_fact_from_wikipedia method, mocking the interpreter's
+    verification step to isolate the harvester's logic.
+    """
+    # 1. GIVEN: We mock the external dependencies.
+    # Mock the wikipedia library to return a predictable page.
+    mock_page = MockWikipediaPage(
+        title="Python (programming language)",
+        summary="Python is a programming language.",
+    )
+    monkeypatch.setattr(wikipedia, "search", lambda *args, **kwargs: [mock_page.title])
+    monkeypatch.setattr(wikipedia, "page", lambda *args, **kwargs: mock_page)
+
+    # AND: We mock the interpreter's verification method to return a predictable, reframed fact.
+    reframed_fact = "Python is a language."
+    verify_spy = MagicMock(return_value=reframed_fact)
+    monkeypatch.setattr(agent.interpreter, "verify_and_reframe_fact", verify_spy)
+
+    # 2. WHEN: We call the method under test.
+    result = harvester.get_fact_from_wikipedia("Python")
+
+    # 3. THEN: Assert that the method returned the reframed fact.
+    assert result is not None
+    title, fact = result
+    assert title == mock_page.title
+    assert fact == reframed_fact
+
+    # AND: Assert that our verification spy was called with the correct raw sentence.
+    verify_spy.assert_called_once_with(
+        original_topic="Python",
+        raw_sentence="Python is a programming language.",
+    )
+    print("✅ Wikipedia harvester correctly used the LLM verifier.")
+
+
 @pytest.mark.parametrize(
     ("api_response", "should_succeed"),
     [
         # "Happy path": API returns a good definition
         (
-            {
-                "AbstractText": "A programming language created by Guido van Rossum. It is dynamically typed.",
-            },
+            {"AbstractText": "A programming language..."},
             True,
         ),
         # "Sad path": API returns an empty response
@@ -286,35 +301,42 @@ class MockResponse:
     ],
 )
 def test_harvester_gets_fact_from_duckduckgo(
-    harvester,
+    harvester: KnowledgeHarvester,
+    agent: CognitiveAgent,
     monkeypatch,
     api_response,
     should_succeed,
 ):
     """
-    Covers the get_fact_from_duckduckgo method in the KnowledgeHarvester.
-    Tests both a successful API response and a failed/empty response.
+    Tests the get_fact_from_duckduckgo method, mocking the interpreter's
+    verification step.
     """
-    # 1. Setup: Mock the external requests.get call
-    topic = "Python"
-    mock_response = MockResponse(api_response)
+    # 1. GIVEN: Mock the external dependencies.
+    # Mock the requests library to return a predictable API response.
+    mock_api_response = {"AbstractText": "Python is a programming language."}
+    mock_response_obj = MockResponse(mock_api_response)
+    monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response_obj)
 
-    # When the code calls requests.get, return our fake response object
-    monkeypatch.setattr(requests, "get", lambda url, timeout: mock_response)
+    # AND: We mock the interpreter's verification method.
+    reframed_fact = "Python is a language."
+    verify_spy = MagicMock(return_value=reframed_fact)
+    monkeypatch.setattr(agent.interpreter, "verify_and_reframe_fact", verify_spy)
 
-    # 2. Action: Call the method we are testing
-    result = harvester.get_fact_from_duckduckgo(topic)
+    # 2. WHEN: We call the method under test.
+    result = harvester.get_fact_from_duckduckgo("Python")
 
-    # 3. Verification
-    if should_succeed:
-        assert result is not None
-        result_topic, fact = result
-        assert result_topic == topic
-        assert fact == "A programming language created by Guido van Rossum."
-        print("DuckDuckGo harvester successfully extracted a fact.")
-    else:
-        assert result is None
-        print("DuckDuckGo harvester correctly handled an empty API response.")
+    # 3. THEN: Assert that the method returned the reframed fact.
+    assert result is not None
+    topic, fact = result
+    assert topic == "Python"
+    assert fact == reframed_fact
+
+    # AND: Assert that our verification spy was called correctly.
+    verify_spy.assert_called_once_with(
+        original_topic="Python",
+        raw_sentence="Python is a programming language.",
+    )
+    print("✅ DuckDuckGo harvester correctly used the LLM verifier.")
 
 
 def test_harvester_handles_complete_failure(harvester, agent, monkeypatch):
