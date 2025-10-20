@@ -269,7 +269,7 @@ class UniversalInterpreter:
 
         sanitized_input = json.dumps(user_input)
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{json_structure_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{json_structure_prompt}\n\n{examples_prompt}\n\n"
             f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
         )
         try:
@@ -353,7 +353,7 @@ class UniversalInterpreter:
             "New Input: what is the largest planet?\nOutput: what is the largest planet?"
         )
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Conversation History:\n{formatted_history}\n"
             f"New Input: {new_input}\nOutput:[/INST]"
         )
@@ -454,7 +454,7 @@ class UniversalInterpreter:
             "- SymbolicParser is for understanding simple language."
         )
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Subject: {subject.capitalize()}\nDefinition: {chunky_definition}\n"
             f"Output:[/INST]"
         )
@@ -524,7 +524,7 @@ class UniversalInterpreter:
             "Output:\n- Why is the sun hot?\n- How big is the sun?"
         )
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Topic: {topic}\nKnown Fact: {known_fact}\n"
             f"Output:[/INST]"
         )
@@ -593,7 +593,7 @@ class UniversalInterpreter:
             "Output: Bees are flying insects."
         )
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Original Topic: {original_topic}\nRaw Sentence: {raw_sentence}\n"
             f"Output:[/INST]"
         )
