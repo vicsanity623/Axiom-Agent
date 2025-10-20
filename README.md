@@ -93,90 +93,36 @@ This creates a path toward a truly autonomous AI, built on a foundation of verif
 
 ## 🧠 A Glimpse into the Agent's Mind: Autonomous Learning in Action
 
-The Axiom Agent isn't just a passive chatbot; it's an active learner. Here is a real, step-by-step example from the agent's logs (Study Cycle), showing how it intelligently discovers, verifies, and integrates new knowledge on its own.
-
-### Step 1: Curiosity (The Study Cycle)
-
-The agent's `Study Cycle` begins. With no immediate tasks, it decides to deepen its own knowledge by picking a concept it already knows but wants to learn more about.
-
-```log
-[Deepen Knowledge]: Chosen to study the concept: 'placental'
-```
-
-### Step 2: Research (The Knowledge Harvester)
-
-The `KnowledgeHarvester` acts as the agent's "senses." It searches the web for the chosen topic. Wikipedia redirects the search from "placental" to the more comprehensive "Placental mammal" article and returns the first sentence.
-
-```log
-[Knowledge Source]: Searching Wikipedia for 'placental'...
- 
-# Raw sentence found:
-# "Placental mammals are any members of the mammalian infraclass Placentalia..."
-```
-
-### Step 3: Verification & Reframing (The LLM as a Tool)
-
-This is the critical step. Instead of blindly trusting the raw sentence, the agent uses its LLM-powered `UniversalInterpreter` as a verification tool. It asks the LLM two crucial questions:
-1. Is this sentence *really* a direct, useful fact about my original topic, "placental"?
-2. If yes, can you rephrase it into a simple, atomic `Subject-Verb-Object` sentence for my brain?
-
-The LLM analyzes the context and provides a clean, verified, and learnable fact.
-
-```log
-[Fact Verifier]: Asking LLM to verify and reframe fact for 'placental'...
-- LLM verified and reframed: 'Placental mammals are one of three subdivisions of the class Mammalia.'
-```
-
-### Step 4: Symbolic Understanding (The Parser)
-
-The clean, pre-digested sentence is now passed to the agent's core `SymbolicParser`. Because the sentence is in a simple, predictable format, the parser can understand it instantly and deterministically **without needing to call the LLM again.**
-
-```log
-[Symbolic Parser]: Successfully parsed S-V-O structure via regex: 
-'placental mammals' -> 'is_a' -> 'one of three subdivisions of the class mammalia'.
- ```
-
-### Step 5: Integration (The Knowledge Graph)
-
-The agent has now achieved a verifiable, symbolic understanding of the new fact. It confidently integrates this knowledge into its `ConceptGraph`, creating new nodes and linking them with a high-confidence relationship.
-
-```log
-[LEARNING]: Learned new fact: 
- placental mammals --[is_a]--> one of three subdivisions of the class mammalia
- ```
-
-
 The Axiom Agent isn't just a passive chatbot; it's an active learner. The diagram below illustrates a real example from the agent's logs, showing how it intelligently discovers, verifies, and integrates new knowledge on its own. (`axiom-train` log of a `study cycle`)
 
 ```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#2E2E33', 'primaryTextColor': '#E0E0E0', 'lineColor': '#5C5C66', 'secondaryColor': '#3A3A40', 'tertiaryColor': '#2E2E33'}}}%%
 graph TD
-    subgraph Cognitive Core
-        A["<b>Study Cycle</b><br/><i>Curiosity Phase</i>"] --> B("Choose Concept:<br/>'placental'");
+    subgraph "Cognitive Core"
+        A["<b>Study Cycle</b><br/><i>Curiosity Phase</i>"] --> B["Choose Concept:<br/>'placental'"];
     end
 
-    subgraph Knowledge Harvester
-        B --> C["<br/><b>Research Phase</b><br/>Search Wikipedia for 'placental'"];
-        C --> D("Redirected to Page:<br/>'Placental mammal'");
-        D --> E("Extract Raw Sentence:<br/>'Placental mammals are any members...'");
+    subgraph "Knowledge Harvester"
+        B --> C["<b>Research Phase</b><br/>Search Wikipedia for 'placental'"];
+        C --> D["Redirected to Page:<br/>'Placental mammal'"];
+        D --> E["Extract Raw Sentence:<br/>'Placental mammals are...'"];
     end
     
-    subgraph LLM as a Tool
+    subgraph "LLM as a Tool"
         E --> F["<b>Verification & Reframing</b><br/>Call `verify_and_reframe_fact`"];
         F -- "1. Is this relevant?<br/>2. Rephrase as S-V-O" --> G{"<b>LLM Analysis</b>"};
-        G -- "YES" --> H("Clean Fact:<br/>'Placental mammals are...'");
-        G -- "NO" --> I("Reject Fact<br/>(e.g., 'None')");
+        G -- "YES" --> H["Clean Fact:<br/>'Placental mammals are...'"];
+        G -- "NO" --> I["Reject Fact<br/>(e.g., 'None')"];
     end
     
-    subgraph Cognitive Core
-        H --> J["<b>Symbolic Understanding</b><br/>`SymbolicParser` processes the clean fact"];
-        J --> K("Parsed as:<br/>'placental mammals' → 'is_a' → '...'");
-        K --> L["<br/><b>Integration Phase</b><br/>Add to Knowledge Graph"];
+    subgraph "Cognitive Core"
+        H --> J["<b>Symbolic Understanding</b><br/>`SymbolicParser` processes clean fact"];
+        J --> K["Parsed as:<br/>'placental mammals' → 'is_a' → '...'"];
+        K --> L["<b>Integration Phase</b><br/>Add to Knowledge Graph"];
     end
     
-    subgraph Knowledge Graph (Brain)
-        M(placental mammals)
-        N(subdivision of mammalia)
+    subgraph "Knowledge Graph (Brain)"
+        M("placental mammals");
+        N("subdivision of mammalia");
         L --> M -- "is_a" --> N;
     end
     
@@ -187,10 +133,8 @@ graph TD
     style J fill:#3C873A,stroke:#90C28E,stroke-width:2px,color:#fff
     style C fill:#4A90E2,stroke:#A3C9F0,stroke-width:2px,color:#fff
     
-    classDef default fill:#2E2E33,stroke:#5C5C66,stroke-width:2px,color:#E0E0E0;
     classDef brain fill:#1E3A5F,stroke:#4A90E2,stroke-width:2px,color:#fff;
     class M,N brain;
-
 ```
 
 ---
