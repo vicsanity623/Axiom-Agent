@@ -152,26 +152,26 @@ The Axiom Agent isn't just a passive chatbot; it's an active learner. The diagra
 %%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#2E2E33', 'primaryTextColor': '#E0E0E0', 'lineColor': '#5C5C66', 'secondaryColor': '#3A3A40', 'tertiaryColor': '#2E2E33'}}}%%
 graph TD
     subgraph Cognitive Core
-        A[<b>Study Cycle</b><br/><i>Curiosity Phase</i>] --> B{Choose Concept:<br/>"placental"};
+        A["<b>Study Cycle</b><br/><i>Curiosity Phase</i>"] --> B("Choose Concept:<br/>'placental'");
     end
 
     subgraph Knowledge Harvester
-        B --> C[<br/><b>Research Phase</b><br/>Search Wikipedia for "placental"];
-        C --> D{Redirected to Page:<br/>"Placental mammal"};
-        D --> E[Extract Raw Sentence:<br/>"Placental mammals are any members..."];
+        B --> C["<br/><b>Research Phase</b><br/>Search Wikipedia for 'placental'"];
+        C --> D("Redirected to Page:<br/>'Placental mammal'");
+        D --> E("Extract Raw Sentence:<br/>'Placental mammals are any members...'");
     end
     
     subgraph LLM as a Tool
-        E --> F[<b>Verification & Reframing</b><br/>Call `verify_and_reframe_fact`];
-        F -- "1. Is this relevant?<br/>2. Rephrase as S-V-O" --> G{<br/><b>LLM Analysis</b>};
-        G -- "YES" --> H[Clean Fact:<br/>"Placental mammals are..."];
-        G -- "NO" --> I[Reject Fact<br/>(e.g., "None")];
+        E --> F["<b>Verification & Reframing</b><br/>Call `verify_and_reframe_fact`"];
+        F -- "1. Is this relevant?<br/>2. Rephrase as S-V-O" --> G{"<b>LLM Analysis</b>"};
+        G -- "YES" --> H("Clean Fact:<br/>'Placental mammals are...'");
+        G -- "NO" --> I("Reject Fact<br/>(e.g., 'None')");
     end
     
     subgraph Cognitive Core
-        H --> J[<b>Symbolic Understanding</b><br/>`SymbolicParser` processes the clean fact];
-        J --> K{Parsed as:<br/>'placental mammals' → 'is_a' → '...'};
-        K --> L[<br/><b>Integration Phase</b><br/>Add to Knowledge Graph];
+        H --> J["<b>Symbolic Understanding</b><br/>`SymbolicParser` processes the clean fact"];
+        J --> K("Parsed as:<br/>'placental mammals' → 'is_a' → '...'");
+        K --> L["<br/><b>Integration Phase</b><br/>Add to Knowledge Graph"];
     end
     
     subgraph Knowledge Graph (Brain)
