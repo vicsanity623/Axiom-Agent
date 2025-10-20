@@ -11,6 +11,7 @@ readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
+    "tqdm",
     "APScheduler",
     "Flask",
     "llama-cpp-python",
@@ -37,6 +38,14 @@ dev = [
 [project.urls]
 "Source" = "https://github.com/vicsanity623/Axiom-Agent"
 "Bug Tracker" = "https://github.com/vicsanity623/Axiom-Agent/issues"
+
+[project.scripts]
+axiom-llm = "axiom.scripts.download_model:main"
+axiom-train = "axiom.scripts.autonomous_trainer:main"
+axiom-render = "axiom.scripts.render_model:main"
+axiom-teach = "axiom.scripts.cnt:main"
+axiom-webui_app = "axiom.scripts.app:main"
+axiom-webui = "axiom.scripts.app_model:main"
 
 
 # --- Tool Configurations ---
@@ -70,7 +79,7 @@ extend-ignore = [
 ]
 
 [tool.mypy]
-files = ["src/", "tests/", "setup/"]
+files = ["src/", "tests/"]
 enable_error_code = [
     "truthy-bool",
     "mutable-override",
@@ -100,6 +109,9 @@ filterwarnings = [
 markers = [
     "introspection: tests that require a live LLM model and are skipped in standard CI",
 ]
+
+[tool.setuptools.package-data]
+axiom = ["static/*", "templates/*"]
 
 [tool.coverage.run]
 branch = true

@@ -13,26 +13,20 @@ This project and everyone participating in it is governed by a standard Code of 
 The following steps will guide you through setting up a complete and stable development environment.
 
 ### Step 1: Clone the Repository & Setup Environment
-First, get the code, create an isolated virtual environment, and activate it.
+First, get the code, create an isolated virtual environment, and activate it. (TIP: the ./setup.sh is to make sure nothing is forgotten during setup, it needs to be `executable` before you run  it)
 ```bash
 git clone https://github.com/vicsanity623/Axiom-Agent.git
 cd Axiom-Agent
-python3 -m venv venv
-source venv/bin/activate
+./setup.sh
 ```
+make sure venv is activated (it should activate with ./setup.sh)
 
-### Step 2: Install All Dependencies
-This project uses a `pyproject.toml` file to manage all dependencies. This single command installs the core application libraries *and* all the development tools (like Ruff, MyPy, and Pytest) needed for contributing.
-# The quotes are important to prevent errors in some shells like Zsh
+
+### Step 2: Download the LLM Model (Optional, for full functionality)
+The agent uses a local LLM for many of its advanced features. You can download the recommended model automatically by running this command from your project's root directory:
 ```bash
-pip install -e '.[dev]'
+axiom-llm
 ```
-
-### Step 3: Download the LLM Model (Optional, for Full Functionality)
-The agent uses a local LLM as a fallback for complex sentences.
-1.  Download the **`mistral-7b-instruct-v0.2.Q4_K_M.gguf`** model from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
-2.  Create a `models/` directory in the root of the project.
-3.  Place the downloaded `.gguf` file inside the `models/` directory.
 
 ---
 
@@ -53,10 +47,11 @@ The agent's memory is stored in the `brain/` directory. For most development, yo
 # To start fresh for a test session
 rm -f brain/*
 ```
-*   **For manual training and chat:** `python setup/cnt.py`
-*   **For rendering a chat model:** `python setup/render_model.py`
-*   **For interactive chat and testing on latest chat model:** `python setup/app_model.py`
-*   **For testing autonomous cycles / endless learning:** `python setup/autonomous_trainer.py`
+*   **For manual training and chat:** ```axiom-teach``` (manually teach inside the terminal)
+*   **For rendering a chat model:** ```axiom-render``` (creates a .axm model for chat)
+*   **For interactive chat and testing on latest chat model:** ```axiom-webui_app``` (can learn form user input)
+*   **For interactive READ ONLY chat and testing on latest chat model:** ```axiom-webui``` (CANNOT LEARN / READ ONLY)
+*   **For testing autonomous cycles / endless learning:** ```axiom-train``` (24/7 autonomous learning)
 
 ---
 

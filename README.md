@@ -50,32 +50,32 @@ The agent's architecture is fully testable and reproducible on your local machin
 - Git
 
 ### Step 1: Clone and Install
-This single command clones the repository, sets up a virtual environment, and installs all dependencies.
+This single command clones the repository, sets up a virtual environment, and installs all dependencies. (make sure setup.sh is executable)
 ```bash
 git clone https://github.com/vicsanity623/Axiom-Agent.git
 cd Axiom-Agent
-python3 -m venv venv
-source venv/bin/activate
-pip install -e '.[dev]'
+./setup.sh
 ```
+make sure venv is activated (it should activate with ./setup.sh)
 
 ### Step 2: Download the LLM Model (Optional, for full functionality)
-The agent uses a local LLM for complex language tasks.
-1.  Download **`mistral-7b-instruct-v0.2.Q4_K_M.gguf`** from [Hugging Face](https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF).
-2.  Create a `models/` directory in the project root and place the downloaded file inside it.
+The agent uses a local LLM for many of its advanced features. You can download the recommended model automatically by running this command from your project's root directory:
+```bash
+axiom-llm
+```
 
 *   **Note on Symbolic-Only Mode:** If the LLM model is not found, the agent will automatically start in a **symbolic-only mode**. This is perfect for testing the core logic and requires significantly less memory.
 
 ### Step 3: Run the Tests
-Verify your setup by running the full test suite. The `check.sh` script runs formatting, linting, type checking, and unit tests.
+Verify your setup by running the full test suite. The `check.sh` script runs formatting, linting, type checking, and unit tests. (this verifies nothing crucial breaks after changes have been made)
 ```bash
 ./check.sh
 ```
 
 ### Step 4: Run the Agent
 The project supports a clean development and deployment cycle.
-1.  **Train:** Use `python setup/autonomous_trainer.py` to let the agent learn on its own.
-2.  **Chat:** Use `python setup/app_model.py` to launch a web UI and interact with the agent's current brain state.
+1.  **Train:** Use `axiom-train` to let the agent learn on its own.
+2.  **Chat:** Use `axiom-webui` to launch a web UI and interact with the agent's current brain state. (more CLI can be found in **[CONTRIBUTING.md](CONTRIBUTING.md)** file.)
 
 ---
 
@@ -83,7 +83,7 @@ The project supports a clean development and deployment cycle.
 
 The ultimate goal of this project is to achieve **intellectual escape velocity** from the LLM.
 
-The vision is to continuously expand the sophistication of the `SymbolicParser` and the richness of the `ConceptGraph` through autonomous learning. As the agent's internal, verifiable model of reality grows, its reliance on the LLM for language understanding will diminish. The end goal is a cognitive entity whose own symbolic brain is so comprehensive that the LLM fallback for interpretation becomes obsolete.
+The vision is to continuously expand the sophistication of the `SymbolicParser` and the richness of the `ConceptGraph` through autonomous learning. As the agent's internal, verifiable model of reality grows, its reliance on the LLM for language understanding will diminish. The end goal is a cognitive entity whose own symbolic brain is so comprehensive that the LLM fallback for interpretation becomes obsolete. (FYI : Axiom will never stop using the llm and instead will keep it as a tool the same way a mathematician will always keep a calculator handy)
 
 Beyond language mastery, the agent's evolution will continue by integrating a **Tool Use Framework**. This will allow it to move beyond what it *knows* (semantic knowledge) to what it can *do* (procedural knowledge)—calling on specialized tools for tasks like mathematical calculations, real-time web searches, or code execution.
 

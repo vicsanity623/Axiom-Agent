@@ -13,36 +13,30 @@ import os
 import re
 from datetime import date, datetime
 from functools import lru_cache
-from pathlib import Path
-from typing import ClassVar, Final, NotRequired, TypedDict
+from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from nltk.stem import WordNetLemmatizer
 from thefuzz import process
 
-from axiom.dictionary_utils import get_word_info_from_wordnet
-from axiom.graph_core import ConceptGraph, ConceptNode, RelationshipEdge
-from axiom.knowledge_base import seed_core_vocabulary, seed_domain_knowledge
-from axiom.lexicon_manager import LexiconManager
-from axiom.symbolic_parser import SymbolicParser
-from axiom.universal_interpreter import (
+from .config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE
+from .dictionary_utils import get_word_info_from_wordnet
+from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
+from .knowledge_base import seed_core_vocabulary, seed_domain_knowledge
+from .lexicon_manager import LexiconManager
+from .symbolic_parser import SymbolicParser
+from .universal_interpreter import (
     Entity,
     InterpretData,
     RelationData,
     UniversalInterpreter,
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [%(name)s]: %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger("CognitiveAgent")
+logger = logging.getLogger(__name__)
 
 lemmatizer = WordNetLemmatizer()
-
-BRAIN_FOLDER: Final = Path("brain")
-DEFAULT_BRAIN_FILE: Final = BRAIN_FOLDER / "my_agent_brain.json"
-DEFAULT_STATE_FILE: Final = BRAIN_FOLDER / "my_agent_state.json"
 
 
 class ClarificationContext(TypedDict):
@@ -130,6 +124,7 @@ class CognitiveAgent:
                 functionality.
         """
         logger.info("Initializing Cognitive Agent...")
+        brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.brain_file = brain_file
         self.state_file = state_file
         self.inference_mode = inference_mode

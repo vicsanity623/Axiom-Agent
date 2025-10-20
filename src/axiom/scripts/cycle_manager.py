@@ -1,30 +1,24 @@
+# In src/axiom/scripts/cycle_manager.py
+
 from __future__ import annotations
 
-# autonomous_trainer.py
-import threading
-import time
-import traceback
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import TYPE_CHECKING, Final
-
-from apscheduler.schedulers.background import BackgroundScheduler
-
-from axiom.cognitive_agent import CognitiveAgent
-from axiom.knowledge_harvester import KnowledgeHarvester
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from apscheduler.schedulers.base import BaseScheduler
 
-BRAIN_PATH: Final = Path("brain")
-BRAIN_FILE: Final = BRAIN_PATH / "my_agent_brain.json"
-STATE_FILE: Final = BRAIN_PATH / "my_agent_state.json"
+    from ..knowledge_harvester import KnowledgeHarvester
 
 
 class CycleManager:
     """Manages the agent's phased cognitive cycles (learning vs. refinement)."""
 
-    def __init__(self, scheduler: BaseScheduler, harvester: KnowledgeHarvester) -> None:
+    def __init__(
+        self,
+        scheduler: BaseScheduler,
+        harvester: KnowledgeHarvester,
+    ) -> None:
         self.scheduler = scheduler
         self.harvester = harvester
         self.LEARNING_PHASE_DURATION = timedelta(hours=4)
@@ -46,10 +40,8 @@ class CycleManager:
         """The main heartbeat, called every minute to check for phase transitions."""
         if not self.phase_start_time:
             return
-
         now = datetime.now()
         elapsed_time = now - self.phase_start_time
-
         if (
             self.current_phase == "learning"
             and elapsed_time >= self.LEARNING_PHASE_DURATION
@@ -78,13 +70,13 @@ class CycleManager:
         self.scheduler.add_job(
             self.harvester.study_cycle,
             "interval",
-            minutes=6,
+            minutes=5,
             id="study_cycle_job",
         )
         self.scheduler.add_job(
             self.harvester.discover_cycle,
             "interval",
-            minutes=21,
+            minutes=18,
             id="discover_cycle_job",
         )
         self.current_phase = "learning"
@@ -97,47 +89,8 @@ class CycleManager:
         self.scheduler.add_job(
             self.harvester.refinement_cycle,
             "interval",
-            minutes=6,
+            minutes=4,
             id="refinement_cycle_job",
         )
         self.current_phase = "refinement"
         self.phase_start_time = datetime.now()
-
-
-def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
-    """Initialize the agent and run its autonomous learning cycles indefinitely."""
-    print("--- [AUTONOMOUS TRAINER]: Starting Axiom Agent Initialization... ---")
-    agent_interaction_lock = threading.Lock()
-
-    try:
-        axiom_agent = CognitiveAgent(
-            brain_file=brain_file,
-            state_file=state_file,
-            inference_mode=False,
-        )
-
-        harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
-        scheduler = BackgroundScheduler(daemon=True)
-
-        manager = CycleManager(scheduler, harvester)
-        manager.start()
-
-        scheduler.start()
-
-        print("\n--- [AUTONOMOUS TRAINER]: Agent is running in headless mode. ---")
-        print("--- Knowledge Harvester is active. Press CTRL+C to stop. ---")
-
-        while True:
-            time.sleep(1)
-
-    except (KeyboardInterrupt, SystemExit):
-        print("\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---")
-    except Exception as exc:
-        print(f"!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: {exc} !!!")
-        traceback.print_exc()
-    finally:
-        print("--- [AUTONOMOUS TRAINER]: Process terminated. ---")
-
-
-if __name__ == "__main__":
-    start_autonomous_training(BRAIN_FILE, STATE_FILE)

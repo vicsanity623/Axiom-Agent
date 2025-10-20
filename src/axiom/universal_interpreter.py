@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-
-# universal_interpreter.py
 import os
 import re
 from contextlib import redirect_stderr
@@ -19,14 +17,11 @@ from typing import (
 
 from llama_cpp import Llama
 
+from .config import DEFAULT_CACHE_FILE, DEFAULT_LLM_PATH
+
 if TYPE_CHECKING:
-    from axiom.graph_core import ConceptNode
+    from .graph_core import ConceptNode
 
-
-MODELS_FOLDER: Final = Path("models")
-BRAIN_FOLDER: Final = Path("brain")
-DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
-DEFAULT_CACHE_PATH: Final = BRAIN_FOLDER / "interpreter_cache.json"
 
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
@@ -117,8 +112,8 @@ class UniversalInterpreter:
 
     def __init__(
         self,
-        model_path: str | Path = DEFAULT_MODEL_PATH,
-        cache_file: str | Path = DEFAULT_CACHE_PATH,
+        model_path: str | Path = DEFAULT_LLM_PATH,
+        cache_file: str | Path = DEFAULT_CACHE_FILE,
         enable_llm: bool = True,
         load_llm: bool = True,
     ) -> None:

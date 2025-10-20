@@ -5,11 +5,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from axiom.cognitive_agent import CognitiveAgent
 from axiom.universal_interpreter import InterpretData
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from axiom.cognitive_agent import CognitiveAgent
 
 
 class MockUniversalInterpreter:
@@ -88,6 +89,9 @@ def blank_agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
     A fixture that provides a CognitiveAgent with a COMPLETELY EMPTY brain.
     It does this by patching the brain-seeding functions to do nothing.
     """
+
+    from axiom.cognitive_agent import CognitiveAgent
+
     # Temporarily replace the real, slow interpreter with our fake one.
     monkeypatch.setattr(
         "axiom.cognitive_agent.UniversalInterpreter",

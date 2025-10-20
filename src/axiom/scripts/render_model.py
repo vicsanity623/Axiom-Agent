@@ -3,11 +3,15 @@ from __future__ import annotations
 import json
 import re
 import zipfile
-from datetime import datetime
-from pathlib import Path
+from datetime import UTC, datetime
 
-VERSION_FILE = Path("brain/model_version.txt")
-RENDERED_FOLDER = Path("rendered")
+from ..config import (
+    BRAIN_DIR,
+    DEFAULT_BRAIN_FILE,
+    DEFAULT_CACHE_FILE,
+    MODEL_VERSION_FILE,
+    RENDERED_DIR,
+)
 
 
 def get_next_version() -> str:
@@ -15,9 +19,11 @@ def get_next_version() -> str:
     major = 0
     minor = 0
 
-    if VERSION_FILE.exists():
+    BRAIN_DIR.mkdir(parents=True, exist_ok=True)
+
+    if MODEL_VERSION_FILE.exists():
         try:
-            version_str = VERSION_FILE.read_text(encoding="utf-8")
+            version_str = MODEL_VERSION_FILE.read_text(encoding="utf-8")
             match = re.search(r"(\d+)\.(\d+)", version_str)
             if match:
                 major, minor = map(int, match.groups())
@@ -31,20 +37,20 @@ def get_next_version() -> str:
 
     next_version = f"{major}.{minor}"
 
-    VERSION_FILE.write_text(next_version, encoding="utf-8")
+    MODEL_VERSION_FILE.write_text(next_version, encoding="utf-8")
 
     return next_version
 
 
 def clear_old_models(current_version_str: str) -> None:
     """Deletes all .axm files in the rendered folder EXCEPT the current one."""
-    current_filename = RENDERED_FOLDER / f"Axiom_{current_version_str}.axm"
-    print(f"   - Cleaning up old models in '{RENDERED_FOLDER}'...")
+    current_filename = RENDERED_DIR / f"Axiom_{current_version_str}.axm"
+    print(f"   - Cleaning up old models in '{RENDERED_DIR}'...")
 
-    if not RENDERED_FOLDER.exists():
+    if not RENDERED_DIR.exists():
         return
 
-    for file_path in RENDERED_FOLDER.glob("Axiom_*.axm"):
+    for file_path in RENDERED_DIR.glob("Axiom_*.axm"):
         if file_path.resolve() != current_filename.resolve():
             try:
                 file_path.unlink()
@@ -58,9 +64,8 @@ def render_axiom_model() -> None:
     Package the agent's current brain and cache into a single, versioned .axm model.
     This script ensures only the latest rendered model exists in the 'rendered/' directory.
     """
-    brain_folder = Path("brain")
-    brain_file = brain_folder / "my_agent_brain.json"
-    cache_file = brain_folder / "interpreter_cache.json"
+    brain_file = DEFAULT_BRAIN_FILE
+    cache_file = DEFAULT_CACHE_FILE
 
     if not brain_file.exists():
         print(f"❌ CRITICAL ERROR: Source file '{brain_file}' not found.")
@@ -72,15 +77,15 @@ def render_axiom_model() -> None:
     version_str = get_next_version()
     print(f"--- Starting Axiom Mind Renderer [Version: {version_str}] ---")
 
-    RENDERED_FOLDER.mkdir(exist_ok=True)
-    output_filename = RENDERED_FOLDER / f"Axiom_{version_str}.axm"
+    RENDERED_DIR.mkdir(exist_ok=True)
+    output_filename = RENDERED_DIR / f"Axiom_{version_str}.axm"
 
     print("✅ Found required source files.")
 
     version_data = {
         "model_format": "AxiomMind",
         "version": version_str,
-        "render_date_utc": datetime.utcnow().isoformat(),
+        "render_date_utc": datetime.now(UTC).isoformat(),
     }
 
     try:
@@ -107,5 +112,9 @@ def render_axiom_model() -> None:
         print(f"❌ CRITICAL ERROR: Failed to create the .axm package. Error: {e}")
 
 
-if __name__ == "__main__":
+def main() -> None:
     render_axiom_model()
+
+
+if __name__ == "__main__":
+    main()
