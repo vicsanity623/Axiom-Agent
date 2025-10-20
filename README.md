@@ -1,5 +1,5 @@
 ---
-<p align="center"><img src="static/Axiom.png" alt="Axiom Agent Banner"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/vicsanity623/Axiom-Agent/main/src/axiom/static/Axiom.png" alt="Axiom Agent Banner"></p>
 
 
 Axiom is a **cognitive architecture**—a framework for a new type of artificial intelligence designed to achieve genuine understanding by building its own internal, logical model of reality from the ground up.
