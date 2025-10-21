@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import requests
 import wikipedia
+from nltk.stem import WordNetLemmatizer
 
 if TYPE_CHECKING:
     from threading import Lock
@@ -28,7 +29,7 @@ class LogColors:
 
 
 class KnowledgeHarvester:
-    __slots__ = ("agent", "lock", "rejected_topics")
+    __slots__ = ("agent", "lock", "rejected_topics", "lemmatizer")
 
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
         """Initialize the KnowledgeHarvester.
@@ -39,6 +40,7 @@ class KnowledgeHarvester:
         """
         self.agent = agent
         self.lock = lock
+        self.lemmatizer = WordNetLemmatizer()
         self.rejected_topics: set[str] = set()
         print("[Knowledge Harvester]: Initialized.")
 
@@ -72,22 +74,7 @@ class KnowledgeHarvester:
         self.agent.log_autonomous_cycle_completion()
 
     def _resolve_investigation_goal(self, goal: str) -> bool:
-        """Resolve an "INVESTIGATE" goal by finding a word's definition.
-
-        This is the primary research function for expanding the agent's
-        vocabulary. It prioritizes using a precise dictionary API. If that
-        fails, it falls back to a general web search and attempts to parse
-        the result with a regex pattern.
-
-        If successful, it adds the new linguistic knowledge to the agent's
-        lexicon and removes the goal from the queue.
-
-        Args:
-            goal: The learning goal string (e.g., "INVESTIGATE: platypus").
-
-        Returns:
-            True if the goal was successfully resolved, False otherwise.
-        """
+        """Resolve an "INVESTIGATE" goal by finding a word's definition."""
         match = re.match(r"INVESTIGATE: (.*)", goal)
         if not match:
             return False
@@ -98,7 +85,6 @@ class KnowledgeHarvester:
         )
 
         api_result = self.get_definition_from_api(word_to_learn)
-
         if api_result:
             part_of_speech, definition = api_result
             with self.lock:
@@ -116,47 +102,37 @@ class KnowledgeHarvester:
             f"  [Study Cycle]: Dictionary API failed for '{word_to_learn}'. Falling back to web search.",
         )
 
-        queries = [f"define {word_to_learn}", f"what is a {word_to_learn}"]
-        definition_found = None
+        queries = [f"what is {word_to_learn}", f"define {word_to_learn}", word_to_learn]
+        web_fact = None
+        source_topic = None
         for query in queries:
             result = self.get_fact_from_wikipedia(
                 query,
             ) or self.get_fact_from_duckduckgo(query)
             if result:
-                definition_found = result[1]
+                source_topic, web_fact = result
                 break
             time.sleep(1)
 
-        if not definition_found:
+        if not web_fact:
             print(f"  [Study Cycle]: Web search also failed for '{word_to_learn}'.")
             return False
 
-        pattern = re.compile(
-            rf"(?i)\b{re.escape(word_to_learn)}\b\s*(\(.*\))?\s+(is|are|refers to)\s+((an?|the)?\s*([\w\s-]+))\b(.*)",
-        )
-        def_match = pattern.search(definition_found)
-        if not def_match:
-            print(
-                f"  [Study Cycle]: Could not parse web search result: '{definition_found}'",
-            )
-            return False
-
-        part_of_speech = def_match.group(5).strip().lower()
-        full_definition = (def_match.group(3) + def_match.group(6)).strip()
-
-        if part_of_speech.isdigit() or part_of_speech in ["a", "an", "the"]:
-            return False
-
+        print(f"  [Study Cycle]: Found potential fact from web: '{web_fact}'")
         with self.lock:
-            self.agent.lexicon.add_linguistic_knowledge_quietly(
-                word=word_to_learn,
-                part_of_speech=part_of_speech,
-                definition=full_definition,
+            was_learned = self.agent.learn_new_fact_autonomously(
+                fact_sentence=web_fact,
+                source_topic=source_topic or word_to_learn,
             )
-            if goal in self.agent.learning_goals:
-                self.agent.learning_goals.remove(goal)
-            self.agent.save_brain()
-        return True
+
+        if was_learned:
+            print("  [Study Cycle]: Agent successfully learned the new fact.")
+            with self.lock:
+                if goal in self.agent.learning_goals:
+                    self.agent.learning_goals.remove(goal)
+            return True
+        print("  [Study Cycle]: Agent failed to learn from the web fact.")
+        return False
 
     def study_cycle(self) -> None:
         """Run one full study cycle.
@@ -550,22 +526,7 @@ class KnowledgeHarvester:
         return None
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
-        """Retrieve the first sentence of a Wikipedia article for a given topic.
-
-        This function acts as a general-purpose information source. It
-        searches Wikipedia for a topic, gets the summary of the top result,
-        and extracts the first sentence.
-
-        It uses a simplicity filter to reject sentences that are too long
-        or complex for the agent's current parsing abilities.
-
-        Args:
-            topic: The search topic.
-
-        Returns:
-            A tuple containing the actual page title and the extracted
-            sentence, or None on failure.
-        """
+        """Retrieve and verify a simple fact from a Wikipedia article."""
         print(f"[Knowledge Source]: Searching Wikipedia for '{topic}'...")
         try:
             search_results = wikipedia.search(topic, results=1)
@@ -573,43 +534,31 @@ class KnowledgeHarvester:
                 return None
 
             page = wikipedia.page(search_results[0], auto_suggest=False, redirect=True)
-
-            if not any(word in page.title.lower() for word in topic.lower().split()):
-                print(
-                    f"  [Knowledge Source]: Wikipedia returned a mismatched page (Title: '{page.title}'). Rejecting.",
-                )
+            if not (page and page.summary):
                 return None
 
             if page and page.summary:
-                first_sentence = page.summary.split(". ")[0].strip() + "."
-                if self._is_sentence_simple_enough(first_sentence):
-                    print(
-                        f"  [Knowledge Source]: Extracted fact from Wikipedia: '{first_sentence}'",
-                    )
-                    return page.title, first_sentence
-        except wikipedia.exceptions.DisambiguationError:
-            print(
-                f"  [Knowledge Source]: Wikipedia search for '{topic}' was ambiguous.",
+                first_sentence = page.summary.split(". ")[0].strip()
+                if not first_sentence.endswith("."):
+                    first_sentence += "."
+
+            reframed_fact = self.agent.interpreter.verify_and_reframe_fact(
+                original_topic=topic,
+                raw_sentence=first_sentence,
             )
+
+            if reframed_fact:
+                print(
+                    f"  [Knowledge Source]: Extracted and verified fact: '{reframed_fact}'",
+                )
+                return page.title, reframed_fact
+
         except Exception:
             pass
         return None
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
-        """Retrieve a definition from DuckDuckGo's Instant Answer API.
-
-        This function serves as a fast, reliable source for simple facts
-        and definitions, acting as a fallback to the Wikipedia search.
-        It extracts the first sentence from the 'AbstractText' or
-        'Definition' field of the API response.
-
-        Args:
-            topic: The search topic.
-
-        Returns:
-            A tuple containing the original topic and the extracted
-            sentence, or None on failure.
-        """
+        """Retrieve, verify, and reframe a definition from DuckDuckGo's API."""
         print(f"[Knowledge Source]: Searching DuckDuckGo for '{topic}'...")
         try:
             url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
@@ -619,36 +568,21 @@ class KnowledgeHarvester:
 
             definition = data.get("AbstractText") or data.get("Definition")
             if definition:
-                first_sentence = definition.split(". ")[0].strip() + "."
-                if self._is_sentence_simple_enough(first_sentence):
+                first_sentence = definition.split(". ")[0].strip()
+                if not first_sentence.endswith("."):
+                    first_sentence += "."
+
+                reframed_fact = self.agent.interpreter.verify_and_reframe_fact(
+                    original_topic=topic,
+                    raw_sentence=first_sentence,
+                )
+
+                if reframed_fact:
                     print(
-                        f"  [Knowledge Source]: Extracted fact from DuckDuckGo: '{first_sentence}'",
+                        f"  [Knowledge Source]: Extracted and verified fact from DuckDuckGo: '{reframed_fact}'",
                     )
-                    return topic, first_sentence
+                    return topic, reframed_fact
+
         except Exception:
             pass
         return None
-
-    def _is_sentence_simple_enough(
-        self,
-        sentence: str,
-        max_words: int = 30,
-        max_commas: int = 2,
-    ) -> bool:
-        """Evaluate if a sentence is simple enough for the parser to handle.
-
-        This is a crucial guardrail for the agent's learning process. It
-        uses simple heuristics (word count and comma count) to reject
-        sentences that are likely too grammatically complex for the current
-        Symbolic Parser, preventing the agent from trying to learn from
-        low-quality or un-parsable data.
-
-        Args:
-            sentence: The sentence to evaluate.
-            max_words: The maximum allowed number of words.
-            max_commas: The maximum allowed number of commas.
-
-        Returns:
-            True if the sentence is simple enough, False otherwise.
-        """
-        return len(sentence.split()) <= max_words and sentence.count(",") <= max_commas

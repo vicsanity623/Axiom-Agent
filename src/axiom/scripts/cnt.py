@@ -2,34 +2,20 @@ from __future__ import annotations
 
 import os
 import traceback
-from pathlib import Path
 
-# cnt.py (Command-Line Manual Trainer)
-from axiom.cognitive_agent import CognitiveAgent
-from axiom.universal_interpreter import DEFAULT_MODEL_PATH
-
-BRAIN_FILE = Path("brain/my_agent_brain.json")
-STATE_FILE = Path("brain/my_agent_state.json")
+from ..cognitive_agent import CognitiveAgent
+from ..config import DEFAULT_BRAIN_FILE, DEFAULT_LLM_PATH, DEFAULT_STATE_FILE
 
 
 def run_training_session() -> None:
-    """Initialize the agent and start an interactive command-line training session.
-
-    This script provides a direct, text-based interface for manually
-    interacting with and teaching the Axiom Agent. It loads the agent in
-    its learning-enabled state and enters a read-eval-print loop (REPL)
-    that allows a user to chat with the agent.
-
-    All new knowledge learned during the session is saved to the brain
-    file in real-time.
-    """
+    """Initialize the agent and start an interactive command-line training session."""
     print("--- [TRAINER]: Starting Axiom Agent Training Session... ---")
 
     llm_should_be_enabled = True
-    if not os.path.exists(DEFAULT_MODEL_PATH):
+    if not os.path.exists(DEFAULT_LLM_PATH):
         print("\n" + "=" * 50)
         print("!!! WARNING: LLM model not found! !!!")
-        print(f"    - Searched for model at: {DEFAULT_MODEL_PATH}")
+        print(f"    - Searched for model at: {DEFAULT_LLM_PATH}")
         print("    - Agent will run in SYMBOLIC-ONLY mode.")
         print("    - Refinement and complex sentence understanding will be disabled.")
         print("=" * 50 + "\n")
@@ -37,8 +23,8 @@ def run_training_session() -> None:
 
     try:
         axiom_agent = CognitiveAgent(
-            brain_file=BRAIN_FILE,
-            state_file=STATE_FILE,
+            brain_file=DEFAULT_BRAIN_FILE,
+            state_file=DEFAULT_STATE_FILE,
             inference_mode=False,
             enable_llm=llm_should_be_enabled,
         )
@@ -70,5 +56,9 @@ def run_training_session() -> None:
             traceback.print_exc()
 
 
-if __name__ == "__main__":
+def main() -> None:
     run_training_session()
+
+
+if __name__ == "__main__":
+    main()

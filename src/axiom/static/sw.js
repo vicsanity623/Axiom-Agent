@@ -1,4 +1,4 @@
-const CACHE_NAME = 'axiom-agent-cache-v0.0.3';
+const CACHE_NAME = 'axiom-agent-cache-v0.0.4';
 const URLS_TO_CACHE = [
   '/',
   '/static/style.css',

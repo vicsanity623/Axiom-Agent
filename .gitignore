@@ -22,12 +22,12 @@ interpreter_cache.json
 # Project-Specific Data & Models
 # -----------------------------------------------------------------------------
 # Ignore all files in the brain folder but keep one
-brain/*
+/src/axiom/brain
 brain.zip
 !brain/.gitkeep
 
 # Ignore the directory containing large, rendered model snapshots
-/rendered/
+/src/axiom/rendered/
 
 # Ignore the directory for LLM files
 /models/

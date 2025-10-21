@@ -421,7 +421,7 @@ class ConceptGraph:
         Args:
             filename: The path to the file where the graph will be saved.
         """
-        graph_data = json_graph.node_link_data(self.graph)
+        graph_data = json_graph.node_link_data(self.graph, edges="links")
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(graph_data, f, indent=4)
         print(f"Agent brain saved to {filename}")

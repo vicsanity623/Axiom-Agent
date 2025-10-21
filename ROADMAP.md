@@ -6,7 +6,7 @@ This roadmap documents the evolution of the Axiom Agent, from its foundational a
 
 The Axiom Agent has successfully evolved through its foundational phases. It began with the **"Genesis Engine,"** establishing a stable knowledge graph. The **"Intelligent Learner"** phase enabled autonomous discovery, while the **"Conversational Mind"** gave it the ability to parse complex sentences and learn from its own responses.
 
-Following this rapid innovation, the axiom agent has now completed a critical **"Stabilization & Hardening"** phase. This engineering-focused effort addressed technical debt, dramatically improved the user experience during startup, and fortified the agent's core logic with a comprehensive test suite. This essential work has created a robust and maintainable platform, paving the way for the agent's next major functional leaps: achieving true **"Semantic Mastery"** with a deeper understanding of language, becoming an **"Autonomous Scholar"** with strategic learning, and finally, evolving into a **"Logical Reasoner"** capable of procedural thought and tool use.
+Following this rapid innovation, the Axiom Agent has now completed a critical **"Stabilization & Hardening"** phase. This engineering-focused effort addressed technical debt, dramatically improved the user experience, and fortified the agent's core logic with a comprehensive test suite and more intelligent learning mechanisms. This essential work has created a robust and maintainable platform, paving the way for the agent's next major functional leaps: achieving true **"Semantic Mastery"** with a deeper understanding of language, becoming an **"Autonomous Scholar"** with strategic learning, and finally, evolving into a **"Logical Reasoner"** capable of procedural thought and tool use.
 
 ---
 
@@ -59,11 +59,16 @@ Following this rapid innovation, the axiom agent has now completed a critical **
 **Goal:** Solidify the foundation, improve user experience, and make the agent more robust and resilient.
 
 ### Key Features
-*   **Silent Startup & Progress Bars:** Replaced verbose startup logging with clean `tqdm` progress bars for brain seeding, dramatically improving UX.
-*   **Robust Parser Fallback:** Implemented a "sanity check" in the cognitive loop to intelligently fall back to the LLM interpreter when the symbolic parser fails on complex or nonsensical input.
-*   **Enhanced Self-Awareness:** Created specific `meta-` intents and handlers for questions about the agent itself ("who are you?", "what is your purpose?"), making it more responsive and knowledgeable about its own state.
-*   **Conversational Resilience:** Integrated fuzzy matching (`thefuzz`) to handle user typos and minor variations in entity names, making the agent more forgiving.
-*   **Comprehensive Test Suite:** Achieved high test coverage (>70%) and a passing CI/CD pipeline (Ruff, MyPy, Pytest), ensuring all core functionality is verified and stable.
+*   **Intelligent Learning Pipeline:** Implemented a sentence sanitizer at the core of the agent's cognitive loop, preventing it from learning "garbage facts" from poorly structured external data.
+*   **Robust Parser Fallback:** Implemented a "sanity check" to intelligently fall back to the LLM interpreter when the symbolic parser fails on complex or nonsensical input.
+*   **Enhanced Self-Awareness:** Created specific `meta-` intents and handlers for questions about the agent itself ("who are you?", "what is your purpose?").
+*   **Conversational Resilience:** Integrated fuzzy matching (`thefuzz`) to handle user typos and minor variations in entity names.
+*   **Comprehensive Test Suite:** Achieved high test coverage (>70%) and a fully passing CI/CD pipeline (Ruff, MyPy, Pytest), ensuring all core functionality is verified.
+*   **Streamlined User Experience:**
+    *   Replaced verbose startup logging with clean `tqdm` progress bars.
+    *   Automated LLM model downloading via a simple `axiom-llm` command.
+    *   Refactored developer scripts into professional command-line entry points (e.g., `axiom-train`, `axiom-render`).
+    *   Implemented versioned model rendering to keep the project directory clean.
 
 ---
 

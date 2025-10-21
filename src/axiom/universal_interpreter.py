@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-
-# universal_interpreter.py
 import os
 import re
 from contextlib import redirect_stderr
@@ -19,13 +17,11 @@ from typing import (
 
 from llama_cpp import Llama
 
+from .config import DEFAULT_CACHE_FILE, DEFAULT_LLM_PATH
+
 if TYPE_CHECKING:
-    from axiom.graph_core import ConceptNode
+    from .graph_core import ConceptNode
 
-
-MODELS_FOLDER: Final = Path("models")
-DEFAULT_MODEL_PATH: Final = MODELS_FOLDER / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
-DEFAULT_CACHE_PATH: Final = "interpreter_cache.json"
 
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
@@ -116,8 +112,8 @@ class UniversalInterpreter:
 
     def __init__(
         self,
-        model_path: str | Path = DEFAULT_MODEL_PATH,
-        cache_file: str | Path = DEFAULT_CACHE_PATH,
+        model_path: str | Path = DEFAULT_LLM_PATH,
+        cache_file: str | Path = DEFAULT_CACHE_FILE,
         enable_llm: bool = True,
         load_llm: bool = True,
     ) -> None:
@@ -256,8 +252,9 @@ class UniversalInterpreter:
         print("  [Interpreter Cache]: Miss. Running LLM for interpretation.")
 
         system_prompt = (
-            "You are a strict, precise text analysis engine. Your only task is to analyze user input "
-            "and convert it into a structured JSON object. Extract factual relationships or commands. "
+            "You are a strict, precise factual analysis engine. Your PRIMARY task is to identify the user's intent. "
+            "If the input is a declarative sentence that presents a fact, you MUST classify the intent as 'statement_of_fact'. "
+            "Your secondary task is to extract the relationship into a structured JSON object. "
             "Your output must be a single, valid JSON object and NOTHING else."
         )
         json_structure_prompt = JSON_STRUCTURE_PROMPT
@@ -273,7 +270,7 @@ class UniversalInterpreter:
 
         sanitized_input = json.dumps(user_input)
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{json_structure_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{json_structure_prompt}\n\n{examples_prompt}\n\n"
             f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
         )
         try:
@@ -357,7 +354,7 @@ class UniversalInterpreter:
             "New Input: what is the largest planet?\nOutput: what is the largest planet?"
         )
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Conversation History:\n{formatted_history}\n"
             f"New Input: {new_input}\nOutput:[/INST]"
         )
@@ -458,7 +455,7 @@ class UniversalInterpreter:
             "- SymbolicParser is for understanding simple language."
         )
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Subject: {subject.capitalize()}\nDefinition: {chunky_definition}\n"
             f"Output:[/INST]"
         )
@@ -528,7 +525,7 @@ class UniversalInterpreter:
             "Output:\n- Why is the sun hot?\n- How big is the sun?"
         )
         full_prompt = (
-            f"<s>[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
             f"Topic: {topic}\nKnown Fact: {known_fact}\n"
             f"Output:[/INST]"
         )
@@ -560,6 +557,72 @@ class UniversalInterpreter:
                 f"  [Question Generation Error]: Could not generate questions. Error: {exc}",
             )
             return []
+
+    def verify_and_reframe_fact(
+        self,
+        original_topic: str,
+        raw_sentence: str,
+    ) -> str | None:
+        """
+        Uses the LLM to verify if a raw sentence is relevant to a topic and,
+        if so, reframes it into a simple, atomic S-V-O sentence for learning.
+        """
+        if self.llm is None:
+            print("  [Fact Verifier Error]: LLM is disabled. Cannot verify/reframe.")
+            if original_topic.lower() in raw_sentence.lower():
+                return raw_sentence
+            return None
+
+        print(
+            f"  [Fact Verifier]: Asking LLM to verify and reframe fact for '{original_topic}'...",
+        )
+        system_prompt = (
+            "You are a precise fact verification and reframing engine. Your task is to analyze a 'Raw Sentence' "
+            "to see if it is a direct, useful fact about the 'Original Topic'. If it is, you MUST rephrase it into a "
+            "single, simple, declarative sentence (Subject-Verb-Object). If it is not relevant, you MUST output ONLY the word 'None'."
+        )
+        examples_prompt = (
+            "Here are some examples:\n"
+            "Original Topic: fabric\n"
+            "Raw Sentence: A textile is a flexible material made by creating an interlocking network of yarns or threads.\n"
+            "Output: A fabric is a flexible material.\n\n"
+            "Original Topic: history of bitcoin\n"
+            "Raw Sentence: Bitcoin is a cryptocurrency, a digital asset that uses cryptography to control its creation and management.\n"
+            "Output: None\n\n"
+            "Original Topic: bees\n"
+            "Raw Sentence: Bees are flying insects closely related to wasps and ants, known for their role in pollination.\n"
+            "Output: Bees are flying insects."
+        )
+        full_prompt = (
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"Original Topic: {original_topic}\nRaw Sentence: {raw_sentence}\n"
+            f"Output:[/INST]"
+        )
+        try:
+            output = cast(
+                "dict[str, list[dict[str, str]]]",
+                self.llm(
+                    full_prompt,
+                    max_tokens=64,
+                    stop=["</s>", "\n"],
+                    echo=False,
+                    temperature=0.0,
+                ),
+            )
+            rephrased_fact = output["choices"][0]["text"].strip()
+
+            if "none" in rephrased_fact.lower():
+                print("    - LLM rejected the fact as irrelevant.")
+                return None
+
+            print(f"    - LLM verified and reframed: '{rephrased_fact}'")
+            return rephrased_fact
+
+        except Exception as e:
+            print(
+                f"  [Fact Verifier Error]: Could not process fact with LLM. Error: {e}",
+            )
+            return None
 
     def synthesize(
         self,

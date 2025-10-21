@@ -187,7 +187,7 @@ class SymbolicParser:
                     "entities": [],
                     "relation": None,
                     "key_topics": ["show all facts"],
-                    "full_text_rephrased": "User has issued a command to show all facts.",  # Optional but good practice
+                    "full_text_rephrased": "User has issued a command to show all facts.",
                 },
             ]
 

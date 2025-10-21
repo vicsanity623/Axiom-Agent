@@ -3,10 +3,11 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import sys
 import zipfile
-from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from flask import (
     Flask,
@@ -17,27 +18,22 @@ from flask import (
     send_from_directory,
 )
 
-from axiom.cognitive_agent import CognitiveAgent
+from ..cognitive_agent import CognitiveAgent
+from ..config import RENDERED_DIR, STATIC_DIR, TEMPLATE_DIR
 
 logger = logging.getLogger(__name__)
 axiom_agent: CognitiveAgent | None = None
 
-THIS_FILE: Final = Path(__file__).resolve()
-PROJECT_ROOT: Final = THIS_FILE.parent.parent
-STATIC_DIR: Final = PROJECT_ROOT / "static"
-TEMPLATE_DIR: Final = PROJECT_ROOT / "templates"
-RENDERED_DIR: Final = PROJECT_ROOT / "rendered"
 
-app = Flask(__name__, template_folder=TEMPLATE_DIR, static_folder=STATIC_DIR)
+app = Flask(__name__, template_folder=str(TEMPLATE_DIR), static_folder=str(STATIC_DIR))
 
 
 def find_latest_model(directory: Path = RENDERED_DIR) -> Path | None:
     """Find and return the path to the most recent .axm model file.
 
-    Scans the specified directory for files matching the 'axiom_model_*.axm'
+    Scans the specified directory for files matching the 'Axiom_*.axm'
     pattern, sorts them by modification time (most recent first), and
-    returns the path to the latest one. Falls back to lexicographical
-    sorting if modification times are identical.
+    returns the path to the latest one.
 
     Args:
         directory: The directory to search for model files.
@@ -48,14 +44,15 @@ def find_latest_model(directory: Path = RENDERED_DIR) -> Path | None:
     """
     logger.info("Searching for the latest .axm model file in '%s'...", directory)
     try:
-        model_files = list(directory.glob("axiom_model_*.axm"))
+        model_files = list(directory.glob("Axiom_*.axm"))
+
         if not model_files:
             logger.critical("No .axm model files found in '%s'.", directory)
             return None
 
         latest_file = sorted(
             model_files,
-            key=lambda p: (p.stat().st_mtime, p.name),
+            key=lambda p: p.stat().st_mtime,
             reverse=True,
         )[0]
 
@@ -199,8 +196,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    sys.exit(main())
+    main()
