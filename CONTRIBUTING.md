@@ -45,7 +45,7 @@ This script runs formatting, linting, static type checking (MyPy), and the full 
 The agent's memory is stored in the `brain/` directory. For most development, you'll want a clean slate to test new features.
 ```bash
 # To start fresh for a test session
-rm -f brain/*
+rm -f src/axiom/brain/*
 ```
 *   **For manual training and chat:** ```axiom-teach``` (manually teach inside the terminal)
 *   **For rendering a chat model:** ```axiom-render``` (creates a .axm model for chat)

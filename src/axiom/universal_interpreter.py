@@ -252,8 +252,9 @@ class UniversalInterpreter:
         print("  [Interpreter Cache]: Miss. Running LLM for interpretation.")
 
         system_prompt = (
-            "You are a strict, precise text analysis engine. Your only task is to analyze user input "
-            "and convert it into a structured JSON object. Extract factual relationships or commands. "
+            "You are a strict, precise factual analysis engine. Your PRIMARY task is to identify the user's intent. "
+            "If the input is a declarative sentence that presents a fact, you MUST classify the intent as 'statement_of_fact'. "
+            "Your secondary task is to extract the relationship into a structured JSON object. "
             "Your output must be a single, valid JSON object and NOTHING else."
         )
         json_structure_prompt = JSON_STRUCTURE_PROMPT
