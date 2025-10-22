@@ -140,33 +140,29 @@ def test_deepen_knowledge_of_random_concept_adds_goal(
     graph_nodes,
     monkeypatch,
 ):
-    """
-    Tests that _deepen_knowledge_of_random_concept successfully adds new
-    learning goals by mocking its external dependencies.
-    """
     agent.graph.graph.clear()
     agent.learning_goals.clear()
     for name, node_type in graph_nodes:
         agent.graph.add_node(ConceptNode(name=name, node_type=node_type))
 
-    # KEY: Mock the external web search to return a predictable fact.
+    # Pre-promote the words that will be in our mocked fact.
+    agent.lexicon._promote_word_for_test("apple", "noun")
+    agent.lexicon._promote_word_for_test("socrates", "noun")
+    agent.lexicon._promote_word_for_test("test", "noun")  # It's a noun in this context
+    agent.lexicon._promote_word_for_test("concept", "noun")
+
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_wikipedia",
         lambda self, topic: (topic, f"{topic} is a test concept."),
     )
-    # ALSO mock the other web search to do nothing.
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester.get_fact_from_duckduckgo",
         lambda self, topic: None,
     )
-
-    # Mock random.choice to be deterministic
     monkeypatch.setattr("axiom.knowledge_harvester.random.choice", lambda x: x[0])
 
     harvester._deepen_knowledge_of_random_concept()
 
-    # VERIFICATION: The method doesn't add goals directly. It calls agent.chat().
-    # We need to check if the fact was learned in the graph.
     test_node = agent.graph.get_node_by_name("test concept")
     assert test_node is not None, (
         "The agent failed to learn the fact from the web search."

@@ -21,8 +21,8 @@ class CycleManager:
     ) -> None:
         self.scheduler = scheduler
         self.harvester = harvester
-        self.LEARNING_PHASE_DURATION = timedelta(hours=4)
-        self.REFINEMENT_PHASE_DURATION = timedelta(hours=1)
+        self.LEARNING_PHASE_DURATION = timedelta(hours=2)
+        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=30)
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
 
@@ -65,7 +65,7 @@ class CycleManager:
 
     def _start_learning_phase(self) -> None:
         """Configure the scheduler to run the Learning Phase cycles."""
-        print("\n--- [CYCLE MANAGER]: Starting 4-hour LEARNING phase. ---")
+        print("\n--- [CYCLE MANAGER]: Starting 2-hour LEARNING phase. ---")
         self._clear_all_jobs()
         self.scheduler.add_job(
             self.harvester.study_cycle,
@@ -84,7 +84,7 @@ class CycleManager:
 
     def _start_refinement_phase(self) -> None:
         """Configure the scheduler to run the Refinement Phase cycles."""
-        print("\n--- [CYCLE MANAGER]: Starting 1-hour REFINEMENT phase. ---")
+        print("\n--- [CYCLE MANAGER]: Starting 30-min REFINEMENT phase. ---")
         self._clear_all_jobs()
         self.scheduler.add_job(
             self.harvester.refinement_cycle,

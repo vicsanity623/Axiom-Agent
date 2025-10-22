@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import threading
 from datetime import date, datetime
 from functools import lru_cache
 from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict
@@ -24,7 +25,12 @@ from thefuzz import process
 from .config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE
 from .dictionary_utils import get_word_info_from_wordnet
 from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
-from .knowledge_base import seed_core_vocabulary, seed_domain_knowledge
+from .knowledge_base import (
+    seed_core_vocabulary,
+    seed_domain_knowledge,
+    validate_and_add_relation,
+)
+from .knowledge_harvester import KnowledgeHarvester
 from .lexicon_manager import LexiconManager
 from .symbolic_parser import SymbolicParser
 from .universal_interpreter import (
@@ -132,11 +138,18 @@ class CognitiveAgent:
         if self.inference_mode:
             logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
+        self.interaction_lock = threading.Lock()
+
         self.interpreter = UniversalInterpreter(load_llm=enable_llm)
         self.lexicon: LexiconManager = LexiconManager(self)
         self.parser: SymbolicParser = SymbolicParser(self)
         self.lemmatizer = WordNetLemmatizer()
         self.learning_goals: list[str] = []
+        self.pending_relations: list[tuple[RelationData, dict, float]] = []
+
+        self.harvester: KnowledgeHarvester | None = None
+        if not self.inference_mode:
+            self.harvester = KnowledgeHarvester(agent=self, lock=self.interaction_lock)
 
         if load_from_file:
             logger.info("   - Loading brain from file: %s", self.brain_file)
@@ -242,20 +255,38 @@ class CognitiveAgent:
         if not interpretations or is_bad_parse:
             words = normalized_input.lower().split()
             unknown_words = [
-                re.sub(r"[^\w\s]", "", w)
+                re.sub(r"[^\w\s-]", "", w)
                 for w in words
-                if w and not self.lexicon.is_known_word(re.sub(r"[^\w\s]", "", w))
+                if w and not self.lexicon.is_known_word(re.sub(r"[^\w\s-]", "", w))
             ]
+
             if unknown_words:
                 word_to_learn = sorted(set(unknown_words))[0]
                 goal = f"INVESTIGATE: {word_to_learn}"
+
                 if goal not in self.learning_goals:
                     self.learning_goals.append(goal)
                     logger.info(
                         "  [Cognitive Reflex]: Unknown word '%s', added to learning goals.",
                         word_to_learn,
                     )
-                return f"New word '{word_to_learn}' discovered, I must research it before I can understand."
+
+                if self.harvester and not self.inference_mode:
+                    logger.info(
+                        "  [Cognitive Reflex]: Attempting real-time research for '%s'...",
+                        word_to_learn,
+                    )
+                    was_resolved = self.harvester._resolve_investigation_goal(goal)
+                    if was_resolved:
+                        logger.info(
+                            "  [Cognitive Reflex]: Succeeded. Re-evaluating original input.",
+                        )
+                        return self.chat(user_input)
+                    logger.warning(
+                        "  [Cognitive Reflex]: Real-time research failed.",
+                    )
+                    return f"I discovered a new word, '{word_to_learn}', but my attempt to research it in real-time failed. I will study it later."
+                return f"New word '{word_to_learn}' discovered. I must study it before I can understand."
 
             if not is_bad_parse:
                 logger.warning(
@@ -1359,22 +1390,51 @@ class CognitiveAgent:
                 )
 
                 if not edge_exists:
-                    self.graph.add_edge(
-                        sub_node,
-                        obj_node,
-                        relation_type,
-                        0.9,
-                        properties=properties,
-                    )
-                    logger.info(
-                        "    Learned new fact: %s --[%s]--> %s with properties %s",
-                        sub_node.name,
-                        relation_type,
-                        obj_node.name,
-                        properties,
-                    )
+                    rel_props = properties if isinstance(properties, dict) else {}
+                    interpretation = {
+                        "confidence": float(rel_props.get("confidence", 0.95)),
+                        "negated": bool(rel_props.get("negated", False)),
+                        "source": rel_props.get("provenance", "user"),
+                    }
+                    candidate = {
+                        "subject": subject_name,
+                        "verb": relation_type,
+                        "object": object_name,
+                    }
 
-                    learned_at_least_one = True
+                    status = validate_and_add_relation(self, candidate, interpretation)
+
+                    if status in ("inserted", "replaced"):
+                        logger.info(
+                            "    Learned new fact: %s --[%s]--> %s (status=%s)",
+                            sub_node.name,
+                            relation_type,
+                            obj_node.name,
+                            status,
+                        )
+                        learned_at_least_one = True
+                    elif status == "deferred":
+                        logger.info(
+                            "    Deferred learning for %s --[%s]--> %s due to unpromoted lexicon entries.",
+                            sub_node.name,
+                            relation_type,
+                            obj_node.name,
+                        )
+                    elif status == "contradiction_stored":
+                        logger.warning(
+                            "    Contradiction detected and stored for %s --[%s]--> %s.",
+                            sub_node.name,
+                            relation_type,
+                            obj_node.name,
+                        )
+                    else:
+                        logger.debug(
+                            "    validate_and_add_relation returned status='%s' for %s --[%s]--> %s",
+                            status,
+                            sub_node.name,
+                            relation_type,
+                            obj_node.name,
+                        )
                 else:
                     logger.debug(
                         "    - Fact already exists: %s --[%s]--> %s",
@@ -1390,7 +1450,7 @@ class CognitiveAgent:
             self.save_state()
             return (True, "I understand. I have noted that.")
 
-        return (True, "I have processed that information.")
+        return (False, "deferred")
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.

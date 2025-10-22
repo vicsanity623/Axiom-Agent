@@ -21,7 +21,13 @@ def test_agent_diverts_to_clarification_handler_when_awaiting(
     Ensures that when the agent is in this state, the input is correctly
     routed to the _handle_clarification method.
     """
-    # 1. GIVEN: Put the agent into an awaiting clarification state.
+    # 1. GIVEN: The words used in the facts are known and trusted.
+    agent.lexicon._promote_word_for_test("paris", "noun")
+    agent.lexicon._promote_word_for_test("lyon", "noun")
+    agent.lexicon._promote_word_for_test("france", "noun")
+    agent.lexicon._promote_word_for_test("capital", "noun")
+
+    # AND: The agent learns a fact, then a contradictory one.
     agent.chat("Paris is the capital of France")
     clarification_question = agent.chat("Lyon is the capital of France")
     assert agent.is_awaiting_clarification is True

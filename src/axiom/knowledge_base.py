@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -13,6 +14,8 @@ get_word_info_from_wordnet = lru_cache(maxsize=None)(get_word_info_from_wordnet)
 if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
 
+LEXICON_PROMOTION_THRESHOLD = 0.8
+LEXICON_OBSERVATION_DECAY = 0.0
 
 ALL_KNOWLEDGE = [
     # --- Self-Identity Knowledge ---
@@ -437,3 +440,193 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
         agent_instance.lexicon.add_linguistic_knowledge_quietly(word, pos)
 
     print("     - Core vocabulary seeding complete.")
+
+
+def promote_word(
+    agent_instance: CognitiveAgent,
+    word: str,
+    pos: str,
+    confidence: float,
+):
+    """Directly promotes a word to a given part of speech."""
+    node = agent_instance.graph.get_node_by_name(word)
+    if not node:
+        return
+
+    props = agent_instance.graph.graph.nodes[node.id].setdefault("properties", {})
+    props["lexical_promoted_as"] = pos
+    props["lexical_promoted_confidence"] = confidence
+    props.pop("lexical_observations", None)
+
+    for rel, interp, ts in list(getattr(agent_instance, "pending_relations", [])):
+        sub = (rel.get("subject") or "").lower()
+        obj = (rel.get("object") or "").lower()
+        if word in sub or word in obj:
+            status = validate_and_add_relation(agent_instance, rel, interp)
+            if status in ("inserted", "replaced", "contradiction_stored"):
+                try:
+                    agent_instance.pending_relations.remove((rel, interp, ts))
+                except ValueError:
+                    pass
+
+
+def record_lexical_observation(
+    agent_instance,
+    word: str,
+    observed_pos: str,
+    confidence: float = 0.5,
+):
+    """
+    Record a single POS observation for a `word`. This accumulates votes
+    in the node's properties under `lexical_observations`.
+    """
+    if not word:
+        return
+    word = word.lower().strip()
+    node = agent_instance.graph.get_node_by_name(word)
+    if not node:
+        node = agent_instance._add_or_update_concept_quietly(word)
+
+    props = agent_instance.graph.graph.nodes[node.id].setdefault("properties", {})
+    obs = props.setdefault("lexical_observations", {"votes": {}, "total": 0.0})
+
+    votes = obs["votes"]
+    votes[observed_pos] = float(votes.get(observed_pos, 0.0)) + float(confidence)
+    obs["total"] = float(obs.get("total", 0.0)) + float(confidence)
+
+    try_promote_lexicon(agent_instance, word)
+
+
+def try_promote_lexicon(
+    agent_instance,
+    word: str,
+    threshold: float = LEXICON_PROMOTION_THRESHOLD,
+):
+    """
+    Promote the token to a stable lexicon POS once the top POS crosses the threshold.
+
+    Creates an `is_a` edge word -> POS with properties marking provenance.
+    """
+
+    if not word:
+        return False
+    word = word.lower().strip()
+    node = agent_instance.graph.get_node_by_name(word)
+    if not node:
+        return False
+
+    props = agent_instance.graph.graph.nodes[node.id].get("properties", {})
+    obs = props.get("lexical_observations")
+    if not obs or float(obs.get("total", 0.0)) <= 0.0:
+        return False
+
+    votes = obs["votes"]
+    total = float(obs["total"])
+    top_pos, top_score = None, 0.0
+    for pos, score in votes.items():
+        if float(score) > top_score:
+            top_pos, top_score = pos, float(score)
+
+    if not top_pos:
+        return False
+
+    frac = top_score / total if total > 0 else 0.0
+    if frac >= threshold:
+        promote_word(agent_instance, word, top_pos, float(frac))
+
+        node = agent_instance.graph.get_node_by_name(word)
+        pos_node = agent_instance._add_or_update_concept_quietly(top_pos)
+        if node and pos_node:
+            agent_instance.graph.add_edge(node, pos_node, "is_a", float(frac))
+
+        return True
+    return False
+
+
+def add_pending_relation(agent_instance, relation: dict, interpretation: dict):
+    """Store a relation temporarily until dependent lexicon entries are promoted."""
+
+    agent_instance.pending_relations.append((relation, interpretation, time.time()))
+
+
+def validate_and_add_relation(agent_instance, relation: dict, interpretation: dict):
+    """
+    Validate a parsed relation, deferring if it contains un-promoted words,
+    and otherwise inserting it into the graph with metadata and basic
+    contradiction handling.
+
+    Returns: one of ("inserted", "contradiction_stored", "replaced", "deferred", "error")
+    """
+    subject_name = (relation.get("subject") or "").strip().lower()
+    object_name = (relation.get("object") or "").strip().lower()
+    relation_type = (
+        relation.get("predicate") or relation.get("verb") or relation.get("relation")
+    )
+    if not subject_name or not object_name or not relation_type:
+        return "error"
+
+    subj_node = agent_instance._add_or_update_concept_quietly(subject_name)
+    obj_node = agent_instance._add_or_update_concept_quietly(object_name)
+    if not subj_node or not obj_node:
+        return "error"
+
+    def _node_untrusted(node):
+        props = agent_instance.graph.graph.nodes[node.id].get("properties", {})
+        if props.get("lexical_observations"):
+            return True
+        if not props.get("lexical_promoted_as"):
+            return True
+        return False
+
+    if _node_untrusted(subj_node) or _node_untrusted(obj_node):
+        add_pending_relation(agent_instance, relation, interpretation)
+        return "deferred"
+
+    new_conf = float(interpretation.get("confidence", 0.6))
+    new_neg = bool(interpretation.get("negated", False))
+    provenance = interpretation.get("source", interpretation.get("provenance", "user"))
+
+    new_props = {
+        "negated": new_neg,
+        "provenance": provenance,
+        "confidence": float(new_conf),
+    }
+
+    existing_edges = [
+        e
+        for e in agent_instance.graph.get_edges_from_node(subj_node.id)
+        if e.type == relation_type
+        and agent_instance.graph.get_node_by_id(e.target).name == object_name
+    ]
+
+    if existing_edges:
+        e = existing_edges[0]
+        existing_conf = float(e.properties.get("confidence", e.weight))
+        existing_neg = bool(e.properties.get("negated", False))
+
+        if existing_neg != new_neg:
+            if new_conf > existing_conf + 0.2:
+                agent_instance.graph.edges[e.source, e.target, e.id].update(new_props)
+                return "replaced"
+            new_props["contradicted"] = True
+            new_props["confidence"] = max(0.05, new_conf * 0.5)
+            agent_instance.graph.add_edge(
+                subj_node,
+                obj_node,
+                relation_type,
+                properties=new_props,
+            )
+            return "contradiction_stored"
+        merged_conf = max(existing_conf, new_conf)
+        new_props["confidence"] = merged_conf
+        agent_instance.graph.edges[e.source, e.target, e.id].update(new_props)
+        return "inserted"
+
+    agent_instance.graph.add_edge(
+        subj_node,
+        obj_node,
+        relation_type,
+        new_conf,
+        properties=new_props,
+    )
+    return "inserted"

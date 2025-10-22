@@ -22,6 +22,76 @@ Axiom’s design is a hybrid model that combines the strengths of classical, sym
 
 ---
 
+## 🧬 The Cognitive Cycles: How the Agent Learns
+
+The Axiom Agent operates in a continuous, phased loop of self-improvement. These cycles allow it to discover new topics, research them to acquire knowledge, and then reflect on that knowledge to improve its quality and depth. The diagram below illustrates the three core cycles using real examples from the agent's logs.
+
+```mermaid
+%%{init: {"theme": "forest"}}%%
+flowchart TD
+    %% Main Loop %%
+    A["Axiom Autonomous Agent"] --> B["Discovery Cycle"]
+    B -->|Finds new topic| C["Study Cycle"]
+    C -->|Extracts & verifies facts| D["Learning & Knowledge Graph Update"]
+    D -->|Stores new fact| E["Refinement Cycle"]
+    E -->|Simplifies & reweights facts| F{"Continuous Loop"}
+    F -->|Triggers next iteration| B
+
+    %% Discovery Cycle %%
+    subgraph DISCOVERY [Discovery Cycle - Exploration Phase]
+      D1A["Identify new topics via curiosity signal"]
+      D1B["Explore core subjects (e.g. Geography, Mathematics)"]
+      D1C["Select best new topic (e.g. History of Mathematics)"]
+      D1A --> D1B --> D1C
+    end
+    B -.-> D1C
+
+    %% Study Cycle %%
+    subgraph STUDY [Study Cycle - Knowledge Acquisition]
+      S1["Query multiple knowledge sources"]
+      S2{"API success?"}
+      S1 --> S2
+      S2 -- Yes --> S3["Extract and clean data"]
+      S2 -- No --> S4["Fallback to web search / Wikipedia"]
+      S3 --> S5["LLM verifies and reframes fact"]
+      S4 --> S5
+      S5 --> S6["Store verified fact candidate"]
+    end
+    C -.-> S5
+
+    %% Learning Cycle %%
+    subgraph LEARN [Learning Cycle - Graph Integration]
+      L1["Interpret linguistic structure"]
+      L2["Extract subject–verb–object relation"]
+      L3["Update Concept Graph (add nodes & edges)"]
+      L4["Clear reasoning cache for fresh inference"]
+      L1 --> L2 --> L3 --> L4
+    end
+    D -.-> L3
+
+    %% Refinement Cycle %%
+    subgraph REFINE [Refinement Cycle - Optimization Phase]
+      R1["Detect complex or redundant facts"]
+      R2["Decompose into atomic facts"]
+      R3["Learn each refined atomic relation"]
+      R4["Lower weight of original chunky fact"]
+      R1 --> R2 --> R3 --> R4
+    end
+    E -.-> R2
+
+    %% Persistence %%
+    P["Save updated brain state (my_agent_brain.json)"]
+    L4 --> P
+    R4 --> P
+
+    %% Feedback %%
+    P -->|Triggers curiosity signal| F
+```
+
+This entire cycle—from curiosity to integration—demonstrates the power of the symbolic-first architecture. The agent uses its LLM as a powerful tool for perception and verification, but the final understanding and knowledge are stored in a clean, logical, and verifiable symbolic brain.
+
+---
+
 ## ✅ Key Capabilities: A Robust and Resilient Mind
 
 This architecture enables the agent to learn, reason, and evolve in a verifiable, self-contained way. The latest version focuses on stability, resilience, and a smarter cognitive flow.
@@ -37,6 +107,27 @@ This architecture enables the agent to learn, reason, and evolve in a verifiable
     *   **Discovery Cycle:** Finds and explores new topics.
     *   **Study Cycle:** Researches unknown concepts to build its knowledge graph.
     *   **Refinement Phase:** Consolidates and clarifies existing knowledge.
+
+---
+
+## 💡 The Hidden Potential: A Personalized AI
+
+While the agent can learn general knowledge autonomously, its true power lies in its ability to learn **from you**. By using the interactive `axiom-teach` command, you can manually instruct the agent, building a personalized knowledge base that is unique to you.
+
+This transforms Axiom from a generic information engine into a true **personal assistant** with persistent memory.
+
+### Use Cases for Manual Teaching:
+*   **Personal Memory:** Teach the agent about your family, friends, and important life events.
+    - `> My sister's name is Jane.`
+    - `> Jane's birthday is on April 10th.`
+*   **Project Management:** Keep track of key project details, deadlines, and stakeholders.
+    - `> Project Phoenix has a deadline of Q4.`
+    - `> The main contact for Project Phoenix is Bob.`
+*   **Creative World-Building:** Use the agent as a dynamic knowledge base for a novel or TTRPG campaign, keeping track of characters, locations, and lore.
+    - `> The Kingdom of Eldoria is ruled by Queen Anya.`
+    - `> Eldoria's main export is enchanted steel.`
+
+Unlike a standard LLM, which has no memory between conversations, Axiom's knowledge is **permanent**. The more you teach it, the more it becomes a personalized extension of your own mind.
 
 ---
 
@@ -89,56 +180,6 @@ Beyond language mastery, the agent's evolution will continue by integrating a **
 This creates a path toward a truly autonomous AI, built on a foundation of verifiable truth, not just probabilistic mimicry, and augmented with powerful, specialized capabilities.
 
 ---
-
-## 🧠 A Glimpse into the Agent's Mind: Autonomous Learning in Action
-
-The Axiom Agent isn't just a passive chatbot; it's an active learner. The diagram below illustrates a real example from the agent's logs, showing how it intelligently discovers, verifies, and integrates new knowledge on its own. (`axiom-train` log of a `study cycle`)
-
-```mermaid
-graph TD
-    subgraph "Cognitive Core"
-        A["<b>Study Cycle</b><br/><i>Curiosity Phase</i>"] --> B["Choose Concept:<br/>'placental'"];
-    end
-
-    subgraph "Knowledge Harvester"
-        B --> C["<b>Research Phase</b><br/>Search Wikipedia for 'placental'"];
-        C --> D["Redirected to Page:<br/>'Placental mammal'"];
-        D --> E["Extract Raw Sentence:<br/>'Placental mammals are...'"];
-    end
-    
-    subgraph "LLM as a Tool"
-        E --> F["<b>Verification & Reframing</b><br/>Call `verify_and_reframe_fact`"];
-        F -- "1. Is this relevant?<br/>2. Rephrase as S-V-O" --> G{"<b>LLM Analysis</b>"};
-        G -- "YES" --> H["Clean Fact:<br/>'Placental mammals are...'"];
-        G -- "NO" --> I["Reject Fact<br/>(e.g., 'None')"];
-    end
-    
-    subgraph "Cognitive Core"
-        H --> J["<b>Symbolic Understanding</b><br/>`SymbolicParser` processes clean fact"];
-        J --> K["Parsed as:<br/>'placental mammals' → 'is_a' → '...'"];
-        K --> L["<b>Integration Phase</b><br/>Add to Knowledge Graph"];
-    end
-    
-    subgraph "Knowledge Graph (Brain)"
-        M("placental mammals");
-        N("subdivision of mammalia");
-        L --> M -- "is_a" --> N;
-    end
-    
-    %% Styling
-    style A fill:#8A2BE2,stroke:#C799F2,stroke-width:2px,color:#fff
-    style L fill:#8A2BE2,stroke:#C799F2,stroke-width:2px,color:#fff
-    style F fill:#3C873A,stroke:#90C28E,stroke-width:2px,color:#fff
-    style J fill:#3C873A,stroke:#90C28E,stroke-width:2px,color:#fff
-    style C fill:#4A90E2,stroke:#A3C9F0,stroke-width:2px,color:#fff
-    
-    classDef brain fill:#1E3A5F,stroke:#4A90E2,stroke-width:2px,color:#fff;
-    class M,N brain;
-```
-
----
-
-This entire cycle—from curiosity to integration—demonstrates the power of the symbolic-first architecture. The agent uses its LLM as a powerful tool for perception and verification, but the final understanding and knowledge are stored in a clean, logical, and verifiable symbolic brain.
 
 ## 🗺️ Project Roadmap
 For a detailed list of completed phases, planned features, and future development goals, please see the **[ROADMAP.md](ROADMAP.md)** file.

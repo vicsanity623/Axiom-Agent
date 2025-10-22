@@ -66,7 +66,9 @@ class PropertyData(TypedDict, total=False):
 
     effective_date: NotRequired[str]
     location: NotRequired[str]
-    certainty: NotRequired[float]
+    confidence: NotRequired[float]
+    provenance: NotRequired[str]
+    negated: NotRequired[bool]
 
 
 class RelationData(TypedDict, total=False):
@@ -95,6 +97,8 @@ class InterpretData(TypedDict):
     relation: RelationData | None
     key_topics: list[str]
     full_text_rephrased: str
+    provenance: NotRequired[str]
+    confidence: NotRequired[float]
 
 
 PRONOUNS: Final = ("it", "its", "they", "them", "their", "he", "she", "his", "her")
@@ -237,12 +241,17 @@ class UniversalInterpreter:
             print(
                 "  [Interpreter Error]: LLM is disabled. Cannot interpret complex input.",
             )
-            return InterpretData(
-                intent="unknown",
-                entities=[],
-                relation=None,
-                key_topics=user_input.split(),
-                full_text_rephrased=f"Could not interpret (LLM disabled): '{user_input}'",
+            return cast(
+                "InterpretData",
+                {
+                    "intent": "unknown",
+                    "entities": [],
+                    "relation": None,
+                    "key_topics": user_input.split(),
+                    "full_text_rephrased": f"Could not interpret (LLM disabled): '{user_input}'",
+                    "provenance": "llm",
+                    "confidence": 0.0,
+                },
             )
 
         cache_key = user_input
@@ -293,18 +302,75 @@ class UniversalInterpreter:
 
             interpretation = cast("InterpretData", raw_interpretation)
 
+            if isinstance(interpretation, dict):
+                interpretation.setdefault("provenance", "llm")
+                interpretation.setdefault("confidence", 0.6)
+                interpretation.setdefault("key_topics", [])
+                interpretation.setdefault("full_text_rephrased", "")
+
+                rel = interpretation.get("relation")
+                if isinstance(rel, dict):
+                    props = rel.setdefault("properties", cast("PropertyData", {}))
+                    props.setdefault("confidence", 0.6)
+                    props.setdefault("provenance", "llm")
+
+                    raw_verb = (rel.get("verb") or "").lower()
+                    obj_field = rel.get("object")
+                    raw_object_text = ""
+                    if isinstance(obj_field, str):
+                        raw_object_text = obj_field
+                    elif isinstance(obj_field, dict):
+                        raw_object_text = " ".join(str(v) for v in obj_field.values())
+                    elif isinstance(obj_field, list):
+                        parts = []
+                        for item in obj_field:
+                            if isinstance(item, str):
+                                parts.append(item)
+                            elif isinstance(item, dict):
+                                parts.append(" ".join(str(v) for v in item.values()))
+                        raw_object_text = " ".join(parts)
+
+                    if re.search(
+                        r"\b(not|never|no|without)\b",
+                        raw_verb,
+                        re.IGNORECASE,
+                    ) or re.search(
+                        r"\b(not|never|no|without)\b",
+                        raw_object_text,
+                        re.IGNORECASE,
+                    ):
+                        props["negated"] = True
+                        cleaned_obj = re.sub(
+                            r"\b(not|never|no|without)\b",
+                            "",
+                            raw_object_text,
+                            flags=re.IGNORECASE,
+                        ).strip()
+                        rel["object"] = cleaned_obj
+                        rel["verb"] = re.sub(
+                            r"\b(not|never|no|without)\b",
+                            "",
+                            raw_verb,
+                            flags=re.IGNORECASE,
+                        ).strip()
+
+                    interpretation["confidence"] = props.get("confidence", 0.6)
+
             self.interpretation_cache[cache_key] = interpretation
             self._save_cache()
             return interpretation
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
-            return InterpretData(
+            return cast(
+                "InterpretData",
                 {
                     "intent": "unknown",
                     "entities": [],
                     "relation": None,
                     "key_topics": user_input.split(),
                     "full_text_rephrased": f"Could not fully interpret: '{user_input}'",
+                    "provenance": "llm",
+                    "confidence": 0.0,
                 },
             )
 

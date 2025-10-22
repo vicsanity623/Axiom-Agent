@@ -47,6 +47,8 @@ waker.log
 /facts/
 /analysis_reports/
 /docs/
+/lib/
+/visualizations/
 
 # -----------------------------------------------------------------------------
 # System & Editor Files

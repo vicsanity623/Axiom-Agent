@@ -558,21 +558,12 @@ class SymbolicParser:
         return found_verbs[0]
 
     def _is_part_of_speech(self, word: str, pos: str) -> bool:
-        """Check if a word is categorized as a specific part of speech.
-
-        This method queries the agent's Lexicon to determine if a word
-        has an "is_a" relationship to a given part-of-speech concept
-        (e.g., checks if 'brown' -> 'is_a' -> 'adjective').
-
-        Args:
-            word: The word to check.
-            pos: The part of speech to check for (e.g., "verb", "adjective").
-
-        Returns:
-            True if the word is categorized as the given part of speech,
-            False otherwise.
         """
-        word_node = self.agent.graph.get_node_by_name(word)
+        Check if a word is categorized as a specific part of speech.
+        This is a read-only check against the agent's current knowledge.
+        """
+        clean_word = word.lower().strip()
+        word_node = self.agent.graph.get_node_by_name(clean_word)
         if not word_node:
             return False
 
@@ -586,4 +577,5 @@ class SymbolicParser:
             target_node = self.agent.graph.get_node_by_id(edge.target)
             if target_node and target_node.name == pos:
                 return True
+
         return False
