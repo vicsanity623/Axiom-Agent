@@ -87,6 +87,48 @@ flowchart TD
     %% Feedback %%
     P -->|Triggers curiosity signal| F
 ```
+### 💡 The Cognitive Reflex: Interactive Learning in Real-Time
+
+The autonomous cycles are how the agent grows its general knowledge, but its true power is revealed during a live conversation. When faced with something it doesn't understand, the agent doesn't just fail—it triggers a **Cognitive Reflex** to learn and adapt in real-time.
+
+This diagram illustrates the agent's thought process when a user says something containing a word the agent has never seen before.
+
+```mermaid
+graph TD
+    %% ====== DISCOVERY CYCLE ======
+    subgraph Discovery_Cycle["1️⃣ Discovery Cycle (Curiosity)"]
+        A1["Explore broad subject: 'Mathematics'"]
+        A2["Search for related topics"]
+        A3["Found new topic: 'History of mathematics'"]
+        A4["Add to Learning Goals: INVESTIGATE ..."]
+    end
+
+    %% ====== STUDY CYCLE ======
+    subgraph Study_Cycle["2️⃣ Study Cycle (Research & Verification)"]
+        B1["Prioritize goal: INVESTIGATE history of mathematics"]
+        B2["Research external sources"]
+        B3["LLM Verification & Reframing – Is fact relevant? Rephrase as S–V–O"]
+        B4["Symbolic Parser understands clean fact"]
+        B5["Integrate into Knowledge Graph (learns new fact)"]
+    end
+
+    %% ====== REFINEMENT CYCLE ======
+    subgraph Refinement_Cycle["3️⃣ Refinement Cycle (Reflection & Decomposition)"]
+        C1["Scan brain for learned facts"]
+        C2["Found 'chunky' fact: banana → ..."]
+        C3["LLM Decomposition – break into atomic facts"]
+        C4["Learn each atomic fact"]
+        C5["Update Knowledge Graph – lower weight of old fact"]
+    end
+
+    %% FLOW BETWEEN CYCLES
+    A1 --> A2 --> A3 --> A4
+    A4 -.-> B1
+    B1 --> B2 --> B3 --> B4 --> B5
+    B5 -.-> C1
+    C1 --> C2 --> C3 --> C4 --> C5
+    C5 -.-> A1
+```
 
 This entire cycle—from curiosity to integration—demonstrates the power of the symbolic-first architecture. The agent uses its LLM as a powerful tool for perception and verification, but the final understanding and knowledge are stored in a clean, logical, and verifiable symbolic brain.
 
