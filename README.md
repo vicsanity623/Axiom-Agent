@@ -138,16 +138,15 @@ This entire cycle—from curiosity to integration—demonstrates the power of th
 This architecture enables the agent to learn, reason, and evolve in a verifiable, self-contained way. The latest version focuses on stability, resilience, and a smarter cognitive flow.
 
 ### Cognitive & Reasoning Abilities
-*   **Multi-Stage Symbolic Parsing:** Understands and deconstructs complex user input.
-*   **Robust Parser Fallback:** Intelligently detects when the symbolic parser fails and automatically switches to the LLM for deeper understanding.
-*   **Conversational Resilience:** Handles user typos and minor variations in language using fuzzy matching, making interaction feel more natural and forgiving.
-*   **Self-Awareness:** Possesses dedicated, fast routines to answer questions about its own purpose, abilities, and identity.
+*   **Real-Time Cognitive Reflex:** When faced with an unknown word during a conversation, the agent doesn't just fail. It triggers an immediate, real-time research cycle to define the word and then re-evaluates the original context, enabling dynamic, interactive learning.
+*   **Trust-Based Learning & Deferral:** A sophisticated lexicon promotion system prevents the knowledge graph from being polluted. The agent defers learning facts with untrusted words until those words are verified through repeated observation or high-confidence sources (like a dictionary).
+*   **Autonomous Learning Cycles (Upgraded):** The agent's ability to learn on its own has been significantly enhanced:
+    *   **Discovery Cycle:** Finds and explores new, relevant topics.
+    *   **Study Cycle:** Researches concepts using an **LLM-powered quality gate** that verifies the relevance of information and reframes it into clean, atomic facts for learning.
+    *   **Refinement Phase:** Decomposes complex "chunky" facts into more precise knowledge.
+*   **Multi-Stage Symbolic Parsing:** Understands and deconstructs a wide range of sentence structures without LLM intervention.
 *   **Contextual Conversation:** Tracks pronouns (`it`, `they`) to maintain short-term memory across conversational turns.
 *   **Introspective Learning:** Can **learn from its own output**—if the LLM "leaks" a new fact in a response, the agent parses and absorbs it, creating a feedback loop for self-improvement.
-*   **Autonomous Learning Cycles:** Can operate independently to expand its knowledge:
-    *   **Discovery Cycle:** Finds and explores new topics.
-    *   **Study Cycle:** Researches unknown concepts to build its knowledge graph.
-    *   **Refinement Phase:** Consolidates and clarifies existing knowledge.
 
 ---
 

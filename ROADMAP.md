@@ -59,16 +59,12 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 **Goal:** Solidify the foundation, improve user experience, and make the agent more robust and resilient.
 
 ### Key Features
-*   **Intelligent Learning Pipeline:** Implemented a sentence sanitizer at the core of the agent's cognitive loop, preventing it from learning "garbage facts" from poorly structured external data.
-*   **Robust Parser Fallback:** Implemented a "sanity check" to intelligently fall back to the LLM interpreter when the symbolic parser fails on complex or nonsensical input.
-*   **Enhanced Self-Awareness:** Created specific `meta-` intents and handlers for questions about the agent itself ("who are you?", "what is your purpose?").
-*   **Conversational Resilience:** Integrated fuzzy matching (`thefuzz`) to handle user typos and minor variations in entity names.
-*   **Comprehensive Test Suite:** Achieved high test coverage (>70%) and a fully passing CI/CD pipeline (Ruff, MyPy, Pytest), ensuring all core functionality is verified.
-*   **Streamlined User Experience:**
-    *   Replaced verbose startup logging with clean `tqdm` progress bars.
-    *   Automated LLM model downloading via a simple `axiom-llm` command.
-    *   Refactored developer scripts into professional command-line entry points (e.g., `axiom-train`, `axiom-render`).
-    *   Implemented versioned model rendering to keep the project directory clean.
+*   **Centralized & Robust Architecture:** Refactored the entire project to use a central `config.py` for all file paths, eliminating dozens of bugs. The core learning logic was fortified with a robust deferral system for facts with untrusted words.
+*   **LLM-Powered Fact Verification:** Implemented an LLM-driven "quality gate" (`verify_and_reframe_fact`) that critically evaluates facts found on the web. It rejects irrelevant information and reframes good facts into simple, learnable sentences, fixing major intelligence flaws (e.g., synonym/redirect bugs).
+*   **Real-Time Interactive Learning:** The agent's "Cognitive Reflex" can now perform real-time research. When it encounters an unknown word during conversation, it immediately attempts to define it, enabling a dynamic, interactive learning loop.
+*   **Intelligent Lexicon Promotion:** Created a formal "promotion" system for the lexicon. The agent now distinguishes between knowing a word's definition and trusting it, and automatically promotes words learned from high-confidence sources (like dictionaries or LLM verification).
+*   **Comprehensive Test Suite:** Achieved a fully passing, clean CI/CD pipeline (Ruff, MyPy, Pytest). The test suite was completely overhauled to validate the new, more sophisticated learning and deferral behaviors.
+*   **Streamlined User Experience:** Refactored developer scripts into professional command-line entry points (`axiom-train`, `axiom-teach`, etc.) and automated the LLM download process (`axiom-llm`).
 
 ---
 
@@ -77,10 +73,10 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 **Goal:** Deepen the agent's understanding of language nuance, context, and complex relationships.
 
 ### Key Features
-*   **Advanced Relationship Extraction:** Enhance the `KnowledgeHarvester` and `UniversalInterpreter` to extract and represent multi-part relationships (e.g., `(person, born_in, city, on_date, date)`).
-*   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly.
-*   **Knowledge Provenance:** Add metadata to all learned facts, tracking their source (e.g., Wikipedia, user input), timestamp, and confidence score. This is a prerequisite for belief revision.
-*   **Belief Revision System:** Implement a strategy for resolving conflicting facts based on source reliability, confidence, and recency.
+*   **Knowledge Provenance & Confidence Scoring:** Add metadata to all learned facts, tracking their source (`user`, `llm_verified`, `dictionary`), timestamp, and confidence score. This is a prerequisite for belief revision.
+*   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
+*   **Belief Revision System:** Implement a strategy for resolving conflicting facts. When a contradiction is found, the agent will use provenance and confidence scores to decide whether to update its belief, ask for clarification, or maintain both possibilities.
+*   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly, making conversation feel more empathetic and natural.
 
 ---
 

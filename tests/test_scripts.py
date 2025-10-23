@@ -230,21 +230,26 @@ def test_main_webui_script_endpoints(monkeypatch):
     """
     Tests the main Flask endpoints in app.py, including the loading sequence.
     """
-    # --- THIS IS THE FIX ---
     # We must use a spec'd mock to prevent errors in dependent classes.
     mock_agent_instance = MagicMock(spec=CognitiveAgent)
     mock_agent_instance.chat.return_value = "Hello from the app.py mock agent."
+    mock_scheduler = MagicMock(name="MockScheduler")
+    mock_cycle_mgr = MagicMock(name="MockCycleManager")
 
     monkeypatch.setattr(
         "axiom.scripts.app.CognitiveAgent",
         lambda *args, **kwargs: mock_agent_instance,
     )
-    # --- END OF FIX ---
 
-    # The rest of the mocks are fine.
     monkeypatch.setattr("axiom.scripts.app.KnowledgeHarvester", MagicMock())
-    monkeypatch.setattr("axiom.scripts.app.BackgroundScheduler", MagicMock)
-    monkeypatch.setattr("axiom.scripts.app.CycleManager", MagicMock)
+    monkeypatch.setattr(
+        "axiom.scripts.app.BackgroundScheduler",
+        lambda *a, **kw: mock_scheduler,
+    )
+    monkeypatch.setattr(
+        "axiom.scripts.app.CycleManager",
+        lambda *a, **kw: mock_cycle_mgr,
+    )
     monkeypatch.setattr("axiom.scripts.app.time.sleep", lambda seconds: None)
 
     client = main_webui_app.test_client()

@@ -34,6 +34,8 @@ class SymbolicParser:
         "PREPOSITION_TO_RELATION_MAP",
         "SVO_PATTERN",
         "CAPITAL_PATTERN",
+        "PROPERTY_KEYWORDS",
+        "AMBIGUOUS_PROPERTY_VERBS",
     )
 
     def __init__(self, agent: CognitiveAgent) -> None:
@@ -84,6 +86,22 @@ class SymbolicParser:
             "how",
             "which",
             "whomst",
+        }
+
+        self.AMBIGUOUS_PROPERTY_VERBS = {"has", "have", "contains", "contain", "holds"}
+        self.PROPERTY_KEYWORDS = {
+            "shape",
+            "color",
+            "volume",
+            "mass",
+            "weight",
+            "height",
+            "length",
+            "width",
+            "temperature",
+            "density",
+            "state",
+            "size",
         }
 
         self.agent = agent
@@ -328,15 +346,22 @@ class SymbolicParser:
             object_ = self.agent._clean_phrase(groups["object"])
             verb = self.agent.get_relation_type(verb_raw, subject, object_)
 
-            logger.info(
-                f"  [Symbolic Parser]: Successfully parsed S-V-O structure via regex: '{subject}' -> '{verb}' -> '{object_}'.",
-            )
+            if verb_raw.lower() in self.AMBIGUOUS_PROPERTY_VERBS:
+                if any(kw in object_.lower() for kw in self.PROPERTY_KEYWORDS):
+                    verb = "has_property"
+                    logger.info(
+                        f"  [Symbolic Parser]: Detected property relation, converting '{verb_raw}' -> '{verb}'.",
+                    )
+
             relation = RelationData(subject=subject, verb=verb, object=object_)
             return InterpretData(
                 intent="statement_of_fact",
                 entities=[
                     {"name": subject, "type": "CONCEPT"},
-                    {"name": object_, "type": "CONCEPT"},
+                    {
+                        "name": object_,
+                        "type": "PROPERTY" if verb == "has_property" else "CONCEPT",
+                    },
                 ],
                 relation=relation,
                 key_topics=[subject, object_],

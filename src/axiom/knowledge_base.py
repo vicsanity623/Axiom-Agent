@@ -273,9 +273,21 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
     """Seed the agent's brain with a foundational set of facts using progress bars."""
     print("   - Seeding a vast initial world knowledge base...")
 
+    concepts_to_promote = {}
+    for subject, s_type, relation, obj, weight in ALL_KNOWLEDGE:
+        concepts_to_promote[subject] = s_type
+        if obj not in concepts_to_promote:
+            concepts_to_promote[obj] = "concept"
+
+    for concept, concept_type in tqdm(
+        concepts_to_promote.items(),
+        desc="     - Seeding & Promoting Concepts",
+    ):
+        agent_instance.lexicon.add_linguistic_knowledge_quietly(concept, concept_type)
+
     for subject, s_type, relation, obj, weight in tqdm(
         ALL_KNOWLEDGE,
-        desc="     - Seeding knowledge facts ",
+        desc="     - Seeding Relationships     ",
     ):
         agent_instance.manual_add_knowledge_quietly(
             subject,
@@ -552,10 +564,7 @@ def add_pending_relation(agent_instance, relation: dict, interpretation: dict):
 def validate_and_add_relation(agent_instance, relation: dict, interpretation: dict):
     """
     Validate a parsed relation, deferring if it contains un-promoted words,
-    and otherwise inserting it into the graph with metadata and basic
-    contradiction handling.
-
-    Returns: one of ("inserted", "contradiction_stored", "replaced", "deferred", "error")
+    and otherwise inserting it into the graph.
     """
     subject_name = (relation.get("subject") or "").strip().lower()
     object_name = (relation.get("object") or "").strip().lower()
@@ -570,10 +579,46 @@ def validate_and_add_relation(agent_instance, relation: dict, interpretation: di
     if not subj_node or not obj_node:
         return "error"
 
+    provenance = interpretation.get("source", interpretation.get("provenance", "user"))
+
+    definitional_relations = {
+        "is_a",
+        "is_located_in",
+        "is_part_of",
+        "has_property",
+        "has_capital",
+        "is_capital_of",
+    }
+
+    # --- Heuristics & automatic promotions to avoid spurious deferrals ---
+    # If relation is definitional and provenance is strong, promote both tokens.
+    # Also allow high-confidence facts to trigger promotion even if provenance marker
+    # was lost upstream.
+    try:
+        interp_conf = float(interpretation.get("confidence", 0.0))
+    except Exception:
+        interp_conf = 0.0
+
+    if relation_type in definitional_relations and (
+        provenance in ("llm_verified", "dictionary", "seed") or interp_conf >= 0.85
+    ):
+        promote_word(agent_instance, subject_name, "noun_phrase", confidence=0.9)
+        promote_word(agent_instance, object_name, "noun_phrase", confidence=0.9)
+
+    # If either token appears to be a multi-word noun-phrase (heuristic), promote it.
+    # This helps with facts like "epidermal growths" created as compound nodes.
+    if " " in subject_name:
+        promote_word(agent_instance, subject_name, "noun_phrase", confidence=0.9)
+    if " " in object_name:
+        promote_word(agent_instance, object_name, "noun_phrase", confidence=0.9)
+
+    # Try to auto-promote based on existing lexical observations (votes).
+    # This lets the parser's recorded POS observations immediately affect promotion.
+    try_promote_lexicon(agent_instance, subject_name)
+    try_promote_lexicon(agent_instance, object_name)
+
     def _node_untrusted(node):
         props = agent_instance.graph.graph.nodes[node.id].get("properties", {})
-        if props.get("lexical_observations"):
-            return True
         if not props.get("lexical_promoted_as"):
             return True
         return False
