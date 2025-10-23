@@ -95,39 +95,38 @@ This diagram illustrates the agent's thought process when a user says something 
 
 ```mermaid
 graph TD
-    %% ====== DISCOVERY CYCLE ======
-    subgraph Discovery_Cycle["1️⃣ Discovery Cycle (Curiosity)"]
-        A1["Explore broad subject: 'Mathematics'"]
-        A2["Search for related topics"]
-        A3["Found new topic: 'History of mathematics'"]
-        A4["Add to Learning Goals: INVESTIGATE ..."]
+    %% Main flow
+    A["User Input: 'Zetetic inquiry.'"]
+
+    subgraph Symbolic_First_Path["1️⃣ Symbolic-First Path"]
+        B["1. Symbolic Parser – Attempts to parse sentence"]
+        B -- "Failure (nonsensical grammar)" --> C
     end
 
-    %% ====== STUDY CYCLE ======
-    subgraph Study_Cycle["2️⃣ Study Cycle (Research & Verification)"]
-        B1["Prioritize goal: INVESTIGATE history of mathematics"]
-        B2["Research external sources"]
-        B3["LLM Verification & Reframing – Is fact relevant? Rephrase as S–V–O"]
-        B4["Symbolic Parser understands clean fact"]
-        B5["Integrate into Knowledge Graph (learns new fact)"]
+    subgraph Cognitive_Reflex["2️⃣ Cognitive Reflex"]
+        C{"2. Check for unknown words?"}
+        C -- "Yes (finds 'zetetic', 'inquiry')" --> D["3. Create Learning Goal: INVESTIGATE 'zetetic'"]
+        C -- "No" --> E["Fallback to LLM Interpreter"]
     end
 
-    %% ====== REFINEMENT CYCLE ======
-    subgraph Refinement_Cycle["3️⃣ Refinement Cycle (Reflection & Decomposition)"]
-        C1["Scan brain for learned facts"]
-        C2["Found 'chunky' fact: banana → ..."]
-        C3["LLM Decomposition – break into atomic facts"]
-        C4["Learn each atomic fact"]
-        C5["Update Knowledge Graph – lower weight of old fact"]
+    subgraph Real_Time_Research["3️⃣ Real-Time Research"]
+        D --> R1["4. Call Harvester (_resolve_investigation_goal)"]
+        R1 --> R2["Query dictionary API"]
+        R2 --> R3{"Success?"}
+        R3 -- "Yes" --> R4["Learn & promote word: 'zetetic' (trusted noun)"]
+        R3 -- "No" --> R5["Return research failure message"]
     end
 
-    %% FLOW BETWEEN CYCLES
-    A1 --> A2 --> A3 --> A4
-    A4 -.-> B1
-    B1 --> B2 --> B3 --> B4 --> B5
-    B5 -.-> C1
-    C1 --> C2 --> C3 --> C4 --> C5
-    C5 -.-> A1
+    subgraph Intelligent_Feedback_Loop["4️⃣ Intelligent Feedback Loop"]
+        R4 --> L1["5. Re-evaluate input: chat('Zetetic inquiry.') again"]
+        L1 --> L2["Parser fails again, but 'zetetic' is now known"]
+        L2 --> E
+    end
+
+    E --> FinalResponse["6. Generate Final Response (LLM provides definition)"]
+    R5 --> FinalResponse
+
+    A --> B
 ```
 
 This entire cycle—from curiosity to integration—demonstrates the power of the symbolic-first architecture. The agent uses its LLM as a powerful tool for perception and verification, but the final understanding and knowledge are stored in a clean, logical, and verifiable symbolic brain.
