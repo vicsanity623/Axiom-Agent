@@ -36,6 +36,7 @@ class SymbolicParser:
         "CAPITAL_PATTERN",
         "PROPERTY_KEYWORDS",
         "AMBIGUOUS_PROPERTY_VERBS",
+        "PROPERTY_OF_QUESTION_PATTERN",
     )
 
     def __init__(self, agent: CognitiveAgent) -> None:
@@ -104,6 +105,10 @@ class SymbolicParser:
             "size",
         }
 
+        self.PROPERTY_OF_QUESTION_PATTERN = re.compile(
+            r"(?i)^what\s+(is|are)\s+(?:the\s+)?(?P<property>.+?)\s+of\s+(?P<subject>.+)\?*$",
+        )
+
         self.agent = agent
         logger.info("   - Symbolic Parser initialized.")
 
@@ -146,13 +151,13 @@ class SymbolicParser:
         context_subject: str | None = None,
     ) -> list[InterpretData] | None:
         """
-        Attempts to parse a sentence by running it through a multi-stage pipeline.
-        Returns a list of interpretations (one for each successfully parsed clause).
+        Attempts to parse a sentence by running it through a multi-stage pipeline,
+        including a refinement step to decompose complex objects.
         """
+
         logger.debug(f"  [Symbolic Parser]: Attempting to parse sentence: '{text}'")
 
         clean_text = text.lower().strip().rstrip("?")
-
         if clean_text in ("who are you", "what are you"):
             logger.info(
                 "  [Symbolic Parser]: Successfully parsed a 'who are you' meta-question.",
@@ -209,24 +214,61 @@ class SymbolicParser:
                 },
             ]
 
+        initial_interpretations = []
         clauses = self._split_into_clauses(text)
-        all_interpretations: list[InterpretData] = []
-
         for clause in clauses:
-            interpretation = self._parse_single_clause(clause, context_subject)
-            if interpretation:
-                all_interpretations.append(interpretation)
+            if interp := self._parse_single_clause(clause, context_subject):
+                initial_interpretations.append(interp)
 
-        if context_subject:
+        if not initial_interpretations:
             logger.debug(
-                f"  [Introspection Parse]: Context='{context_subject}', text='{text}'",
+                "  [Symbolic Parser]: Failed. No initial clauses could be parsed.",
             )
+            return None
 
-        if all_interpretations:
-            return all_interpretations
+        final_interpretations: list[InterpretData] = []
+        for interp in initial_interpretations:
+            final_interpretations.append(interp)
+            relation = interp.get("relation")
 
-        logger.debug("  [Symbolic Parser]: Failed. No clauses could be parsed.")
-        return None
+            if relation:
+                object_phrase = relation.get("object", "")
+                subject = relation.get("subject", "")
+
+                if subject and len(object_phrase.split()) > 2:
+                    logger.debug(
+                        "  [Parser Refinement]: Decomposing chunky object: '%s'",
+                        object_phrase,
+                    )
+                    refined_relations = self._refine_object_phrase(
+                        subject,
+                        object_phrase,
+                    )
+
+                    for ref_rel in refined_relations:
+                        ref_subject = ref_rel.get("subject", "")
+                        ref_object = ref_rel.get("object", "")
+                        ref_verb = ref_rel.get("verb", "")
+
+                        logger.info(
+                            "  [Parser Refinement]: Extracted: %s -> %s -> %s",
+                            ref_subject,
+                            ref_verb,
+                            ref_object,
+                        )
+                        new_interp = InterpretData(
+                            intent="statement_of_fact",
+                            relation=ref_rel,
+                            entities=[
+                                {"name": ref_subject, "type": "CONCEPT"},
+                                {"name": ref_object, "type": "CONCEPT"},
+                            ],
+                            key_topics=[ref_subject, ref_object],
+                            full_text_rephrased=f"{ref_subject} {ref_verb} {ref_object}",
+                        )
+                        final_interpretations.append(new_interp)
+
+        return final_interpretations
 
     def _parse_single_clause(
         self,
@@ -273,8 +315,35 @@ class SymbolicParser:
         if not raw_words:
             return None
 
+        prop_of_match = re.match(
+            r"(?i)^what\s+is\s+(?:the\s+)?(?P<property>.+?)\s+of\s+(?P<subject>.+)\?*$",
+            raw_clause,
+        )
+        if prop_of_match:
+            groups = prop_of_match.groupdict()
+            subject = self.agent._clean_phrase(groups["subject"])
+            property_name = self.agent._clean_phrase(groups["property"])
+
+            relation_verb = f"has_{property_name.replace(' ', '_')}"
+
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed a 'Property Of' question for subject '%s' about relation '%s'.",
+                subject,
+                relation_verb,
+            )
+            relation = RelationData(subject=subject, verb=relation_verb, object="?")
+            return InterpretData(
+                intent="question_by_relation",
+                entities=[{"name": subject, "type": "CONCEPT"}],
+                relation=relation,
+                key_topics=[subject, property_name],
+                full_text_rephrased=raw_clause,
+            )
+
         if raw_words[0] in self.QUESTION_WORDS:
-            logger.info("  [Symbolic Parser]: Successfully parsed a wh-question.")
+            logger.info(
+                "  [Symbolic Parser]: Successfully parsed a generic wh-question.",
+            )
             entity_name = (
                 " ".join(raw_words[2:])
                 if len(raw_words) > 2
@@ -604,3 +673,56 @@ class SymbolicParser:
                 return True
 
         return False
+
+    def _refine_object_phrase(
+        self,
+        subject: str,
+        object_phrase: str,
+    ) -> list[RelationData]:
+        """
+        Analyzes a complex object phrase to extract additional atomic facts related
+        to either the original subject or the nouns within the phrase itself.
+        """
+        refined_facts = []
+        words = object_phrase.split()
+
+        for i, word in enumerate(words):
+            if self._is_part_of_speech(word, "adjective"):
+                if i + 1 < len(words):
+                    noun = self.agent._clean_phrase(words[i + 1])
+                    refined_facts.append(
+                        RelationData(subject=noun, verb="has_property", object=word),
+                    )
+
+        prep_match = re.search(r"(.+?)\s+(from|of|in|with)\s+(.+)", object_phrase)
+        if prep_match:
+            obj_subject = self.agent._clean_phrase(prep_match.group(1))
+            preposition = prep_match.group(2)
+            prep_object = self.agent._clean_phrase(prep_match.group(3))
+
+            if preposition == "from":
+                refined_facts.append(
+                    RelationData(
+                        subject=obj_subject,
+                        verb="comes_from",
+                        object=prep_object,
+                    ),
+                )
+            elif preposition == "of":
+                refined_facts.append(
+                    RelationData(
+                        subject=obj_subject,
+                        verb="is_part_of",
+                        object=prep_object,
+                    ),
+                )
+            elif preposition == "with":
+                refined_facts.append(
+                    RelationData(
+                        subject=obj_subject,
+                        verb="has_part",
+                        object=prep_object,
+                    ),
+                )
+
+        return refined_facts

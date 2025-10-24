@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock
 
 from axiom.graph_core import ConceptNode
 from axiom.universal_interpreter import InterpretData
@@ -12,14 +11,10 @@ if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
 
 
-def test_agent_diverts_to_clarification_handler_when_awaiting(
-    agent: CognitiveAgent,
-    monkeypatch,
-):
+def test_agent_handles_stalemate_correctly(agent: CognitiveAgent):
     """
-    Covers the 'if self.is_awaiting_clarification:' branch in the chat method.
-    Ensures that when the agent is in this state, the input is correctly
-    routed to the _handle_clarification method.
+    Test that when a 'Stalemate' conflict occurs, the agent correctly
+    triggers clarification AND creates a RESOLVE_CONFLICT learning goal.
     """
     # 1. GIVEN: The words used in the facts are known and trusted.
     agent.lexicon._promote_word_for_test("paris", "noun")
@@ -27,27 +22,48 @@ def test_agent_diverts_to_clarification_handler_when_awaiting(
     agent.lexicon._promote_word_for_test("france", "noun")
     agent.lexicon._promote_word_for_test("capital", "noun")
 
-    # AND: The agent learns a fact, then a contradictory one.
+    # 2. WHEN: The agent learns a fact, then a contradictory one of equal confidence.
     agent.chat("Paris is the capital of France")
     clarification_question = agent.chat("Lyon is the capital of France")
-    assert agent.is_awaiting_clarification is True
-    assert "?" in clarification_question, "Agent should have asked a question."
 
-    # 2. MOCK: Replace the real _handle_clarification method with a "spy".
-    mock_handler = MagicMock()
-    monkeypatch.setattr(agent, "_handle_clarification", mock_handler)
+    # 3. THEN: Verify the new, unified "Stalemate" behavior.
 
-    mock_normal_flow_spy = MagicMock()
-    monkeypatch.setattr(agent, "_expand_contractions", mock_normal_flow_spy)
+    # a) It SHOULD be awaiting clarification and should have asked a question.
+    assert agent.is_awaiting_clarification is True, (
+        "Agent should ask for clarification on a stalemate."
+    )
+    assert "?" in clarification_question, "Agent should have returned a question."
 
-    # 3. WHEN: The user provides an answer to the clarification question.
-    user_answer = "Paris"
-    agent.chat(user_answer)
+    # b) It SHOULD have created a specific learning goal for the autonomous system.
+    assert len(agent.learning_goals) == 1, "A learning goal should have been created."
+    assert "RESOLVE_CONFLICT" in agent.learning_goals[0], (
+        "The goal should be to resolve a conflict."
+    )
+    assert "lyon" in agent.learning_goals[0], (
+        "The learning goal should mention the new conflict 'lyon'."
+    )
+    assert "paris" in agent.learning_goals[0], (
+        "The learning goal should mention the existing conflict 'paris'."
+    )
 
-    # 4. THEN: Verify the correct path was taken.
-    mock_handler.assert_called_once_with(user_answer)
-    mock_normal_flow_spy.assert_not_called()
-    print("Agent correctly diverted input to the clarification handler.")
+    # c) It should NOT have learned the second fact yet.
+    france_node = agent.graph.get_node_by_name("france")
+    assert france_node is not None
+
+    capitals = []
+    for edge in agent.graph.get_edges_from_node(france_node.id):
+        if edge.type == "has_capital":
+            target_node = agent.graph.get_node_by_id(edge.target)
+            if target_node:
+                capitals.append(target_node.name)
+
+    assert capitals == ["paris"], (
+        "Agent should not learn the conflicting fact until clarified."
+    )
+
+    print(
+        "Agent correctly handled stalemate by asking for clarification and creating a learning goal.",
+    )
 
 
 def test_agent_handle_clarification_reinforces_and_punishes(

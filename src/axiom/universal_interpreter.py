@@ -58,6 +58,7 @@ Intent: TypeAlias = Literal[
     "meta_question_purpose",
     "meta_question_abilities",
     "command_show_all_facts",
+    "question_by_relation",
 ]
 
 
@@ -69,6 +70,19 @@ class PropertyData(TypedDict, total=False):
     confidence: NotRequired[float]
     provenance: NotRequired[str]
     negated: NotRequired[bool]
+    revision_status: NotRequired[
+        Literal[
+            "active",
+            "superseded",
+            "disputed",
+            "replaced",
+            "ignored_lower_provenance",
+            "merged",
+        ]
+    ]
+    superseded_by: NotRequired[str]
+    last_modified: NotRequired[float]
+    confidence_updated: NotRequired[bool]
 
 
 class RelationData(TypedDict, total=False):
@@ -76,7 +90,7 @@ class RelationData(TypedDict, total=False):
 
     subject: str
     verb: NotRequired[str]
-    object: str | dict[str, str] | list[str | dict[str, str]]
+    object: str
     predicate: NotRequired[str]
     relation: NotRequired[str]
     properties: NotRequired[PropertyData]
@@ -314,21 +328,8 @@ class UniversalInterpreter:
                     props.setdefault("confidence", 0.6)
                     props.setdefault("provenance", "llm")
 
-                    raw_verb = (rel.get("verb") or "").lower()
-                    obj_field = rel.get("object")
-                    raw_object_text = ""
-                    if isinstance(obj_field, str):
-                        raw_object_text = obj_field
-                    elif isinstance(obj_field, dict):
-                        raw_object_text = " ".join(str(v) for v in obj_field.values())
-                    elif isinstance(obj_field, list):
-                        parts = []
-                        for item in obj_field:
-                            if isinstance(item, str):
-                                parts.append(item)
-                            elif isinstance(item, dict):
-                                parts.append(" ".join(str(v) for v in item.values()))
-                        raw_object_text = " ".join(parts)
+                    raw_verb = rel.get("verb", "").lower()
+                    raw_object_text = rel.get("object", "")
 
                     if re.search(
                         r"\b(not|never|no|without)\b",
@@ -340,13 +341,13 @@ class UniversalInterpreter:
                         re.IGNORECASE,
                     ):
                         props["negated"] = True
-                        cleaned_obj = re.sub(
+
+                        rel["object"] = re.sub(
                             r"\b(not|never|no|without)\b",
                             "",
                             raw_object_text,
                             flags=re.IGNORECASE,
                         ).strip()
-                        rel["object"] = cleaned_obj
                         rel["verb"] = re.sub(
                             r"\b(not|never|no|without)\b",
                             "",

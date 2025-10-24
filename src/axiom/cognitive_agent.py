@@ -14,7 +14,7 @@ import re
 import threading
 from datetime import date, datetime
 from functools import lru_cache
-from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict
+from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict, cast
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -87,6 +87,16 @@ CONTRACTION_MAP: Final[dict[str, str]] = {
     "didn't": "did not",
     "isn't": "is not",
     "aren't": "are not",
+}
+
+PROVENANCE_RANK: Final[dict[str, int]] = {
+    "seed": 5,
+    "dictionary_api": 4,
+    "llm_verified": 3,
+    "wikipedia": 2,
+    "duckduckgo": 2,
+    "user_input": 1,
+    "llm": 1,
 }
 
 
@@ -653,6 +663,26 @@ class CognitiveAgent:
 
         if intent == "question_yes_no" and relation:
             return self._answer_yes_no_question(relation)
+
+        if intent == "question_by_relation" and relation:
+            subject = relation.get("subject")
+            verb = relation.get("verb")
+
+            if subject and verb:
+                corrected_subject = self._get_corrected_entity(subject)
+                subject_node = self.graph.get_node_by_name(corrected_subject)
+
+                if subject_node:
+                    for edge in self.graph.get_edges_from_node(subject_node.id):
+                        if edge.type == verb:
+                            target_node = self.graph.get_node_by_id(edge.target)
+                            if target_node:
+                                property_name = verb.replace("has_", "").replace(
+                                    "_", " ",
+                                )
+                                return f"The {property_name} of {subject.capitalize()} is {target_node.name.capitalize()}."
+
+            return f"I don't have information about the {relation.get('verb', 'property').replace('has_', '')} of {subject}."
 
         if intent in ("question_about_entity", "question_about_concept") and relation:
             start_concept = relation.get("subject")
@@ -1302,7 +1332,8 @@ class CognitiveAgent:
         self,
         relation: RelationData,
     ) -> tuple[bool, str]:
-        """Process a structured fact to learn and integrate it into the graph."""
+        """Process a structured fact to learn and integrate it into the graph,
+        including belief revision logic for conflicting exclusive relationships."""
         if self.inference_mode:
             return (
                 False,
@@ -1321,20 +1352,7 @@ class CognitiveAgent:
             return (False, "Could not determine the subject of the fact.")
         subject_name = subject_name_raw
 
-        objects_to_process = []
-        if isinstance(object_, list):
-            for item in object_:
-                if isinstance(item, dict):
-                    name = item.get("entity") or item.get("name")
-                else:
-                    name = item
-
-                if name:
-                    objects_to_process.append(name)
-        else:
-            name = object_.get("name") if isinstance(object_, dict) else object_
-            if name:
-                objects_to_process.append(name)
+        objects_to_process = [object_]
 
         if not objects_to_process:
             return (False, "Could not determine the object(s) of the fact.")
@@ -1351,97 +1369,156 @@ class CognitiveAgent:
         verb_cleaned = verb.lower().strip()
         sub_node = self._add_or_update_concept(subject_name)
 
-        for object_name in objects_to_process:
-            relation_type = self.get_relation_type(
-                verb_cleaned,
-                subject_name,
-                object_name,
-            )
-            exclusive_relations = [
-                "has_name",
-                "is_capital_of",
-                "has_capital",
-                "is_located_in",
-            ]
-            if relation_type in exclusive_relations and sub_node:
-                for edge in self.graph.get_edges_from_node(sub_node.id):
-                    if edge.type == relation_type:
-                        existing_target_data = self.graph.graph.nodes[edge.target]
-                        if existing_target_data.get("name") != self._clean_phrase(
-                            object_name,
-                        ):
-                            logger.warning(
-                                "  [Curiosity]: CONTRADICTION DETECTED (Exclusive Relationship)!",
-                            )
-                            return (False, "exclusive_conflict")
-
         learned_at_least_one = False
+
         for object_name in objects_to_process:
+            if object_name is None:
+                continue
+
             relation_type = self.get_relation_type(
                 verb_cleaned,
                 subject_name,
                 object_name,
             )
             obj_node = self._add_or_update_concept(object_name)
-            if sub_node and obj_node:
-                edge_exists = any(
-                    edge.type == relation_type and edge.target == obj_node.id
-                    for edge in self.graph.get_edges_from_node(sub_node.id)
+            if not (sub_node and obj_node):
+                continue
+
+            exclusive_relations = [
+                "has_name",
+                "is_capital_of",
+                "has_capital",
+                "is_located_in",
+            ]
+
+            rel_props = properties if isinstance(properties, dict) else {}
+            candidate_confidence = float(rel_props.get("confidence", 0.95))
+            candidate_provenance = rel_props.get("provenance", "user")
+            candidate_rank = PROVENANCE_RANK.get(candidate_provenance, 0)
+
+            conflict_edge = None
+            if relation_type in exclusive_relations:
+                conflict_edge = self.graph.find_exclusive_conflict(
+                    sub_node,
+                    relation_type,
                 )
 
-                if not edge_exists:
-                    rel_props = properties if isinstance(properties, dict) else {}
-                    interpretation = {
-                        "confidence": float(rel_props.get("confidence", 0.95)),
-                        "negated": bool(rel_props.get("negated", False)),
-                        "source": rel_props.get("provenance", "user"),
-                    }
+            if conflict_edge:
+                existing_confidence = getattr(conflict_edge, "weight", 0.6)
+                existing_prov = conflict_edge.properties.get("provenance", "unknown")
+                existing_rank = PROVENANCE_RANK.get(existing_prov, 0)
+
+                if (candidate_confidence, candidate_rank) > (
+                    existing_confidence,
+                    existing_rank,
+                ):
+                    logger.warning(
+                        "  [Belief Revision]: New fact is stronger. Deprecating old fact.",
+                    )
+                    self.graph.update_edge_properties(
+                        conflict_edge,
+                        {"superseded_by": "new_fact_pending"},
+                    )
+                    self.graph.update_edge_weight(conflict_edge, 0.2)
+
                     candidate = {
                         "subject": subject_name,
                         "verb": relation_type,
                         "object": object_name,
                     }
-
-                    status = validate_and_add_relation(self, candidate, interpretation)
-
+                    status = validate_and_add_relation(self, candidate, rel_props)
                     if status in ("inserted", "replaced"):
-                        logger.info(
-                            "    Learned new fact: %s --[%s]--> %s (status=%s)",
-                            sub_node.name,
-                            relation_type,
-                            obj_node.name,
-                            status,
-                        )
                         learned_at_least_one = True
-                    elif status == "deferred":
-                        logger.info(
-                            "    Deferred learning for %s --[%s]--> %s due to unpromoted lexicon entries.",
-                            sub_node.name,
-                            relation_type,
-                            obj_node.name,
-                        )
-                    elif status == "contradiction_stored":
-                        logger.warning(
-                            "    Contradiction detected and stored for %s --[%s]--> %s.",
-                            sub_node.name,
-                            relation_type,
-                            obj_node.name,
-                        )
-                    else:
-                        logger.debug(
-                            "    validate_and_add_relation returned status='%s' for %s --[%s]--> %s",
-                            status,
-                            sub_node.name,
-                            relation_type,
-                            obj_node.name,
-                        )
+
+                elif (candidate_confidence, candidate_rank) < (
+                    existing_confidence,
+                    existing_rank,
+                ):
+                    logger.warning(
+                        "  [Belief Revision]: Existing fact is stronger. Rejecting new fact.",
+                    )
+                    continue
+
                 else:
-                    logger.debug(
-                        "    - Fact already exists: %s --[%s]--> %s",
+                    logger.warning(
+                        "  [Belief Revision]: Stalemate detected. Triggering clarification and creating resolution goal.",
+                    )
+
+                    if hasattr(self, "harvester") and self.harvester:
+                        target_node = self.graph.get_node_by_id(conflict_edge.target)
+                        if target_node:
+                            goal = (
+                                f"RESOLVE_CONFLICT: {subject_name} --[{relation_type}]--> {object_name} "
+                                f"vs {target_node.name}"
+                            )
+                            if goal not in self.learning_goals:
+                                self.learning_goals.append(goal)
+                                self.save_state()
+
+                    return (False, "exclusive_conflict")
+                continue
+
+            edge_exists = any(
+                edge.type == relation_type and edge.target == obj_node.id
+                for edge in self.graph.get_edges_from_node(sub_node.id)
+            )
+
+            if not edge_exists:
+                from .universal_interpreter import PropertyData
+
+                interpretation = cast(
+                    "PropertyData",
+                    {
+                        "confidence": candidate_confidence,
+                        "negated": bool(rel_props.get("negated", False)),
+                        "provenance": candidate_provenance,
+                    },
+                )
+                candidate = {
+                    "subject": subject_name,
+                    "verb": relation_type,
+                    "object": object_name,
+                }
+                status = validate_and_add_relation(self, candidate, interpretation)
+
+                if status in ("inserted", "replaced"):
+                    logger.info(
+                        "    Learned new fact: %s --[%s]--> %s (status=%s)",
+                        sub_node.name,
+                        relation_type,
+                        obj_node.name,
+                        status,
+                    )
+                    learned_at_least_one = True
+                elif status == "deferred":
+                    logger.info(
+                        "    Deferred learning for %s --[%s]--> %s due to unpromoted lexicon entries.",
                         sub_node.name,
                         relation_type,
                         obj_node.name,
                     )
+                elif status == "contradiction_stored":
+                    logger.warning(
+                        "    Contradiction detected and stored for %s --[%s]--> %s.",
+                        sub_node.name,
+                        relation_type,
+                        obj_node.name,
+                    )
+                else:
+                    logger.debug(
+                        "    validate_and_add_relation returned status='%s' for %s --[%s]--> %s",
+                        status,
+                        sub_node.name,
+                        relation_type,
+                        obj_node.name,
+                    )
+            else:
+                logger.debug(
+                    "    - Fact already exists: %s --[%s]--> %s",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                )
 
         if learned_at_least_one:
             self._gather_facts_multihop.cache_clear()
@@ -1450,7 +1527,7 @@ class CognitiveAgent:
             self.save_state()
             return (True, "I understand. I have noted that.")
 
-        return (False, "deferred")
+        return (True, "deferred")
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.

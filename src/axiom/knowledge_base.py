@@ -14,6 +14,8 @@ get_word_info_from_wordnet = lru_cache(maxsize=None)(get_word_info_from_wordnet)
 if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
 
+    from .universal_interpreter import PropertyData
+
 LEXICON_PROMOTION_THRESHOLD = 0.8
 LEXICON_OBSERVATION_DECAY = 0.0
 
@@ -555,16 +557,20 @@ def try_promote_lexicon(
     return False
 
 
-def add_pending_relation(agent_instance, relation: dict, interpretation: dict):
+def add_pending_relation(agent_instance, relation: dict, interpretation: PropertyData):
     """Store a relation temporarily until dependent lexicon entries are promoted."""
 
     agent_instance.pending_relations.append((relation, interpretation, time.time()))
 
 
-def validate_and_add_relation(agent_instance, relation: dict, interpretation: dict):
+def validate_and_add_relation(
+    agent_instance,
+    relation: dict,
+    interpretation: PropertyData,
+):
     """
-    Validate a parsed relation, deferring if it contains un-promoted words,
-    and otherwise inserting it into the graph.
+    Validate a parsed relation, deferring if it contains un-promoted words
+    with low confidence, and otherwise inserting it into the graph.
     """
     subject_name = (relation.get("subject") or "").strip().lower()
     object_name = (relation.get("object") or "").strip().lower()
@@ -579,9 +585,16 @@ def validate_and_add_relation(agent_instance, relation: dict, interpretation: di
     if not subj_node or not obj_node:
         return "error"
 
-    provenance = interpretation.get("source", interpretation.get("provenance", "user"))
+    provenance = interpretation.get("provenance", "user")
+    confidence = float(interpretation.get("confidence", 0.0))
 
-    definitional_relations = {
+    def is_node_promoted(node):
+        if not node:
+            return False
+        node_data = agent_instance.graph.graph.nodes.get(node.id, {})
+        return node_data.get("properties", {}).get("lexical_promoted_as") is not None
+
+    is_definitional = relation_type in {
         "is_a",
         "is_located_in",
         "is_part_of",
@@ -589,58 +602,35 @@ def validate_and_add_relation(agent_instance, relation: dict, interpretation: di
         "has_capital",
         "is_capital_of",
     }
+    is_high_trust_source = (
+        provenance in ("llm_verified", "dictionary", "seed") or confidence >= 0.85
+    )
 
-    # --- Heuristics & automatic promotions to avoid spurious deferrals ---
-    # If relation is definitional and provenance is strong, promote both tokens.
-    # Also allow high-confidence facts to trigger promotion even if provenance marker
-    # was lost upstream.
-    try:
-        interp_conf = float(interpretation.get("confidence", 0.0))
-    except Exception:
-        interp_conf = 0.0
+    if is_definitional and is_high_trust_source:
+        if not is_node_promoted(subj_node):
+            promote_word(agent_instance, subject_name, "noun_phrase", confidence=0.9)
+        if not is_node_promoted(obj_node):
+            promote_word(agent_instance, object_name, "noun_phrase", confidence=0.9)
 
-    if relation_type in definitional_relations and (
-        provenance in ("llm_verified", "dictionary", "seed") or interp_conf >= 0.85
-    ):
-        promote_word(agent_instance, subject_name, "noun_phrase", confidence=0.9)
-        promote_word(agent_instance, object_name, "noun_phrase", confidence=0.9)
-
-    # If either token appears to be a multi-word noun-phrase (heuristic), promote it.
-    # This helps with facts like "epidermal growths" created as compound nodes.
-    if " " in subject_name:
-        promote_word(agent_instance, subject_name, "noun_phrase", confidence=0.9)
-    if " " in object_name:
-        promote_word(agent_instance, object_name, "noun_phrase", confidence=0.9)
-
-    # Try to auto-promote based on existing lexical observations (votes).
-    # This lets the parser's recorded POS observations immediately affect promotion.
-    try_promote_lexicon(agent_instance, subject_name)
-    try_promote_lexicon(agent_instance, object_name)
-
-    def _node_untrusted(node):
-        props = agent_instance.graph.graph.nodes[node.id].get("properties", {})
-        if not props.get("lexical_promoted_as"):
-            return True
-        return False
-
-    if _node_untrusted(subj_node) or _node_untrusted(obj_node):
+    if not is_node_promoted(subj_node) or not is_node_promoted(obj_node):
         add_pending_relation(agent_instance, relation, interpretation)
         return "deferred"
 
     new_conf = float(interpretation.get("confidence", 0.6))
     new_neg = bool(interpretation.get("negated", False))
-    provenance = interpretation.get("source", interpretation.get("provenance", "user"))
+    new_provenance = interpretation.get("provenance", "user")
 
     new_props = {
         "negated": new_neg,
-        "provenance": provenance,
-        "confidence": float(new_conf),
+        "provenance": new_provenance,
+        "confidence": new_conf,
     }
 
     existing_edges = [
         e
         for e in agent_instance.graph.get_edges_from_node(subj_node.id)
         if e.type == relation_type
+        and agent_instance.graph.get_node_by_id(e.target)
         and agent_instance.graph.get_node_by_id(e.target).name == object_name
     ]
 

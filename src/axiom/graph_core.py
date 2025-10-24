@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import uuid
 
 # graph_core.py
@@ -327,23 +328,6 @@ class ConceptGraph:
         )
         return new_edge
 
-    def update_edge_weight(self, edge: RelationshipEdge, new_weight: float) -> None:
-        """Find a specific edge in the graph and update its weight.
-
-        This is used by the refinement cycle to "punish" a chunky fact
-        after it has been successfully decomposed into smaller, atomic facts.
-
-        Args:
-            edge: The `RelationshipEdge` object to be updated.
-            new_weight: The new weight to assign to the edge.
-        """
-        if self.graph.has_edge(edge.source, edge.target, key=edge.id):
-            self.graph.edges[edge.source, edge.target, edge.id]["weight"] = new_weight
-        else:
-            print(
-                f"[Graph Core Warning]: Could not find edge {edge.id} to update its weight.",
-            )
-
     def get_edges_from_node(self, node_id: str) -> list[RelationshipEdge]:
         """Retrieve all outgoing edges (relationships) from a specific node.
 
@@ -512,3 +496,179 @@ class ConceptGraph:
                 if target_node_data:
                     conflicts.append(ConceptNode.from_dict(target_node_data))
         return conflicts
+
+    def update_edge_properties(
+        self,
+        edge: RelationshipEdge,
+        updates: dict[str, object],
+        merge: bool = True,
+    ) -> None:
+        """Safely update or merge properties on an existing edge.
+
+        Args:
+            edge: The `RelationshipEdge` to update.
+            updates: A dictionary of new or updated key-value pairs.
+            merge: If True (default), merge into existing properties.
+                   If False, replace the entire dictionary.
+        """
+        if not self.graph.has_edge(edge.source, edge.target, key=edge.id):
+            print(
+                f"[Graph Core Warning]: Edge {edge.id} not found for property update.",
+            )
+            return
+
+        edge_data = self.graph.edges[edge.source, edge.target, edge.id]
+
+        if merge:
+            edge_data["properties"].update(updates)
+        else:
+            edge_data["properties"] = updates
+
+        edge_data["properties"]["last_modified"] = time.time()
+
+    def find_exclusive_conflict(
+        self,
+        subject_node: ConceptNode,
+        relation_type: str,
+        debug: bool = False,
+    ) -> RelationshipEdge | None:
+        """Return the strongest non-superseded edge matching this relation type.
+
+        This is used by the CognitiveAgent’s belief revision process.
+        Only one 'exclusive' fact per subject-relation type should exist.
+        """
+        candidates = []
+        for edge in self.get_edges_from_node(subject_node.id):
+            if edge.type != relation_type:
+                continue
+            status = edge.properties.get("revision_status", "active")
+            if status != "superseded":
+                candidates.append(edge)
+
+        if not candidates:
+            if debug:
+                print(
+                    f"[Conflict Check]: No active edges found for '{subject_node.name}' --[{relation_type}]--> ?",
+                )
+            return None
+
+        winner = max(candidates, key=lambda e: e.weight)
+        if debug:
+            print(
+                f"[Conflict Check]: Found conflict edge {winner.id} (w={winner.weight:.2f}, type={winner.type})",
+            )
+        return winner
+
+    @staticmethod
+    def normalize_provenance_rank(rank_table: dict[str, int], provenance: str) -> int:
+        """Return a safe provenance rank value even if missing or malformed."""
+        if not provenance:
+            return 0
+        provenance = provenance.lower().strip()
+        return rank_table.get(provenance, 0)
+
+    def compute_confidence_adjustment(
+        self,
+        current_confidence: float,
+        incoming_confidence: float,
+        provenance_rank_current: int,
+        provenance_rank_new: int,
+    ) -> float:
+        """Compute a revised edge confidence based on provenance and source reliability."""
+        if provenance_rank_new > provenance_rank_current:
+            return (incoming_confidence * 0.7) + (current_confidence * 0.3)
+        if provenance_rank_new == provenance_rank_current:
+            return (incoming_confidence + current_confidence) / 2
+        return (current_confidence * 0.8) + (incoming_confidence * 0.2)
+
+    def update_edge_weight(
+        self,
+        edge: RelationshipEdge,
+        new_weight: float,
+        provenance: str = "user",
+        rank_table: dict[str, int] | None = None,
+    ) -> None:
+        """Update an edge's confidence weight with provenance-aware adjustment."""
+        if not self.graph.has_edge(edge.source, edge.target, key=edge.id):
+            print(
+                f"[Graph Core Warning]: Could not find edge {edge.id} to update weight.",
+            )
+            return
+
+        rank_table = rank_table or {
+            "user": 1,
+            "llm_verified": 2,
+            "dictionary": 3,
+            "system": 4,
+        }
+
+        edge_data = self.graph.edges[edge.source, edge.target, edge.id]
+        old_weight = edge_data.get("weight", 0.5)
+        old_provenance = edge_data.get("properties", {}).get("provenance", "user")
+
+        rank_current = self.normalize_provenance_rank(rank_table, old_provenance)
+        rank_new = self.normalize_provenance_rank(rank_table, provenance)
+
+        adjusted_weight = self.compute_confidence_adjustment(
+            old_weight,
+            new_weight,
+            rank_current,
+            rank_new,
+        )
+
+        edge_data["weight"] = round(max(0.0, min(1.0, adjusted_weight)), 4)
+        edge_data.setdefault("properties", {}).update(
+            {
+                "provenance": provenance,
+                "last_modified": time.time(),
+                "confidence_updated": True,
+            },
+        )
+
+        print(
+            f"[Graph Update]: Edge '{edge.type}' confidence updated "
+            f"{old_weight:.2f} → {edge_data['weight']:.2f} "
+            f"(provenance: {old_provenance} → {provenance})",
+        )
+
+    def revise_conflicting_edge(
+        self,
+        existing_edge: RelationshipEdge,
+        new_confidence: float,
+        new_provenance: str = "user",
+    ) -> str:
+        """Decide how to handle a conflict between existing and new edges."""
+        rank_table = {
+            "user": 1,
+            "llm_verified": 2,
+            "dictionary": 3,
+            "system": 4,
+        }
+
+        rank_existing = self.normalize_provenance_rank(
+            rank_table,
+            existing_edge.properties.get("provenance", "user"),
+        )
+        rank_new = self.normalize_provenance_rank(rank_table, new_provenance)
+
+        if rank_new > rank_existing:
+            self.update_edge_weight(
+                existing_edge,
+                new_confidence,
+                new_provenance,
+                rank_table,
+            )
+            existing_edge.properties["revision_status"] = "replaced"
+            return "replaced"
+
+        if rank_new == rank_existing:
+            self.update_edge_weight(
+                existing_edge,
+                new_confidence,
+                new_provenance,
+                rank_table,
+            )
+            return "merged"
+
+        existing_edge.properties["revision_status"] = "ignored_lower_provenance"
+        return "ignored"
