@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 BASELINE_STORE_PATH = Path(".metacog_baseline.json")
 EMBEDDING_MODEL_AVAILABLE = False
 try:
-    # Optional heavy dependency. If available, will be used for semantic clustering.
     from sentence_transformers import SentenceTransformer
 
     EMBEDDING_MODEL_AVAILABLE = True
@@ -69,7 +68,7 @@ class BaselineStats:
     mean_time: float = 0.0
     var_time: float = 0.0
     samples: int = 0
-    last_observed_time: float = 0.0  # NEW: store latest timing sample
+    last_observed_time: float = 0.0
 
     def update_time(self, new_val: float, alpha: float = 0.2):
         """Update timing stats for this function."""
@@ -80,13 +79,11 @@ class BaselineStats:
         else:
             old_mean = self.mean_time
             self.mean_time = (1 - alpha) * self.mean_time + alpha * new_val
-            # Welford-ish online variance update approximated via EWMA
             self.var_time = (1 - alpha) * self.var_time + alpha * (
                 (new_val - old_mean) ** 2
             )
             self.samples += 1
 
-        # store last observed value
         self.last_observed_time = new_val
 
     def update_error_count(self, new_count: int, alpha: float = 0.3):
@@ -155,7 +152,6 @@ class PerformanceMonitor:
 
     @staticmethod
     def _cosine_similarity(a: list[float], b: list[float]) -> float:
-        # assumes non-empty
         dot = sum(x * y for x, y in zip(a, b))
         na = math.sqrt(sum(x * x for x in a))
         nb = math.sqrt(sum(y * y for y in b))
@@ -178,8 +174,7 @@ class PerformanceMonitor:
                 placed = False
                 for idx, centroid in enumerate(clusters):
                     sim = self._cosine_similarity(emb, centroid)
-                    if sim > 0.80:  # highly similar
-                        # update centroid (simple avg)
+                    if sim > 0.80:
                         clusters[idx] = [
                             (c * cluster_sizes[idx] + e) / (cluster_sizes[idx] + 1)
                             for c, e in zip(centroid, emb)
@@ -191,7 +186,6 @@ class PerformanceMonitor:
                     clusters.append(emb[:])
                     cluster_sizes.append(1)
             return dict(enumerate(cluster_sizes))
-        # fallback: group by short sha256 of message -> rough clustering
         cnt = Counter(sha256(m.encode("utf-8")).hexdigest()[:8] for m in messages)
         return dict(enumerate(cnt.values()))
 
@@ -204,7 +198,6 @@ class PerformanceMonitor:
         If git is not available or repo not present, returns empty list.
         """
         try:
-            # Use git log to get commits in ISO format since a given date
             since_dt = int(time.time()) - since_seconds
             cmd = [
                 "git",
@@ -260,6 +253,7 @@ class PerformanceMonitor:
         - Uses optional semantic clustering of log messages to surface concentrated issues.
         - Correlates anomalies with recent git commits to provide causal hints.
         - Persists updated baselines (adaptive system).
+        - Detects deferred learning entries and flags them for review.
         """
         if not log_file.exists():
             logger.warning(
@@ -270,7 +264,6 @@ class PerformanceMonitor:
 
         lines = log_file.read_text(encoding="utf-8").splitlines()
 
-        # flexible pattern: [Module]: message (optional "in func" or "(in func)")
         log_pattern = re.compile(
             r"\[(?P<module>[^\]]+)\]:\s*(?P<message>.+?)(?:\s*\(in\s*(?P<function>[\w\.]+)\))?$",
         )
@@ -279,27 +272,55 @@ class PerformanceMonitor:
             re.IGNORECASE,
         )
 
-        # aggregated data for this analysis cycle
-        errors_by_func = defaultdict(list)  # func -> list of messages
+        errors_by_func = defaultdict(list)
         warnings_by_func = defaultdict(list)
         timings_by_func = defaultdict(list)
-        first_seen_time_by_func = {}  # func -> first seen unix timestamp (approx from log if provided)
+        first_seen_time_by_func = {}
 
-        # attempt to extract timestamps if log lines contain an ISO timestamp at the start
         ts_pattern = re.compile(r"^(?P<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})")
+        deferred_fact_re = re.compile(
+            r"Deferred learning for\s+(?P<fact>[\w\-\._]+)",
+            re.IGNORECASE,
+        )
 
         for idx, line in enumerate(lines):
+            if "Deferred learning" in line:
+                m = deferred_fact_re.search(line)
+                fact_id = m.group("fact") if m else f"{idx}"
+                func = f"DeferredLearning_{fact_id}"
+                message = line.strip()
+
+                try:
+                    self._save_baselines()
+                except Exception as e:
+                    logger.warning(
+                        "[Metacognition]: Failed to save baselines before returning deferred target: %s",
+                        e,
+                    )
+
+                logger.info(
+                    "[Metacognition]: Detected deferred learning entry for '%s' (line %d). Returning as optimization target.",
+                    fact_id,
+                    idx,
+                )
+
+                return OptimizationTarget(
+                    file_path=Path("src/axiom/cognitive_agent.py"),
+                    target_name=func,
+                    issue_description=f"Deferred learning detected for `{fact_id}`: {message}",
+                    relevant_logs=message,
+                )
+
             match = log_pattern.search(line)
             if not match:
                 continue
+
             message = (match.group("message") or "").strip()
             func = (match.group("function") or "unknown_function").strip()
 
-            # approximate timestamp extraction
             ts_match = ts_pattern.search(line)
             if ts_match:
                 try:
-                    # convert "YYYY-MM-DDTHH:MM:SS" to unix
                     t_struct = time.strptime(ts_match.group("iso"), "%Y-%m-%dT%H:%M:%S")
                     ts = int(time.mktime(t_struct))
                 except Exception:
@@ -323,7 +344,6 @@ class PerformanceMonitor:
                 except Exception:
                     pass
 
-        # update baselines with observed counts/timings (but do not immediately persist until decision)
         for func, msgs in errors_by_func.items():
             observed_err_count = len(msgs)
             if func not in self.baselines:
@@ -336,25 +356,17 @@ class PerformanceMonitor:
             for t in times:
                 self.baselines[func].update_time(t)
 
-        # Heuristic scoring: compute anomaly scores per function combining:
-        # 1) error recurrence relative to baseline EWMA (z-like)
-        # 2) timing anomaly relative to baseline mean+stdev
-        # 3) semantic concentration (cluster sizes)
         candidate_scores: dict[str, float] = {}
         candidate_reasons: dict[str, list[str]] = {}
         now = int(time.time())
 
-        # evaluate semantic clusters for functions with many errors/warnings
         for func, msgs in {**errors_by_func, **warnings_by_func}.items():
             cluster_counts = self._semantic_cluster_counts(msgs)
-            # pick the largest cluster as 'concentration'
             largest_cluster = max(cluster_counts.values()) if cluster_counts else 0
-            # scale cluster importance modestly
             sem_score = math.log1p(largest_cluster) if largest_cluster > 0 else 0.0
 
             baseline = self.baselines.get(func, BaselineStats())
             observed_err = len(errors_by_func.get(func, []))
-            # error relative score: positive when observed exceeds baseline EWMA significantly
             err_delta = observed_err - baseline.error_count_ewma
             err_score = (
                 (err_delta / (1.0 + baseline.error_count_ewma))
@@ -362,21 +374,17 @@ class PerformanceMonitor:
                 else float(observed_err)
             )
 
-            # timing anomaly score
             timing_score = 0.0
             if timings_by_func.get(func):
                 observed_mean = statistics.mean(timings_by_func[func])
                 if baseline.samples > 1:
                     baseline_stdev = math.sqrt(baseline.var_time)
-                    # z-like score
                     timing_score = (observed_mean - baseline.mean_time) / (
                         baseline_stdev + 1e-6
                     )
                 else:
-                    # if no baseline, use a modest positive signal proportional to observed mean
                     timing_score = observed_mean / (1.0 + observed_mean)
 
-            # assemble a combined score (weights chosen conservatively)
             score = (
                 1.5 * max(0.0, err_score)
                 + 1.0 * max(0.0, timing_score)
@@ -401,10 +409,8 @@ class PerformanceMonitor:
                     "elevated composite anomaly score",
                 ]
 
-        # pick top-scoring candidate if it exceeds an adaptive threshold
         if candidate_scores:
             func, top_score = max(candidate_scores.items(), key=lambda kv: kv[1])
-            # adaptive threshold heuristic: base threshold of 2.0 plus small fraction of baseline error EWMA
             baseline = self.baselines.get(func, BaselineStats())
             adaptive_threshold = 2.0 + 0.5 * baseline.error_count_ewma
             logger.debug(
@@ -415,7 +421,6 @@ class PerformanceMonitor:
             )
 
             if top_score >= adaptive_threshold:
-                # correlate with recent commits if we have a first-seen time
                 anomaly_time = first_seen_time_by_func.get(func, now)
                 correlated_commits = self._correlate_with_commits(anomaly_time)
                 commit_hint = ""
@@ -425,7 +430,6 @@ class PerformanceMonitor:
                         for c in correlated_commits
                     )
 
-                # produce a compact sample of relevant logs (dedupe and limit)
                 sample_logs = "\n".join(
                     list(
                         dict.fromkeys(
@@ -434,7 +438,6 @@ class PerformanceMonitor:
                         ),
                     )[:8],
                 )
-
                 issue_description = (
                     f"Automated analysis flagged `{func}` with anomaly score {top_score:.2f}. "
                     f"Contributing factors: {', '.join(candidate_reasons.get(func, []))}."
@@ -442,7 +445,6 @@ class PerformanceMonitor:
                 if commit_hint:
                     issue_description += f"\n\n{commit_hint}"
 
-                # before returning, persist updated baselines for next run
                 self._save_baselines()
 
                 target = OptimizationTarget(
@@ -454,7 +456,6 @@ class PerformanceMonitor:
                 logger.info("[Metacognition]: Identified optimization target: %s", func)
                 return target
 
-        # If nothing exceeds adaptive threshold, persist baselines (we still learned)
         self._save_baselines()
         logger.info(
             "[Metacognition]: No clear optimization targets found in logs this cycle.",
@@ -474,7 +475,6 @@ class PerformanceMonitor:
             "process_input": "src/axiom/core_agent.py",
             "update_graph": "src/axiom/graph_core.py",
         }
-        # handle dotted method names like Class.method
         base = func_name.split(".")[-1]
         return Path(
             mapping.get(func_name, mapping.get(base, "src/axiom/unknown_module.py")),

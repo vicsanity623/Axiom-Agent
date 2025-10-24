@@ -66,3 +66,47 @@ def test_no_target_found(tmp_path: Path):
     target = monitor.find_optimization_target(log_file)
 
     assert target is None
+
+
+def test_deferred_learning_detection_and_baseline_persistence(tmp_path: Path):
+    """Test that a deferred learning log entry is correctly detected as a target and baselines are saved."""
+    log_text = "\n".join(
+        [
+            "2025-10-24T07:00:00 [Cognitive Agent]: Deferred learning for Fact123 --[relationX]--> ConceptY due to missing prerequisite.",
+        ],
+    )
+
+    log_file = tmp_path / "deferred.log"
+    log_file.write_text(log_text, encoding="utf-8")
+
+    monitor = PerformanceMonitor()
+
+    # call the analyzer
+    target = monitor.find_optimization_target(log_file)
+
+    # Expect an OptimizationTarget for deferred learning
+    assert isinstance(target, OptimizationTarget), (
+        "Deferred learning should produce an OptimizationTarget"
+    )
+    assert (
+        target.target_name.startswith("DeferredLearning")
+        or "Fact123" in target.target_name
+    ), "target_name should reference the deferred subject"
+    assert (
+        "deferred learning" in target.issue_description.lower()
+        or "Deferred learning" in target.issue_description
+    )
+    assert "Fact123" in target.issue_description or "Fact123" in target.target_name
+
+    # Verify that baselines were persisted after detection
+    assert BASELINE_STORE_PATH.exists(), (
+        "Baseline store should be persisted after analysis"
+    )
+    saved_data = BASELINE_STORE_PATH.read_text(encoding="utf-8")
+
+    # Lint-friendly: break compound assertion into two checks (PT018)
+    stripped = saved_data.strip()
+    assert stripped.startswith("{"), (
+        "Baseline store file should be JSON and start with '{'"
+    )
+    assert stripped.endswith("}"), "Baseline store file should be JSON and end with '}'"
