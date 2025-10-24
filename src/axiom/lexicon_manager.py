@@ -154,3 +154,12 @@ class LexiconManager:
         props = self.agent.graph.graph.nodes[node.id].setdefault("properties", {})
         props["lexical_promoted_as"] = pos
         props["lexical_promoted_confidence"] = 1.0
+
+    def promote_word(self, word: str, pos: str, confidence: float = 0.95) -> None:
+        """Wrapper for knowledge_base.promote_word() for consistency."""
+        try:
+            from . import knowledge_base as kb
+
+            kb.promote_word(self.agent, word, pos, confidence)
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to promote word: %s", word)

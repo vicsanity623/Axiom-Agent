@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import threading
+import time
 from datetime import date, datetime
 from functools import lru_cache
 from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict, cast
@@ -156,6 +157,7 @@ class CognitiveAgent:
         self.lemmatizer = WordNetLemmatizer()
         self.learning_goals: list[str] = []
         self.pending_relations: list[tuple[RelationData, dict, float]] = []
+        self.recently_researched: dict[str, float] = {}
 
         self.harvester: KnowledgeHarvester | None = None
         if not self.inference_mode:
@@ -244,6 +246,16 @@ class CognitiveAgent:
         expanded_input = self._expand_contractions(sanitized_input)
         contextual_input = self._resolve_references(expanded_input)
         normalized_input = self._preprocess_self_reference(contextual_input)
+        for w, t in list(self.recently_researched.items()):
+            if time.time() - t < 600:  # 10-minute cooldown
+                if w in user_input.lower():
+                    logger.info(
+                        "  [Cognitive Reflex]: Skipping '%s' (cooldown active).",
+                        w,
+                    )
+                    return f"I’m still processing what I learned about '{w}'. Let's move on for now."
+            else:
+                del self.recently_researched[w]
         interpretations: list[InterpretData] | None = self.parser.parse(
             normalized_input,
         )
@@ -287,15 +299,33 @@ class CognitiveAgent:
                         word_to_learn,
                     )
                     was_resolved = self.harvester._resolve_investigation_goal(goal)
+
                     if was_resolved:
                         logger.info(
-                            "  [Cognitive Reflex]: Succeeded. Re-evaluating original input.",
+                            "  [Cognitive Reflex]: Succeeded. Checking integration status...",
                         )
-                        return self.chat(user_input)
-                    logger.warning(
-                        "  [Cognitive Reflex]: Real-time research failed.",
+
+                        if self.lexicon.is_known_word(word_to_learn):
+                            logger.info(
+                                "  [Cognitive Reflex]: New knowledge integrated. Re-evaluating input once.",
+                            )
+                            self.recently_researched[word_to_learn] = time.time()
+                            return self._chat_reentry_once(user_input)
+
+                        logger.warning(
+                            "  [Cognitive Reflex]: '%s' still not promoted after research. Halting recursion.",
+                            word_to_learn,
+                        )
+                        return (
+                            f"I studied '{word_to_learn}', but couldn't connect it clearly yet. "
+                            "I'll remember it for future learning."
+                        )
+
+                    logger.warning("  [Cognitive Reflex]: Real-time research failed.")
+                    return (
+                        f"I discovered a new word, '{word_to_learn}', but my attempt to research it "
+                        "in real-time failed. I will study it later."
                     )
-                    return f"I discovered a new word, '{word_to_learn}', but my attempt to research it in real-time failed. I will study it later."
                 return f"New word '{word_to_learn}' discovered. I must study it before I can understand."
 
             if not is_bad_parse:
@@ -367,6 +397,18 @@ class CognitiveAgent:
                                 self._process_statement_for_learning(new_rel)
 
         return final_response
+
+    def _chat_reentry_once(self, user_input: str) -> str:
+        """Safely re-enter chat() once after learning, avoiding infinite recursion."""
+        if getattr(self, "_has_reentered_chat", False):
+            logger.warning("  [Safety]: Prevented recursive chat() re-entry.")
+            return "I've already reconsidered that input after learning something new."
+
+        self._has_reentered_chat = True
+        try:
+            return self.chat(user_input)
+        finally:
+            self._has_reentered_chat = False
 
     def _resolve_references(self, text: str) -> str:
         """Resolve simple pronouns using the stored interpretations from history."""
@@ -678,7 +720,8 @@ class CognitiveAgent:
                             target_node = self.graph.get_node_by_id(edge.target)
                             if target_node:
                                 property_name = verb.replace("has_", "").replace(
-                                    "_", " ",
+                                    "_",
+                                    " ",
                                 )
                                 return f"The {property_name} of {subject.capitalize()} is {target_node.name.capitalize()}."
 
@@ -1600,6 +1643,25 @@ class CognitiveAgent:
                 logger.info(
                     "[Autonomous Learning]: Successfully learned and saved new fact.",
                 )
+
+                if not source_topic:
+                    return False
+
+                lexicon = getattr(self, "lexicon", None)
+                if lexicon is not None and not lexicon.is_known_word(source_topic):
+                    try:
+                        lexicon.promote_word(source_topic)
+                        logger.info(
+                            "  [Lexicon]: Promoted '%s' after successful autonomous learning.",
+                            source_topic,
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            "  [Lexicon]: Could not promote '%s': %s",
+                            source_topic,
+                            e,
+                        )
+
                 return True
             logger.warning(
                 "[Autonomous Learning]: Failed to process fact. Reason: %s",
