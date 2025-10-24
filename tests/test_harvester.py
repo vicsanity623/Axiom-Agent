@@ -9,9 +9,8 @@ from axiom.cognitive_agent import CognitiveAgent
 from axiom.graph_core import ConceptNode
 from axiom.knowledge_harvester import KnowledgeHarvester
 
-# --- Fixtures needed ONLY by the tests in this file ---
 
-
+# --- Fixtures ---
 @pytest.fixture
 def harvester(agent: CognitiveAgent) -> KnowledgeHarvester:
     """Creates a KnowledgeHarvester instance linked to the test agent."""
@@ -105,15 +104,50 @@ def test_resolve_investigation_goal_fallback_web(
     )
 
 
-def test_study_cycle_resolves_goal(harvester, agent, monkeypatch):
+def test_study_cycle_removes_failed_opportunistic_goal(harvester, agent, monkeypatch):
+    """
+    Tests that the study cycle correctly identifies and REMOVES a goal
+    that repeatedly fails, when there is NO active high-level goal.
+    """
+    # GIVEN: The resolver will always fail
     monkeypatch.setattr(
         "axiom.knowledge_harvester.KnowledgeHarvester._resolve_investigation_goal",
         lambda self, goal: False,
     )
-    agent.learning_goals.append("INVESTIGATE: someword")
+
+    goal = "INVESTIGATE: someword"
+    agent.learning_goals.append(goal)
+
+    # WHEN: The study cycle runs
     harvester.study_cycle()
-    assert len(agent.learning_goals) == 0
-    print("KnowledgeHarvester: study_cycle resolved an investigation goal.")
+
+    # THEN: The failed goal should be removed from the list.
+    assert goal not in agent.learning_goals
+    print("✅ study_cycle correctly removed a failed opportunistic goal.")
+
+
+def test_study_cycle_works_on_active_goal(harvester, agent, monkeypatch):
+    """
+    Tests that the study cycle correctly prioritizes a sub-goal
+    from an active high-level plan.
+    """
+    # GIVEN: A high-level goal is active
+    agent.goal_manager.add_goal("Learn about birds")
+    active_goal = agent.goal_manager.get_active_goal()
+    # Manually set sub-goals for the test
+    active_goal["sub_goals"] = ["INVESTIGATE: bird", "INVESTIGATE: feather"]
+    agent.learning_goals.extend(active_goal["sub_goals"])
+
+    # AND: We create a spy to watch the resolver method
+    resolve_spy = MagicMock(return_value=True)
+    monkeypatch.setattr(harvester, "_resolve_investigation_goal", resolve_spy)
+
+    # WHEN: The study cycle runs
+    harvester.study_cycle()
+
+    # THEN: The resolver should have been called with the FIRST sub-goal
+    resolve_spy.assert_called_once_with("INVESTIGATE: bird")
+    print("✅ study_cycle correctly prioritized a sub-goal from an active plan.")
 
 
 def test_refinement_cycle_no_chunky_fact(harvester, agent, monkeypatch):

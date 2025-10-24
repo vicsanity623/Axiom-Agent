@@ -1,7 +1,6 @@
-# In src/axiom/scripts/cycle_manager.py
-
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -9,6 +8,9 @@ if TYPE_CHECKING:
     from apscheduler.schedulers.base import BaseScheduler
 
     from ..knowledge_harvester import KnowledgeHarvester
+    from ..metacognitive_engine import MetacognitiveEngine
+
+logger = logging.getLogger(__name__)
 
 
 class CycleManager:
@@ -18,22 +20,32 @@ class CycleManager:
         self,
         scheduler: BaseScheduler,
         harvester: KnowledgeHarvester,
+        metacognitive_engine: MetacognitiveEngine,
     ) -> None:
         self.scheduler = scheduler
         self.harvester = harvester
+        self.metacognitive_engine = metacognitive_engine
         self.LEARNING_PHASE_DURATION = timedelta(hours=2)
         self.REFINEMENT_PHASE_DURATION = timedelta(minutes=30)
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
 
     def start(self) -> None:
-        """Start the first phase and schedule the manager's main loop."""
+        """Start the first phase and schedule all cognitive cycles."""
         self._start_learning_phase()
+
         self.scheduler.add_job(
             self._manage_phases,
             "interval",
             minutes=1,
             id="cycle_manager_job",
+        )
+
+        self.scheduler.add_job(
+            self.metacognitive_engine.run_introspection_cycle,
+            "interval",
+            minutes=24,
+            id="metacognitive_cycle_job",
         )
 
     def _manage_phases(self) -> None:
@@ -56,16 +68,12 @@ class CycleManager:
     def _clear_all_jobs(self) -> None:
         """Remove all existing cognitive cycle jobs from the scheduler."""
         for job in self.scheduler.get_jobs():
-            if job.id in [
-                "study_cycle_job",
-                "discover_cycle_job",
-                "refinement_cycle_job",
-            ]:
+            if job.id not in ["cycle_manager_job", "metacognitive_cycle_job"]:
                 job.remove()
 
     def _start_learning_phase(self) -> None:
         """Configure the scheduler to run the Learning Phase cycles."""
-        print("\n--- [CYCLE MANAGER]: Starting 2-hour LEARNING phase. ---")
+        logger.info("--- [CYCLE MANAGER]: Starting 2-hour LEARNING phase. ---")
         self._clear_all_jobs()
         self.scheduler.add_job(
             self.harvester.study_cycle,
@@ -84,7 +92,7 @@ class CycleManager:
 
     def _start_refinement_phase(self) -> None:
         """Configure the scheduler to run the Refinement Phase cycles."""
-        print("\n--- [CYCLE MANAGER]: Starting 30-min REFINEMENT phase. ---")
+        logger.info("--- [CYCLE MANAGER]: Starting 30-min REFINEMENT phase. ---")
         self._clear_all_jobs()
         self.scheduler.add_job(
             self.harvester.refinement_cycle,

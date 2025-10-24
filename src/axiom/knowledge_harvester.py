@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 # knowledge_harvester.py
 import random
 import re
@@ -18,6 +20,8 @@ if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
     from axiom.graph_core import ConceptNode, RelationshipEdge
 
+logger = logging.getLogger(__name__)
+
 wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
 
 
@@ -29,8 +33,6 @@ class LogColors:
 
 
 class KnowledgeHarvester:
-    __slots__ = ("agent", "lock", "rejected_topics", "lemmatizer")
-
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
         """Initialize the KnowledgeHarvester.
 
@@ -135,42 +137,55 @@ class KnowledgeHarvester:
         return False
 
     def study_cycle(self) -> None:
-        """Run one full study cycle.
-
-        This cycle has two main priorities:
-        1.  **Resolve Goals:** It first checks for any pending "INVESTIGATE"
-            goals in the agent's learning queue and attempts to resolve them.
-        2.  **Deepen Knowledge:** If the queue is empty, it falls back to the
-            `_deepen_knowledge_of_random_concept` routine to proactively
-            enrich the agent's existing knowledge.
+        """
+        Run one full study cycle, driven by the GoalManager's strategic plan.
+        If no active goals exist, it falls back to opportunistic learning.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"\n--- [Study Cycle Started at {timestamp}] ---")
+        logger.info("\n--- [Study Cycle Started at %s] ---", timestamp)
 
-        if self.agent.learning_goals:
-            goal_to_resolve = self.agent.learning_goals[0]
-            if goal_to_resolve.startswith("INVESTIGATE:"):
-                goal_resolved = self._resolve_investigation_goal(goal_to_resolve)
-                if not goal_resolved:
-                    print(
-                        f"  [Study Cycle]: {LogColors.YELLOW}Failed to resolve goal '{goal_to_resolve}'. Removing from queue.{LogColors.RESET}",
-                    )
-                    with self.lock:
-                        if goal_to_resolve in self.agent.learning_goals:
-                            self.agent.learning_goals.remove(goal_to_resolve)
+        active_goal = self.agent.goal_manager.get_active_goal()
 
-                print(
-                    f"{LogColors.GREEN}--- [Study Cycle Finished]: Completed a learning goal task. ---{LogColors.RESET}",
+        if active_goal:
+            logger.info(">> Working on active goal: '%s'", active_goal["description"])
+
+            goal_to_resolve = None
+            for sub_goal in active_goal["sub_goals"]:
+                if sub_goal in self.agent.learning_goals:
+                    goal_to_resolve = sub_goal
+                    break
+
+            if goal_to_resolve:
+                self._resolve_investigation_goal(goal_to_resolve)
+                self.agent.goal_manager.check_goal_completion(active_goal["id"])
+            else:
+                logger.info(
+                    "No pending sub-goals found for '%s'. Goal might be complete.",
+                    active_goal["description"],
                 )
-                self.agent.log_autonomous_cycle_completion()
-                return
 
-        print(
-            "[Study Cycle]: No learning goals. Attempting to deepen existing knowledge.",
-        )
-        self._deepen_knowledge_of_random_concept()
+        else:
+            if self.agent.learning_goals:
+                logger.info("No active goals. Working on opportunistic learning queue.")
+                goal_to_resolve = self.agent.learning_goals[0]
+                if goal_to_resolve.startswith("INVESTIGATE:"):
+                    resolved = self._resolve_investigation_goal(goal_to_resolve)
 
-        print(f"{LogColors.GREEN}--- [Study Cycle Finished] ---\n{LogColors.RESET}")
+                    if not resolved:
+                        logger.warning(
+                            "Failed to resolve opportunistic goal '%s'. Removing from queue.",
+                            goal_to_resolve,
+                        )
+                        with self.lock:
+                            if goal_to_resolve in self.agent.learning_goals:
+                                self.agent.learning_goals.remove(goal_to_resolve)
+            else:
+                logger.info(
+                    "Learning queue is empty. Attempting to deepen existing knowledge.",
+                )
+                self._deepen_knowledge_of_random_concept()
+
+        logger.info("--- [Study Cycle Finished] ---")
         self.agent.log_autonomous_cycle_completion()
 
     def refinement_cycle(self) -> None:

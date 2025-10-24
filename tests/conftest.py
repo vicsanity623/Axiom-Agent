@@ -22,6 +22,12 @@ class MockUniversalInterpreter:
         self.llm = None
         print("--- Initialized MockUniversalInterpreter (No LLM Loaded) ---")
 
+    def generate_curriculum(self, high_level_goal: str) -> list[str]:
+        """A mock curriculum generator that returns a predictable list."""
+        if "birds" in high_level_goal.lower():
+            return ["bird", "feather", "nest"]
+        return ["test topic 1", "test topic 2"]
+
     def verify_and_reframe_fact(
         self,
         original_topic: str,

@@ -5,6 +5,7 @@ import traceback
 
 from ..cognitive_agent import CognitiveAgent
 from ..config import DEFAULT_BRAIN_FILE, DEFAULT_LLM_PATH, DEFAULT_STATE_FILE
+from ..logging_config import setup_logging
 
 
 def run_training_session() -> None:
@@ -57,6 +58,7 @@ def run_training_session() -> None:
 
 
 def main() -> None:
+    setup_logging()
     run_training_session()
 
 

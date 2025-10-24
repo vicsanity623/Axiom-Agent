@@ -82,12 +82,16 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 
 # Phase 5 — Autonomous Scholar
 
-**Goal:** Transform the agent from a passive learner into a strategic researcher with long-term goals.
+**Goal:** Transform the agent from a passive learner into a strategic researcher with long-term goals and the ability to improve itself.
 
 ### Key Features
 *   **Goal-Oriented Learning:** Introduce a `GoalManager` that allows the agent to be given high-level learning objectives (e.g., "Become an expert on ancient Rome").
 *   **Strategic Study Plans:** The `KnowledgeHarvester` will use its learning goals to generate and execute multi-step study plans (e.g., find a Wikipedia page, read it, identify key entities, generate curious questions for each entity, then research those questions).
 *   **Dynamic Knowledge Pruning:** Implement a "forgetting" mechanism where facts that are consistently low-activation and low-confidence are periodically removed to keep the graph relevant.
+*   **Metacognitive Self-Modification:**
+    *   **Deliverable:** A `MetacognitiveEngine` that enables the agent to analyze its own performance logs, identify potential flaws or inefficiencies in its source code, and use an external LLM (like Gemini Pro) to generate improvements.
+    *   **Logic:** This engine operates on a low-frequency (e.g., 24-hour) cycle. It uses a robust sandboxing and verification system to test suggested code changes against the project's `pytest` suite before applying them to its own live codebase.
+    *   **Purpose:** To enable true, long-term autonomy, allowing the agent to patch its own bugs and optimize its own logic without direct human intervention.
 
 ---
 
@@ -97,17 +101,9 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 
 ### Key Features
 *   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use. Each tool will be a specialized function for tasks the knowledge graph cannot perform.
-*   **Mathematical Capability (First Tool):**
-    *   **Deliverable:** A `MathTool` that integrates a symbolic math library like `SymPy`.
-    *   **Logic:** The `SymbolicParser` and `UniversalInterpreter` will be trained to recognize a new `question_math` intent.
-    *   **Flow:** When this intent is detected, `_process_intent` will route the mathematical expression to the `MathTool` for execution, and the result will be returned to the user.
-*   **Real-Time Data (Second Tool):**
-    *   **Deliverable:** A `WebSearchTool` (e.g., using a Google/DuckDuckGo API) and a `CurrentDateTool`.
-    *   **Logic:** The agent will be taught to recognize questions it cannot answer from its static knowledge (e.g., "What is the weather in New York?", "Who won the game last night?").
-    *   **Flow:** The agent will learn to route these questions to the appropriate tool to fetch live data from the internet.
-*   **Code Execution (Advanced Tool):**
-    *   **Deliverable:** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
-    *   **Flow:** For questions like "What are the first 10 prime numbers?", the agent will learn to write and execute a small script instead of trying to find the answer in its knowledge graph.
+*   **Mathematical Capability (First Tool):** A `MathTool` that integrates a symbolic math library like `SymPy`.
+*   **Real-Time Data (Second Tool):** A `WebSearchTool` and a `CurrentDateTool` to fetch live data from the internet.
+*   **Code Execution (Advanced Tool):** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
 
 ---
 
@@ -116,5 +112,5 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 **Goal:** Prepare the agent for massive scalability and collaborative learning.
 
 ### Key Features
-*   **Pluggable Graph Backends:** Refactor `ConceptGraph` to be an interface, with the current in-memory NetworkX implementation as the default and a new implementation for a graph database (e.g., Neo4j, RedisGraph) as an option for large-scale deployments.
-*   **Agent Federation:** Design a protocol that allows multiple Axiom Agents to query each other's knowledge, share facts, and collaborate on learning goals.
+*   **Pluggable Graph Backends:** Refactor `ConceptGraph` to be an interface with options for graph databases (e.g., Neo4j).
+*   **Agent Federation:** Design a protocol that allows multiple Axiom Agents to query each other's knowledge and collaborate.

@@ -49,6 +49,7 @@ waker.log
 /docs/
 /lib/
 /visualizations/
+*.metacog_baseline.json
 
 # -----------------------------------------------------------------------------
 # System & Editor Files

@@ -140,6 +140,9 @@ class CognitiveAgent:
             inference_mode: If True, disables all learning and saving
                 functionality.
         """
+
+        from .goal_manager import GoalManager
+
         logger.info("Initializing Cognitive Agent...")
         brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.brain_file = brain_file
@@ -155,6 +158,9 @@ class CognitiveAgent:
         self.lexicon: LexiconManager = LexiconManager(self)
         self.parser: SymbolicParser = SymbolicParser(self)
         self.lemmatizer = WordNetLemmatizer()
+
+        self.goal_manager: GoalManager = GoalManager(self)
+
         self.learning_goals: list[str] = []
         self.pending_relations: list[tuple[RelationData, dict, float]] = []
         self.recently_researched: dict[str, float] = {}

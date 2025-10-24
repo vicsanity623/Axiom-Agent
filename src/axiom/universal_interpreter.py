@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from contextlib import redirect_stderr
@@ -22,6 +23,7 @@ from .config import DEFAULT_CACHE_FILE, DEFAULT_LLM_PATH
 if TYPE_CHECKING:
     from .graph_core import ConceptNode
 
+logger = logging.getLogger(__name__)
 
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
@@ -783,3 +785,56 @@ class UniversalInterpreter:
         except Exception as e:
             print(f"  [Synthesizer Error]: Could not generate fluent text. Error: {e}")
             return structured_facts
+
+    def generate_curriculum(self, high_level_goal: str) -> list[str]:
+        """
+        Uses the LLM to break down a high-level learning goal into a list of
+        essential, prerequisite topics to study.
+        """
+        if self.llm is None:
+            return []
+
+        logger.info(
+            "  [Interpreter]: Generating curriculum for goal '%s'...",
+            high_level_goal,
+        )
+        system_prompt = (
+            "You are a curriculum design expert. Your task is to break down a 'High-Level Goal' into a "
+            "short, prioritized list of the most fundamental, prerequisite concepts needed to understand it. "
+            "These concepts should be simple nouns or short noun phrases."
+        )
+        examples_prompt = (
+            "RULES:\n"
+            "1. Output ONLY a comma-separated list of topics.\n"
+            "2. Prioritize the most foundational concepts first.\n"
+            "3. Do not add numbers, bullets, or any other formatting.\n\n"
+            "Example 1:\n"
+            "High-Level Goal: Become an expert on ancient Rome\n"
+            "Output: Roman Republic, Roman Empire, Julius Caesar, Augustus, Colosseum, Latin\n\n"
+            "Example 2:\n"
+            "High-Level Goal: Understand photosynthesis\n"
+            "Output: plant, cell, sunlight, chlorophyll, water, carbon dioxide, oxygen, glucose"
+        )
+        full_prompt = (
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"High-Level Goal: {high_level_goal}\n"
+            f"Output:[/INST]"
+        )
+        try:
+            output = cast(
+                "dict",
+                self.llm(full_prompt, max_tokens=128, stop=["</s>", "\n"], echo=False),
+            )
+            response_text = output["choices"][0]["text"].strip()
+
+            topics = [
+                topic.strip() for topic in response_text.split(",") if topic.strip()
+            ]
+            logger.info("    - Generated curriculum with %d topics.", len(topics))
+            return topics
+        except Exception as e:
+            logger.error(
+                "  [Interpreter Error]: Could not generate curriculum. Error: %s",
+                e,
+            )
+            return []

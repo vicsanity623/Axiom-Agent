@@ -24,7 +24,7 @@ Axiom’s design is a hybrid model that combines the strengths of classical, sym
 
 ## 🧬 The Cognitive Cycles: How the Agent Learns
 
-The Axiom Agent operates in a continuous, phased loop of self-improvement. These cycles allow it to discover new topics, research them to acquire knowledge, and then reflect on that knowledge to improve its quality and depth. The diagram below illustrates the three core cycles using real examples from the agent's logs.
+The Axiom Agent operates in a continuous, phased loop of self-improvement. These cycles allow it to discover new topics, research them, and reflect on that knowledge to improve its quality. The most advanced cycle is the **Metacognitive Cycle**, where the agent can analyze and improve its own source code.
 
 ```mermaid
 %%{init: {"theme": "forest"}}%%
@@ -34,58 +34,57 @@ flowchart TD
     B -->|Finds new topic| C["Study Cycle"]
     C -->|Extracts & verifies facts| D["Learning & Knowledge Graph Update"]
     D -->|Stores new fact| E["Refinement Cycle"]
-    E -->|Simplifies & reweights facts| F{"Continuous Loop"}
+    E -->|Simplifies facts| F{"Continuous Loop"}
     F -->|Triggers next iteration| B
 
-    %% Discovery Cycle %%
-    subgraph DISCOVERY [Discovery Cycle - Exploration Phase]
-      D1A["Identify new topics via curiosity signal"]
-      D1B["Explore core subjects (e.g. Geography, Mathematics)"]
-      D1C["Select best new topic (e.g. History of Mathematics)"]
-      D1A --> D1B --> D1C
+    %% Metacognitive Loop (Parallel) %%
+    subgraph META["Metacognitive Cycle - Self-Modification (24h)"]
+    M1["Analyze own logs for errors/inefficiencies"] --> M2["Identify problematic source code function"]
+    M2 --> M3["Send code to external LLM (e.g., Gemini) for a fix"]
+    M3 --> M4["Verify suggested fix in a sandboxed test environment"]
+    M4 -- "If tests pass" --> M5["Apply patch to own source code"]
     end
-    B -.-> D1C
+    A -.-> M1
+
+    %% Discovery Cycle %%
+    subgraph DISCOVERY["Discovery Cycle - Exploration Phase"]
+    D1A["Identify new topics via curiosity signal"]
+    D1B["Explore core subjects (e.g. Geography)"]
+    D1A --> D1B
+    end
+    B -.-> D1B
 
     %% Study Cycle %%
-    subgraph STUDY [Study Cycle - Knowledge Acquisition]
-      S1["Query multiple knowledge sources"]
-      S2{"API success?"}
-      S1 --> S2
-      S2 -- Yes --> S3["Extract and clean data"]
-      S2 -- No --> S4["Fallback to web search / Wikipedia"]
-      S3 --> S5["LLM verifies and reframes fact"]
-      S4 --> S5
-      S5 --> S6["Store verified fact candidate"]
+    subgraph STUDY["Study Cycle - Knowledge Acquisition"]
+    S1["Query multiple knowledge sources"]
+    S5["LLM verifies and reframes fact"]
+    S1 --> S5
     end
     C -.-> S5
 
     %% Learning Cycle %%
-    subgraph LEARN [Learning Cycle - Graph Integration]
-      L1["Interpret linguistic structure"]
-      L2["Extract subject–verb–object relation"]
-      L3["Update Concept Graph (add nodes & edges)"]
-      L4["Clear reasoning cache for fresh inference"]
-      L1 --> L2 --> L3 --> L4
+    subgraph LEARN["Learning Cycle - Graph Integration"]
+    L1["Interpret linguistic structure"]
+    L2["Extract subject–verb–object relation"]
+    L3["Update Concept Graph"]
+    L1 --> L2 --> L3
     end
     D -.-> L3
 
     %% Refinement Cycle %%
-    subgraph REFINE [Refinement Cycle - Optimization Phase]
-      R1["Detect complex or redundant facts"]
-      R2["Decompose into atomic facts"]
-      R3["Learn each refined atomic relation"]
-      R4["Lower weight of original chunky fact"]
-      R1 --> R2 --> R3 --> R4
+    subgraph REFINE["Refinement Cycle - Optimization Phase"]
+    R1["Detect complex ('chunky') facts"]
+    R2["Decompose into atomic facts"]
+    R4["Lower weight of original chunky fact"]
+    R1 --> R2 --> R4
     end
     E -.-> R2
 
     %% Persistence %%
     P["Save updated brain state (my_agent_brain.json)"]
-    L4 --> P
+    L3 --> P
     R4 --> P
-
-    %% Feedback %%
-    P -->|Triggers curiosity signal| F
+    M5 --> P
 ```
 ### 💡 The Cognitive Reflex: Interactive Learning in Real-Time
 
