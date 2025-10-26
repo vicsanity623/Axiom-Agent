@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# symbolic_parser.py
 import logging
 import re
 from typing import TYPE_CHECKING

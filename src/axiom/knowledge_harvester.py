@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-
-# knowledge_harvester.py
 import random
 import re
 import time
@@ -101,20 +99,16 @@ class KnowledgeHarvester:
             if api_result:
                 part_of_speech, definition = api_result
 
-                # We will track success of learning both POS and definition separately.
                 pos_learned = False
                 definition_learned = False
 
                 with self.lock:
-                    # 1. Learn the simple, high-confidence linguistic fact.
                     pos_relation = {
                         "subject": term_to_learn,
                         "verb": "is_a",
                         "object": part_of_speech,
                         "properties": {"provenance": "dictionary_api"},
                     }
-                    # We use validate_and_add_relation directly as it's the core
-                    # of the learning process shown in knowledge_base.py
                     status_pos = validate_and_add_relation(self.agent, pos_relation)
                     if status_pos != "deferred":
                         logger.info(
@@ -123,8 +117,6 @@ class KnowledgeHarvester:
                         )
                         pos_learned = True
 
-                    # 2. Treat the definition as a full sentence and let the agent decompose it.
-                    # This is the crucial change.
                     logger.info(
                         "  [Study Cycle]: Processing definition as a new learning opportunity: '%s'",
                         definition,
@@ -143,7 +135,6 @@ class KnowledgeHarvester:
                             self.agent.learning_goals.remove(goal)
                     return True
 
-        # Fallback to web search if the dictionary failed or it's a multi-word concept.
         if is_single_word:
             logger.info(
                 "  [Study Cycle]: Dictionary API failed for '%s'. Falling back to web search.",
@@ -154,7 +145,6 @@ class KnowledgeHarvester:
                 "  [Study Cycle]: Term is a multi-word concept. Using web search directly.",
             )
 
-        # (The rest of the web search logic remains the same)
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}", term_to_learn]
         web_fact = None
         source_topic = None
@@ -205,11 +195,8 @@ class KnowledgeHarvester:
         active_goal = self.agent.goal_manager.get_active_goal()
 
         if active_goal:
-            # --- Plan-Driven Learning ---
-            # An active goal (or goal stage) exists. We must work on its tasks.
             logger.info(">> Working on active plan: '%s'", active_goal["description"])
 
-            # Find the next available task from the active plan's sub-goals.
             task_to_resolve = next(
                 (
                     sg
@@ -224,8 +211,6 @@ class KnowledgeHarvester:
                 resolved = self._resolve_investigation_goal(task_to_resolve)
 
                 if not resolved:
-                    # The task failed. Remove it from the queue to prevent loops.
-                    # _resolve_investigation_goal already removes it on success.
                     logger.warning(
                         "Failed to resolve planned task '%s'. Removing from queue.",
                         task_to_resolve,
@@ -234,13 +219,8 @@ class KnowledgeHarvester:
                         if task_to_resolve in self.agent.learning_goals:
                             self.agent.learning_goals.remove(task_to_resolve)
 
-                # CRITICAL: Always check for completion after every attempt.
-                # This allows the GoalManager to advance to the next stage immediately.
                 self.agent.goal_manager.check_goal_completion(active_goal["id"])
             else:
-                # This can happen if all sub-goals for the stage are done but the
-                # completion check hasn't run yet. Triggering it manually ensures
-                # the next stage can be activated on the next cycle.
                 logger.info(
                     "No pending tasks found for active goal '%s'. Triggering completion check.",
                     active_goal["description"],
@@ -248,8 +228,6 @@ class KnowledgeHarvester:
                 self.agent.goal_manager.check_goal_completion(active_goal["id"])
 
         else:
-            # --- Opportunistic Learning ---
-            # No active plan exists. Fall back to the general learning queue or discovery.
             logger.info("No active plan. Checking for opportunistic learning tasks.")
             if self.agent.learning_goals:
                 opportunistic_task = self.agent.learning_goals[0]
@@ -600,7 +578,6 @@ class KnowledgeHarvester:
                             part_of_speech,
                         )
 
-                        # Return both pieces of information for the caller to use.
                         return (part_of_speech, first_definition)
 
         except requests.RequestException as e:

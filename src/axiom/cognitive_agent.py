@@ -115,7 +115,6 @@ class CognitiveAgent:
 
     INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 50
 
-    # CORRECT PLACEMENT: The constant must be inside the class body.
     _EXCLUSIVE_RELATIONS: ClassVar[frozenset[str]] = frozenset(
         [
             "has_name",
@@ -270,7 +269,7 @@ class CognitiveAgent:
         contextual_input = self._resolve_references(expanded_input)
         normalized_input = self._preprocess_self_reference(contextual_input)
         for w, t in list(self.recently_researched.items()):
-            if time.time() - t < 600:  # 10-minute cooldown
+            if time.time() - t < 600:
                 if w in user_input.lower():
                     logger.info(
                         "  [Cognitive Reflex]: Skipping '%s' (cooldown active).",
@@ -1410,23 +1409,19 @@ class CognitiveAgent:
         - We explicitly cast the raw .get(...) results into narrow Union types
         before validating to satisfy mypy's `no_implicit_optional` and related flags.
         """
-        # Phase 1: Preconditions
         if self.inference_mode:
             return False, "Agent is in read-only mode."
 
-        # relation.get(...) returns Any from a TypedDict access; cast to narrow unions
         subj_raw = cast("str | dict[str, Any] | None", relation.get("subject"))
         verb_raw = cast("str | None", relation.get("verb"))
         obj_raw = cast("str | dict[str, Any] | None", relation.get("object"))
 
-        # Ensure presence of the three core pieces
         if subj_raw is None or verb_raw is None or obj_raw is None:
             return (
                 False,
                 "Incomplete fact structure: requires subject, verb, and object.",
             )
 
-        # Helper to extract a stable string name from either str or {'name': str}
         def _extract_name(value: str | dict[str, Any]) -> str | None:
             """Return the name string from either a string or dict, or None if invalid."""
 
@@ -1438,7 +1433,6 @@ class CognitiveAgent:
                         return name_clean
                 return None
 
-            # `value` must be str at this point
             name_clean = value.strip()
             return name_clean or None
 
@@ -1450,8 +1444,6 @@ class CognitiveAgent:
         if object_name is None:
             return False, "Could not determine the object of the fact."
 
-        # Detect if the object looks like a long descriptive phrase (defer learning)
-        # (this originates from the suggestion: treat multi-word long objects as descriptions)
         if len(object_name.split()) > 5:
             truncated = (
                 (object_name[:60] + "...") if len(object_name) > 60 else object_name
@@ -1460,8 +1452,6 @@ class CognitiveAgent:
             logger.warning(msg)
             return False, msg
 
-        # Phase 2: Process the fact and update the knowledge base
-        # At this point verb_raw is guaranteed non-None and a str by the earlier guard.
         verb_cleaned = verb_raw.lower().strip()
 
         logger.info(
@@ -1471,10 +1461,8 @@ class CognitiveAgent:
             object_name,
         )
 
-        # Increment bookkeeping
         self.learning_iterations += 1
 
-        # Add / update concept nodes (these helpers are expected to accept str)
         sub_node = self._add_or_update_concept(subject_name)
         obj_node = self._add_or_update_concept(object_name)
 
@@ -1484,7 +1472,6 @@ class CognitiveAgent:
                 f"Failed to create concepts for '{subject_name}' or '{object_name}'.",
             )
 
-        # Determine relation type and attempt to add/resolve
         relation_type = self.get_relation_type(verb_cleaned, subject_name, object_name)
 
         if relation_type in self._EXCLUSIVE_RELATIONS:
@@ -1505,12 +1492,9 @@ class CognitiveAgent:
         if not was_learned:
             return False, message
 
-        # Phase 3: Commit changes and finalize state
-        # Clear cached multi-hop facts; this attribute is expected to have cache_clear()
         try:
             self._gather_facts_multihop.cache_clear()
         except Exception:
-            # Be conservative: do not fail learning if cache clearing isn't available.
             logger.debug(
                 "  [Cache]: could not clear reasoning cache (missing cache_clear).",
             )
@@ -1617,7 +1601,6 @@ class CognitiveAgent:
         status = validate_and_add_relation(self, candidate, interpretation)
 
         if status in ("inserted", "replaced"):
-            # FIX: Elevate this critical confirmation log to WARNING for high visibility.
             logger.warning(
                 "    Learned new fact: %s --[%s]--> %s (status=%s)",
                 sub_node.name,
@@ -1684,8 +1667,6 @@ class CognitiveAgent:
             fact_sentence,
         )
 
-        # --- START OF CHANGE ---
-        # Use the new decomposition method instead of the old single-relation interpreter.
         atomic_relations = self.interpreter.decompose_sentence_to_relations(
             text=fact_sentence, main_topic=source_topic
         )
@@ -1698,7 +1679,6 @@ class CognitiveAgent:
 
         facts_learned_count = 0
         for relation_data in atomic_relations:
-            # Add default properties if they don't exist
             props = relation_data.setdefault("properties", {})
             props.setdefault("confidence", 0.6)
             props.setdefault("provenance", "llm_decomposition")
@@ -1707,7 +1687,6 @@ class CognitiveAgent:
                 "  [Autonomous Learning]: Interpreted Relation: %s", relation_data
             )
 
-            # Use the existing internal learning function for each atomic fact
             success, _ = self._process_statement_for_learning(relation_data)
             if success:
                 facts_learned_count += 1

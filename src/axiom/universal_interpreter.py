@@ -539,7 +539,6 @@ class UniversalInterpreter:
             )
             response_text = output["choices"][0]["text"].strip()
 
-            # Clean the output to find the JSON list
             start_bracket = response_text.find("[")
             end_bracket = response_text.rfind("]")
             if start_bracket == -1 or end_bracket == -1:

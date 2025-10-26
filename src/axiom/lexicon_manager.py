@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# src/axiom/lexicon_manager.py
 import logging
 from typing import TYPE_CHECKING
 

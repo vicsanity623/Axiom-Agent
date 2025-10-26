@@ -41,6 +41,13 @@ class CycleManager:
             id="cycle_manager_job",
         )
 
+        self.scheduler.add_job(
+            self.metacognitive_engine.run_introspection_cycle,
+            "interval",
+            hours=2.5,
+            id="metacognitive_cycle_job",
+        )
+
     def _manage_phases(self) -> None:
         """The main heartbeat, called every minute to check for phase transitions."""
         if not self.phase_start_time:
@@ -71,7 +78,7 @@ class CycleManager:
         self.scheduler.add_job(
             self.harvester.study_cycle,
             "interval",
-            minutes=1.5,
+            minutes=6.5,
             id="study_cycle_job",
         )
         self.scheduler.add_job(
@@ -79,12 +86,6 @@ class CycleManager:
             "interval",
             minutes=30,
             id="discover_cycle_job",
-        )
-        self.scheduler.add_job(
-            self.metacognitive_engine.run_introspection_cycle,
-            "interval",
-            minutes=9.2,
-            id="metacognitive_cycle_job",
         )
         self.current_phase = "learning"
         self.phase_start_time = datetime.now()

@@ -1,11 +1,7 @@
-# In src/axiom/config.py
-
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Final
-
-# All other modules should import their paths from here.
 
 THIS_FILE: Final = Path(__file__).resolve()
 PROJECT_ROOT: Final = THIS_FILE.parent.parent.parent

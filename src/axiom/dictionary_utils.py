@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-# dictionary_utils.py
 from typing import Final, Literal, TypedDict
 
 import nltk

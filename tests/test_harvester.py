@@ -30,7 +30,6 @@ def test_discover_cycle_adds_goal(
     assert "INVESTIGATE: Quantum Mechanics" in agent.learning_goals
 
 
-# --- THIS IS THE UPDATED TEST ---
 def test_resolve_investigation_goal_with_api_success(
     harvester: KnowledgeHarvester, agent: CognitiveAgent, monkeypatch
 ):
@@ -40,15 +39,12 @@ def test_resolve_investigation_goal_with_api_success(
     Then: It should learn the part-of-speech and pass the definition sentence
           to the autonomous learner, then remove the goal.
     """
-    # 1. Mock external dependencies
     monkeypatch.setattr(
         harvester,
         "get_definition_from_api",
         lambda word: ("noun", "A test definition."),
     )
 
-    # 2. Spy on the internal functions that are now called
-    # We patch the imported 'validate_and_add_relation' function within the harvester's namespace
     validate_spy = MagicMock(return_value="inserted")
     monkeypatch.setattr(
         "axiom.knowledge_harvester.validate_and_add_relation", validate_spy
@@ -57,20 +53,15 @@ def test_resolve_investigation_goal_with_api_success(
     autonomous_learn_spy = MagicMock(return_value=True)
     monkeypatch.setattr(agent, "learn_new_fact_autonomously", autonomous_learn_spy)
 
-    # 3. Set up the initial state
     goal = "INVESTIGATE: testword"
     agent.learning_goals.append(goal)
 
-    # 4. Run the function under test
     resolved = harvester._resolve_investigation_goal(goal)
 
-    # 5. Assert the results
     assert resolved is True
     assert goal not in agent.learning_goals
 
-    # Assert that it tried to learn the part-of-speech
     validate_spy.assert_called_once()
-    # Inspect the arguments passed to the validation function
     pos_relation_arg = validate_spy.call_args[0][1]
     assert pos_relation_arg == {
         "subject": "testword",
@@ -79,7 +70,6 @@ def test_resolve_investigation_goal_with_api_success(
         "properties": {"provenance": "dictionary_api"},
     }
 
-    # Assert that it passed the definition sentence to the autonomous learner
     autonomous_learn_spy.assert_called_once_with(
         fact_sentence="A test definition.",
         source_topic="testword",

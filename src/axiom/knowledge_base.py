@@ -5,7 +5,6 @@ import time
 from functools import lru_cache
 from typing import TYPE_CHECKING, cast
 
-# knowledge_base.py
 from tqdm import tqdm
 
 from axiom.dictionary_utils import get_word_info_from_wordnet
@@ -870,8 +869,6 @@ def validate_and_add_relation(
             if goal not in agent.learning_goals:
                 agent.learning_goals.insert(0, goal)
 
-        # We must cast the properties dict to the expected type for add_pending_relation
-
         add_pending_relation(agent, relation, cast("PropertyData", props))
         return "deferred"
 
@@ -894,7 +891,6 @@ def validate_and_add_relation(
     existing_edges = []
     for e in agent.graph.get_edges_from_node(sub_node.id):
         target_node = agent.graph.get_node_by_id(e.target)
-        # FIX: Add a guard to ensure target_node is not None before accessing .name
         if target_node and e.type == relation_type and target_node.name == object_name:
             existing_edges.append(e)
 
@@ -911,7 +907,6 @@ def validate_and_add_relation(
             contradiction_props = new_props.copy()
             contradiction_props["contradicted"] = True
             contradiction_props["confidence"] = max(0.05, new_conf * 0.5)
-            # FIX: Cast the generic dict to the specific PropertyData TypedDict
             agent.graph.add_edge(
                 sub_node,
                 obj_node,
@@ -926,7 +921,6 @@ def validate_and_add_relation(
         agent.graph.update_edge_properties(e, update_props)
         return "inserted"
 
-    # FIX: Cast the generic dict to the specific PropertyData TypedDict
     agent.graph.add_edge(
         sub_node,
         obj_node,
@@ -943,6 +937,4 @@ def add_pending_relation(
     interpretation: PropertyData | dict,
 ):
     """Store a relation temporarily until dependent lexicon entries are promoted."""
-    # This function is part of the older system but is now called by our new vocabulary check.
-    # It serves as the mechanism to remember the fact that needs to be re-attempted.
     agent_instance.pending_relations.append((relation, interpretation, time.time()))

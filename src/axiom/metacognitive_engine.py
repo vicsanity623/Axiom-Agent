@@ -734,6 +734,7 @@ class ExternalAnalysisBridge:
 
 class SandboxVerifier:
     """Verifies that a suggested code change is safe and effective by running
+
     the project's own 'check.sh' script in a fully isolated clone."""
 
     def verify_change(
@@ -744,7 +745,8 @@ class SandboxVerifier:
     ) -> bool:
         """
         Creates a hermetically sealed copy of the project, applies the new code,
-        and runs the 'check.sh' quality gate from within the isolated environment.
+        automatically formats it, and then runs the 'check.sh' quality gate
+        from within the isolated environment.
         """
         logger.info(
             "[Metacognition]: Beginning fully isolated sandboxed verification...",
@@ -796,6 +798,26 @@ class SandboxVerifier:
                     ast.unparse(new_tree),
                     encoding="utf-8",
                 )
+
+                logger.info(
+                    "  [Sandbox]: Applying automatic formatting with 'ruff format .' to ensure compliance...",
+                )
+                format_process = subprocess.run(
+                    ["ruff", "format", "."],
+                    capture_output=True,
+                    text=True,
+                    cwd=sandbox_root,
+                )
+
+                if format_process.returncode != 0:
+                    logger.error(
+                        "  [Sandbox]: ❌ Ruff formatting FAILED. The suggested code likely has a syntax error.",
+                    )
+                    logger.error("  [Sandbox]: Ruff stdout:\n%s", format_process.stdout)
+                    logger.error("  [Sandbox]: Ruff stderr:\n%s", format_process.stderr)
+                    return False
+
+                logger.info("  [Sandbox]: ✅ Ruff formatting applied successfully.")
 
                 check_script_path = sandbox_root / "check.sh"
                 if not check_script_path.exists():

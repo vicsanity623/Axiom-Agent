@@ -14,9 +14,9 @@ class Goal(TypedDict):
     id: str
     description: str
     status: Literal["pending", "in_progress", "completed", "failed"]
-    sub_goals: list[str]  # For simple goals, this is a flat list of INVESTIGATE tasks.
-    stages: list[Goal]  # For complex goals, this holds a sequence of sub-goals.
-    parent_goal: str | None  # Link to a parent goal, if this is a stage.
+    sub_goals: list[str]
+    stages: list[Goal]
+    parent_goal: str | None
 
 
 class GoalManager:
@@ -42,11 +42,9 @@ class GoalManager:
         stages = stage_pattern.findall(description)
 
         if stages:
-            # This is a complex, multi-stage goal.
             main_goal_desc = description.split("[Stage")[0].strip()
             self._generate_staged_study_plan(main_goal_desc, stages)
         else:
-            # This is a simple, single-topic goal.
             self._generate_simple_study_plan(description)
 
     def _generate_simple_study_plan(self, description: str):
@@ -111,7 +109,6 @@ class GoalManager:
             )
 
         main_goal["stages"] = stage_goals
-        # Add only the sub-goals of the first stage to the active learning queue.
         if stage_goals:
             self.agent.learning_goals.extend(stage_goals[0]["sub_goals"])
             logger.info(
@@ -123,12 +120,11 @@ class GoalManager:
         """Finds the first goal or sub-goal stage that is 'in_progress'."""
         for goal in self.goals.values():
             if goal["status"] == "in_progress":
-                # If it's a parent goal, find its active stage.
                 if goal["stages"]:
                     for stage in goal["stages"]:
                         if stage["status"] == "in_progress":
                             return stage
-                return goal  # It's a simple goal or a stage itself.
+                return goal
         return None
 
     def check_goal_completion(self, goal_id: str):
@@ -145,7 +141,6 @@ class GoalManager:
             goal["status"] = "completed"
             logger.info("🎉 Stage/Goal '%s' is complete! 🎉", goal["description"])
 
-            # If this was a stage of a larger goal, activate the next stage.
             if goal["parent_goal"]:
                 parent_goal = self.goals.get(goal["parent_goal"])
                 if parent_goal:
@@ -163,7 +158,6 @@ class GoalManager:
                             "Activating next stage: '%s'", next_stage["description"]
                         )
                     else:
-                        # This was the last stage, so the parent goal is also complete.
                         parent_goal["status"] = "completed"
                         logger.info(
                             "🎉 All stages for '%s' are complete. Main goal achieved! 🎉",

@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-# Ensure the src directory is in the path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from axiom.metacognitive_engine import (
@@ -73,8 +72,6 @@ def test_deferred_learning_is_prioritized_as_target(tmp_path: Path):
     target = monitor.find_optimization_target(log_file)
 
     assert isinstance(target, OptimizationTarget)
-    # FIX: The engine now correctly maps this systemic issue to a real function
-    # for the code introspector to analyze.
     assert target.target_name == "CognitiveAgent.__init__"
     assert "deferred learning was triggered" in target.issue_description.lower()
     assert "Log entry: " in target.issue_description
@@ -130,7 +127,6 @@ def test_identifies_inefficient_learning_cycle(tmp_path: Path):
     target = monitor.find_optimization_target(log_file)
 
     assert isinstance(target, OptimizationTarget)
-    # FIX: This systemic issue is now correctly mapped to a real function.
     assert target.target_name == "CognitiveAgent.__init__"
     assert target.file_path == Path("src/axiom/cognitive_agent.py")
 

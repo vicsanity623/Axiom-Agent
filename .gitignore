@@ -50,6 +50,7 @@ waker.log
 /lib/
 /visualizations/
 *.metacog_baseline.json
+code_suggestion.json
 
 # -----------------------------------------------------------------------------
 # System & Editor Files
@@ -69,6 +70,7 @@ desktop.ini
 # Ignore personal or temporary files
 notes.txt
 Voicetrain.txt
+.env
 *.wav
 *.csv
 interpreter_cache.json
