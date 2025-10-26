@@ -1,6 +1,5 @@
 <p align="center"><img src="https://raw.githubusercontent.com/vicsanity623/Axiom-Agent/main/src/axiom/static/Axiom.png" alt="Axiom Agent Banner"></p>
 
-
 Axiom is a **cognitive architecture**—a framework for a new type of artificial intelligence designed to achieve genuine understanding by building its own internal, logical model of reality from the ground up.
 
 This project’s core philosophy is that true intelligence requires more than just statistical mimicry (like in traditional LLMs). It must be built on a foundation of verifiable, interconnected knowledge. **Axiom is an experiment to create that engine.**
@@ -22,110 +21,94 @@ Axiom’s design is a hybrid model that combines the strengths of classical, sym
 
 ---
 
-## 🧬 The Cognitive Cycles: How the Agent Learns
+## 🧬 The Cognitive Cycles: How the Agent Thinks and Grows
 
-The Axiom Agent operates in a continuous, phased loop of self-improvement. These cycles allow it to discover new topics, research them, and reflect on that knowledge to improve its quality. The most advanced cycle is the **Metacognitive Cycle**, where the agent can analyze and improve its own source code.
+The Axiom Agent operates in a continuous, multi-layered loop of self-improvement. These cycles allow it to discover new topics, research them, decompose complex information, and even analyze its own performance to suggest code improvements.
+
+### The Main Learning Loop: From Curiosity to Knowledge
+
+This is the agent's primary process for expanding its knowledge graph. It’s a continuous loop where the agent explores, studies, and integrates new information.
 
 ```mermaid
 %%{init: {"theme": "forest"}}%%
 flowchart TD
-    %% Main Loop %%
-    A["Axiom Autonomous Agent"] --> B["Discovery Cycle"]
-    B -->|Finds new topic| C["Study Cycle"]
-    C -->|Extracts & verifies facts| D["Learning & Knowledge Graph Update"]
-    D -->|Stores new fact| E["Refinement Cycle"]
-    E -->|Simplifies facts| F{"Continuous Loop"}
-    F -->|Triggers next iteration| B
+    A["Axiom Agent"] --> B[Discovery Cycle]
+    B --> C{Found New Topic?}
+    C -- Yes --> D[Study Cycle]
+    C -- No --> B
+    D --> E[Learning Cycle]
+    E --> A
 
-    %% Metacognitive Loop (Parallel) %%
-    subgraph META["Metacognitive Cycle - Self-Modification (24h)"]
-    M1["Analyze own logs for errors/inefficiencies"] --> M2["Identify problematic source code function"]
-    M2 --> M3["Send code to external LLM (e.g., Gemini) for a fix"]
-    M3 --> M4["Verify suggested fix in a sandboxed test environment"]
-    M4 -- "If tests pass" --> M5["Apply patch to own source code"]
+    subgraph DISCOVERY ["1. Discovery Cycle"]
+        B1[Explore Core Subjects e.g. Biology]
+        B2[Find and Filter New Concepts e.g. Photosynthesis]
+        B1 --> B2
     end
-    A -.-> M1
-
-    %% Discovery Cycle %%
-    subgraph DISCOVERY["Discovery Cycle - Exploration Phase"]
-    D1A["Identify new topics via curiosity signal"]
-    D1B["Explore core subjects (e.g. Geography)"]
-    D1A --> D1B
+    
+    subgraph STUDY ["2. Study Cycle"]
+        S1[Query Knowledge Sources such as Dictionary or Wikipedia]
+        S2[LLM Verifies and Decomposes Sentences into Atomic Facts]
+        S1 --> S2
     end
-    B -.-> D1B
 
-    %% Study Cycle %%
-    subgraph STUDY["Study Cycle - Knowledge Acquisition"]
-    S1["Query multiple knowledge sources"]
-    S5["LLM verifies and reframes fact"]
-    S1 --> S5
+    subgraph LEARN ["3. Learning Cycle"]
+        L1[Process Atomic Fact e.g. photosynthesis is a process]
+        L2{Lexicon Check - All words known?}
+        L1 --> L2
+        L2 -- Yes --> L3[Update Knowledge Graph]
+        L2 -- No --> L4[Create High Priority Sub Goal such as Investigate Chlorophyll]
+        L4 --> A
     end
-    C -.-> S5
-
-    %% Learning Cycle %%
-    subgraph LEARN["Learning Cycle - Graph Integration"]
-    L1["Interpret linguistic structure"]
-    L2["Extract subject–verb–object relation"]
-    L3["Update Concept Graph"]
-    L1 --> L2 --> L3
-    end
-    D -.-> L3
-
-    %% Refinement Cycle %%
-    subgraph REFINE["Refinement Cycle - Optimization Phase"]
-    R1["Detect complex ('chunky') facts"]
-    R2["Decompose into atomic facts"]
-    R4["Lower weight of original chunky fact"]
-    R1 --> R2 --> R4
-    end
-    E -.-> R2
-
-    %% Persistence %%
-    P["Save updated brain state (my_agent_brain.json)"]
-    L3 --> P
-    R4 --> P
-    M5 --> P
+    
+    B --> B1
+    D --> S1
+    E --> L1
 ```
-### 💡 The Cognitive Reflex: Interactive Learning in Real-Time
 
-The autonomous cycles are how the agent grows its general knowledge, but its true power is revealed during a live conversation. When faced with something it doesn't understand, the agent doesn't just fail—it triggers a **Cognitive Reflex** to learn and adapt in real-time.
+---
 
-This diagram illustrates the agent's thought process when a user says something containing a word the agent has never seen before.
+### The Metacognitive Loop: Self-Analysis and Improvement
+
+Running in parallel to the main learning loop, the Metacognitive Engine performs the ultimate act of introspection: it analyzes its own performance logs to identify and fix flaws in its own source code.
 
 ```mermaid
+%%{init: {"theme": "forest"}}%%
+flowchart TD
+    subgraph MetacognitiveEngine ["Metacognitive Cycle - Slow Supervisory Loop"]
+        M1["1. Performance Monitor analyzes axiom.log for errors and inefficiencies"]
+        M2["2. Identify Optimization Target such as a slow function"]
+        M3["3. Code Introspector retrieves the problematic source code"]
+        M4["4. External Analysis Bridge sends code to Gemini for a suggested fix"]
+        M5["5. Sandbox Verifier runs isolated tests using check.sh"]
+        M6{Verification Passed?}
+        M7["Pass: Save verified code suggestion and report for human review"]
+        M8["Fail: Save failed suggestion and report for human review"]
+        
+        M1 --> M2 --> M3 --> M4 --> M5 --> M6
+        M6 -- Yes --> M7
+        M6 -- No --> M8
+    end
+```
+
+### The Cognitive Reflex: Real-Time Learning
+
+The autonomous cycles grow the agent's general knowledge, but its true intelligence is revealed during a live conversation. When faced with an unknown word, the agent triggers a **Cognitive Reflex** to learn and adapt in real-time.
+
+```mermaid
+%%{init: {"theme": "forest"}}%%
 graph TD
-    %% Main flow
-    A["User Input: 'Zetetic inquiry.'"]
-
-    subgraph Symbolic_First_Path["1️⃣ Symbolic-First Path"]
-        B["1. Symbolic Parser – Attempts to parse sentence"]
-        B -- "Failure (nonsensical grammar)" --> C
+    A[User Input: 'Tell me about zetetic inquiry.']
+    
+    subgraph Agent's Thought Process
+        B[1. Parser Fails<br/>'zetetic' and 'inquiry' are unknown words]
+        C[2. Lexicon Check<br/>Identifies 'zetetic' as unknown]
+        D[3. Recursive Sub-Goaling<br/>Pauses current task.<br/>Creates new goal: 'INVESTIGATE: zetetic']
+        E[4. Knowledge Harvester<br/>Resolves the new goal by querying Dictionary API]
+        F[5. Word Learned<br/>'zetetic' is added to the lexicon as a known word]
+        G[6. Re-process Original Input<br/>The agent now understands all words and can respond intelligently]
     end
 
-    subgraph Cognitive_Reflex["2️⃣ Cognitive Reflex"]
-        C{"2. Check for unknown words?"}
-        C -- "Yes (finds 'zetetic', 'inquiry')" --> D["3. Create Learning Goal: INVESTIGATE 'zetetic'"]
-        C -- "No" --> E["Fallback to LLM Interpreter"]
-    end
-
-    subgraph Real_Time_Research["3️⃣ Real-Time Research"]
-        D --> R1["4. Call Harvester (_resolve_investigation_goal)"]
-        R1 --> R2["Query dictionary API"]
-        R2 --> R3{"Success?"}
-        R3 -- "Yes" --> R4["Learn & promote word: 'zetetic' (trusted noun)"]
-        R3 -- "No" --> R5["Return research failure message"]
-    end
-
-    subgraph Intelligent_Feedback_Loop["4️⃣ Intelligent Feedback Loop"]
-        R4 --> L1["5. Re-evaluate input: chat('Zetetic inquiry.') again"]
-        L1 --> L2["Parser fails again, but 'zetetic' is now known"]
-        L2 --> E
-    end
-
-    E --> FinalResponse["6. Generate Final Response (LLM provides definition)"]
-    R5 --> FinalResponse
-
-    A --> B
+    A --> B --> C --> D --> E --> F --> G
 ```
 
 This entire cycle—from curiosity to integration—demonstrates the power of the symbolic-first architecture. The agent uses its LLM as a powerful tool for perception and verification, but the final understanding and knowledge are stored in a clean, logical, and verifiable symbolic brain.
@@ -137,15 +120,14 @@ This entire cycle—from curiosity to integration—demonstrates the power of th
 This architecture enables the agent to learn, reason, and evolve in a verifiable, self-contained way. The latest version focuses on stability, resilience, and a smarter cognitive flow.
 
 ### Cognitive & Reasoning Abilities
-*   **Real-Time Cognitive Reflex:** When faced with an unknown word during a conversation, the agent doesn't just fail. It triggers an immediate, real-time research cycle to define the word and then re-evaluates the original context, enabling dynamic, interactive learning.
-*   **Trust-Based Learning & Deferral:** A sophisticated lexicon promotion system prevents the knowledge graph from being polluted. The agent defers learning facts with untrusted words until those words are verified through repeated observation or high-confidence sources (like a dictionary).
-*   **Autonomous Learning Cycles (Upgraded):** The agent's ability to learn on its own has been significantly enhanced:
+*   **Recursive Sub-Goal Learning:** When the agent encounters a concept it can't process due to an unknown word (e.g., learning "spoken language" without knowing "spoken"), it **pauses, creates a new high-priority goal to learn the unknown word**, and then resumes the original task. This is the foundation of true, bottom-up understanding.
+*   **Metacognitive Self-Analysis:** The agent analyzes its own performance logs to detect inefficiencies or errors. It can then use an external LLM (like Gemini) to suggest a code fix, verify that fix in a secure sandbox by running its own test suite, and present a verified patch for human review.
+*   **Advanced Autonomous Learning Cycles:**
     *   **Discovery Cycle:** Finds and explores new, relevant topics.
-    *   **Study Cycle:** Researches concepts using an **LLM-powered quality gate** that verifies the relevance of information and reframes it into clean, atomic facts for learning.
-    *   **Refinement Phase:** Decomposes complex "chunky" facts into more precise knowledge.
+    *   **Study Cycle:** Researches concepts using an **LLM-powered quality gate** that verifies relevance and **decomposes complex sentences into clean, atomic facts** for learning.
+    *   **Refinement Cycle:** Periodically reviews its own knowledge base to find and break down overly complex "chunky" facts into more precise knowledge.
 *   **Multi-Stage Symbolic Parsing:** Understands and deconstructs a wide range of sentence structures without LLM intervention.
 *   **Contextual Conversation:** Tracks pronouns (`it`, `they`) to maintain short-term memory across conversational turns.
-*   **Introspective Learning:** Can **learn from its own output**—if the LLM "leaks" a new fact in a response, the agent parses and absorbs it, creating a feedback loop for self-improvement.
 
 ---
 
@@ -172,41 +154,7 @@ Unlike a standard LLM, which has no memory between conversations, Axiom's knowle
 
 ## 🔬 Local Verification (Quickstart)
 
-The agent's architecture is fully testable and reproducible on your local machine.
-
-### Prerequisites
-- Python 3.11+
-- Git
-
-### Step 1: Clone and Install
-This single command clones the repository, sets up a virtual environment, and installs all dependencies. (make sure setup.sh is executable)
-```bash
-git clone https://github.com/vicsanity623/Axiom-Agent.git
-cd Axiom-Agent
-./setup.sh
-```
-make sure venv is activated (it should activate with ./setup.sh)
-
-### Step 2: Download the LLM Model (Optional, for full functionality)
-The agent uses a local LLM for many of its advanced features. You can download the recommended model automatically by running this command from your project's root directory:
-```bash
-axiom-llm
-```
-
-*   **Note on Symbolic-Only Mode:** If the LLM model is not found, the agent will automatically start in a **symbolic-only mode**. This is perfect for testing the core logic and requires significantly less memory.
-
-### Step 3: Run the Tests
-Verify your setup by running the full test suite. The `check.sh` script runs formatting, linting, type checking, and unit tests. (this verifies nothing crucial breaks after changes have been made)
-```bash
-./check.sh
-```
-
-### Step 4: Run the Agent
-The project supports a clean development and deployment cycle.
-1.  **Train:** Use `axiom-train` to let the agent learn on its own.
-2.  **Chat:** Use `axiom-webui` to launch a web UI and interact with the agent's current brain state. (more CLI can be found in **[CONTRIBUTING.md](CONTRIBUTING.md)** file.)
-
----
+Check the **[CONTRIBUTING.md](CONTRIBUTING.md)** for quick start guide.
 
 ## 🚀 The Vision: Intellectual Escape Velocity
 

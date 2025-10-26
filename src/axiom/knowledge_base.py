@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 import time
 from functools import lru_cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 # knowledge_base.py
 from tqdm import tqdm
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
 
     from .universal_interpreter import PropertyData
+
+logger = logging.getLogger(__name__)
 
 LEXICON_PROMOTION_THRESHOLD = 0.8
 LEXICON_OBSERVATION_DECAY = 0.0
@@ -268,6 +271,126 @@ ALL_KNOWLEDGE = [
     ("romantic", "descriptor", "is_a", "sentiment", 0.8),
     ("satisfied", "descriptor", "is_a", "sentiment", 0.8),
     ("sympathetic", "descriptor", "is_a", "sentiment", 0.8),
+    # --- has_part relations ---
+    ("bicycle", "vehicle", "has_part", "wheels", 1.0),
+    ("computer", "device", "has_part", "processor", 1.0),
+    ("tree", "plant", "has_part", "roots", 1.0),
+    ("house", "building", "has_part", "roof", 1.0),
+    ("human body", "organism", "has_part", "heart", 1.0),
+    # --- is_opposite_of relations ---
+    ("hot", "temperature", "is_opposite_of", "cold", 1.0),
+    ("light", "concept", "is_opposite_of", "dark", 1.0),
+    ("up", "direction", "is_opposite_of", "down", 1.0),
+    ("fast", "speed", "is_opposite_of", "slow", 1.0),
+    ("happy", "emotion", "is_opposite_of", "sad", 1.0),
+    # --- is_synonym_of relations ---
+    ("big", "size", "is_synonym_of", "large", 1.0),
+    ("small", "size", "is_synonym_of", "tiny", 1.0),
+    ("quick", "speed", "is_synonym_of", "fast", 1.0),
+    ("smart", "intelligence", "is_synonym_of", "intelligent", 1.0),
+    ("begin", "action", "is_synonym_of", "start", 1.0),
+    # --- is_antonym_of relations ---
+    ("good", "quality", "is_antonym_of", "bad", 1.0),
+    ("true", "truth value", "is_antonym_of", "false", 1.0),
+    ("beautiful", "appearance", "is_antonym_of", "ugly", 1.0),
+    ("strong", "strength", "is_antonym_of", "weak", 1.0),
+    ("rich", "wealth", "is_antonym_of", "poor", 1.0),
+    # --- is_used_for relations ---
+    ("hammer", "tool", "is_used_for", "pounding nails", 1.0),
+    ("pen", "tool", "is_used_for", "writing", 1.0),
+    ("knife", "tool", "is_used_for", "cutting", 1.0),
+    ("key", "object", "is_used_for", "opening locks", 1.0),
+    ("umbrella", "object", "is_used_for", "protection from rain", 1.0),
+    # --- is_made_of relations ---
+    ("glass", "material", "is_made_of", "sand", 1.0),
+    ("paper", "material", "is_made_of", "wood pulp", 1.0),
+    ("steel", "material", "is_made_of", "iron and carbon", 1.0),
+    ("concrete", "material", "is_made_of", "cement and aggregate", 1.0),
+    ("chocolate", "food", "is_made_of", "cocoa beans", 1.0),
+    # --- is_similar_to relations ---
+    ("car", "vehicle", "is_similar_to", "truck", 0.9),
+    ("orange", "fruit", "is_similar_to", "tangerine", 0.9),
+    ("whale", "mammal", "is_similar_to", "dolphin", 0.8),
+    ("violin", "instrument", "is_similar_to", "viola", 0.9),
+    ("lake", "body of water", "is_similar_to", "pond", 0.8),
+    # --- is_related_to relations ---
+    ("mathematics", "subject", "is_related_to", "physics", 0.9),
+    ("music", "art", "is_related_to", "dance", 0.8),
+    ("biology", "science", "is_related_to", "medicine", 0.9),
+    ("cooking", "skill", "is_related_to", "nutrition", 0.8),
+    ("history", "subject", "is_related_to", "archaeology", 0.9),
+    # --- is_caused_by relations ---
+    ("rust", "process", "is_caused_by", "oxidation", 1.0),
+    ("fire", "phenomenon", "is_caused_by", "combustion", 1.0),
+    ("flood", "disaster", "is_caused_by", "heavy rainfall", 0.9),
+    ("hunger", "sensation", "is_caused_by", "lack of food", 1.0),
+    ("thirst", "sensation", "is_caused_by", "dehydration", 1.0),
+    # --- causes relations ---
+    ("smoking", "activity", "causes", "health problems", 0.9),
+    ("exercise", "activity", "causes", "improved fitness", 0.9),
+    ("gravity", "force", "causes", "objects to fall", 1.0),
+    ("friction", "force", "causes", "heat", 0.9),
+    ("sunlight", "energy", "causes", "photosynthesis", 1.0),
+    # --- is_type_of relations ---
+    ("mammal", "animal", "is_type_of", "vertebrate", 1.0),
+    ("oak", "tree", "is_type_of", "deciduous tree", 1.0),
+    ("sedan", "vehicle", "is_type_of", "car", 1.0),
+    ("sonnet", "poem", "is_type_of", "poetry", 1.0),
+    ("democracy", "system", "is_type_of", "government", 1.0),
+    # --- has_type relations ---
+    ("music", "art", "has_type", "classical music", 0.9),
+    ("literature", "writing", "has_type", "fiction", 0.9),
+    ("sport", "activity", "has_type", "team sport", 0.9),
+    ("climate", "pattern", "has_type", "tropical climate", 0.9),
+    ("rock", "music", "has_type", "alternative rock", 0.9),
+    # --- is_instance_of relations ---
+    ("everest", "mountain", "is_instance_of", "highest peak", 1.0),
+    ("einstein", "scientist", "is_instance_of", "genius", 0.9),
+    ("romeo and juliet", "play", "is_instance_of", "tragedy", 1.0),
+    ("mona lisa", "painting", "is_instance_of", "masterpiece", 0.9),
+    ("titanic", "ship", "is_instance_of", "ocean liner", 1.0),
+    # --- has_instance relations ---
+    ("planet", "celestial body", "has_instance", "earth", 1.0),
+    ("element", "substance", "has_instance", "gold", 1.0),
+    ("language", "communication", "has_instance", "english", 1.0),
+    ("currency", "money", "has_instance", "dollar", 1.0),
+    ("continent", "landmass", "has_instance", "africa", 1.0),
+    # --- is_form_of relations ---
+    ("ice", "water", "is_form_of", "solid water", 1.0),
+    ("steam", "water", "is_form_of", "gaseous water", 1.0),
+    ("poetry", "literature", "is_form_of", "artistic writing", 1.0),
+    ("sculpture", "art", "is_form_of", "three-dimensional art", 1.0),
+    ("jazz", "music", "is_form_of", "improvisational music", 1.0),
+    # --- has_form relations ---
+    ("water", "substance", "has_form", "liquid", 1.0),
+    ("carbon", "element", "has_form", "diamond", 1.0),
+    ("energy", "concept", "has_form", "kinetic energy", 1.0),
+    ("communication", "process", "has_form", "verbal communication", 1.0),
+    ("entertainment", "activity", "has_form", "live performance", 1.0),
+    # --- is_derived_from relations ---
+    ("wine", "beverage", "is_derived_from", "grapes", 1.0),
+    ("butter", "dairy", "is_derived_from", "milk", 1.0),
+    ("oxygen", "gas", "is_derived_from", "air", 1.0),
+    ("electricity", "energy", "is_derived_from", "power plants", 1.0),
+    ("knowledge", "concept", "is_derived_from", "learning", 1.0),
+    # --- derives_into relations ---
+    ("seed", "plant part", "derives_into", "plant", 1.0),
+    ("caterpillar", "insect", "derives_into", "butterfly", 1.0),
+    ("idea", "concept", "derives_into", "invention", 0.8),
+    ("investment", "action", "derives_into", "profit", 0.7),
+    ("education", "process", "derives_into", "career", 0.8),
+    # --- is_member_of relations ---
+    ("player", "person", "is_member_of", "team", 1.0),
+    ("citizen", "person", "is_member_of", "nation", 1.0),
+    ("student", "person", "is_member_of", "school", 1.0),
+    ("employee", "person", "is_member_of", "company", 1.0),
+    ("bird", "animal", "is_member_of", "flock", 1.0),
+    # --- has_member relations ---
+    ("family", "group", "has_member", "parent", 1.0),
+    ("orchestra", "group", "has_member", "musician", 1.0),
+    ("committee", "group", "has_member", "chairperson", 1.0),
+    ("ecosystem", "system", "has_member", "species", 1.0),
+    ("solar system", "system", "has_member", "planet", 1.0),
 ]
 
 
@@ -448,6 +571,166 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
         "if": "conjunction",
         "while": "conjunction",
         "because": "conjunction",
+        "my": "pronoun",
+        "your": "pronoun",
+        "his": "pronoun",
+        "its": "pronoun",
+        "our": "pronoun",
+        "their": "pronoun",
+        "mine": "pronoun",
+        "yours": "pronoun",
+        "hers": "pronoun",
+        "ours": "pronoun",
+        "theirs": "pronoun",
+        "myself": "pronoun",
+        "yourself": "pronoun",
+        "himself": "pronoun",
+        "herself": "pronoun",
+        "itself": "pronoun",
+        "ourselves": "pronoun",
+        "yourselves": "pronoun",
+        "themselves": "pronoun",
+        "who": "pronoun",
+        "whom": "pronoun",
+        "whose": "pronoun",
+        "which": "pronoun",
+        "what": "pronoun",
+        "all": "determiner",
+        "any": "determiner",
+        "each": "determiner",
+        "every": "determiner",
+        "another": "determiner",
+        "both": "determiner",
+        "either": "determiner",
+        "neither": "determiner",
+        "some": "determiner",
+        "such": "determiner",
+        "no": "determiner",
+        "more": "determiner",
+        "most": "determiner",
+        "few": "determiner",
+        "many": "determiner",
+        "little": "determiner",
+        "much": "determiner",
+        "own": "determiner",
+        "find": "verb",
+        "finds": "verb",
+        "found": "verb",
+        "use": "verb",
+        "uses": "verb",
+        "used": "verb",
+        "work": "verb",
+        "works": "verb",
+        "worked": "verb",
+        "call": "verb",
+        "calls": "verb",
+        "called": "verb",
+        "try": "verb",
+        "tries": "verb",
+        "tried": "verb",
+        "ask": "verb",
+        "asks": "verb",
+        "asked": "verb",
+        "need": "verb",
+        "needs": "verb",
+        "needed": "verb",
+        "feel": "verb",
+        "feels": "verb",
+        "felt": "verb",
+        "become": "verb",
+        "becomes": "verb",
+        "became": "verb",
+        "leave": "verb",
+        "leaves": "verb",
+        "left": "verb",
+        "put": "verb",
+        "puts": "verb",
+        "mean": "verb",
+        "means": "verb",
+        "meant": "verb",
+        "keep": "verb",
+        "keeps": "verb",
+        "kept": "verb",
+        "let": "verb",
+        "lets": "verb",
+        "begin": "verb",
+        "begins": "verb",
+        "began": "verb",
+        "seem": "verb",
+        "seems": "verb",
+        "seemed": "verb",
+        "help": "verb",
+        "helps": "verb",
+        "helped": "verb",
+        "show": "verb",
+        "shows": "verb",
+        "showed": "verb",
+        "hear": "verb",
+        "hears": "verb",
+        "heard": "verb",
+        "run": "verb",
+        "runs": "verb",
+        "ran": "verb",
+        "move": "verb",
+        "moves": "verb",
+        "moved": "verb",
+        "live": "verb",
+        "lives": "verb",
+        "lived": "verb",
+        "believe": "verb",
+        "believes": "verb",
+        "believed": "verb",
+        "bring": "verb",
+        "brings": "verb",
+        "brought": "verb",
+        "happen": "verb",
+        "happens": "verb",
+        "happened": "verb",
+        "write": "verb",
+        "writes": "verb",
+        "wrote": "verb",
+        "provide": "verb",
+        "provides": "verb",
+        "provided": "verb",
+        "sit": "verb",
+        "sits": "verb",
+        "sat": "verb",
+        "stand": "verb",
+        "stands": "verb",
+        "stood": "verb",
+        "lose": "verb",
+        "loses": "verb",
+        "lost": "verb",
+        "pay": "verb",
+        "pays": "verb",
+        "paid": "verb",
+        "meet": "verb",
+        "meets": "verb",
+        "met": "verb",
+        "since": "preposition",
+        "within": "preposition",
+        "toward": "preposition",
+        "upon": "preposition",
+        "above": "preposition",
+        "across": "preposition",
+        "below": "preposition",
+        "beneath": "preposition",
+        "beside": "preposition",
+        "beyond": "preposition",
+        "except": "preposition",
+        "than": "preposition",
+        "until": "preposition",
+        "nor": "conjunction",
+        "yet": "conjunction",
+        "although": "conjunction",
+        "though": "conjunction",
+        "unless": "conjunction",
+        "whether": "conjunction",
+        "once": "conjunction",
+        "when": "conjunction",
+        "where": "conjunction",
+        "why": "conjunction",
+        "how": "conjunction",
     }
 
     for word, pos in tqdm(core_vocab.items(), desc="     - Seeding lexicon         "):
@@ -557,68 +840,50 @@ def try_promote_lexicon(
     return False
 
 
-def add_pending_relation(agent_instance, relation: dict, interpretation: PropertyData):
-    """Store a relation temporarily until dependent lexicon entries are promoted."""
-
-    agent_instance.pending_relations.append((relation, interpretation, time.time()))
-
-
 def validate_and_add_relation(
-    agent_instance,
+    agent: CognitiveAgent,
     relation: dict,
-    interpretation: PropertyData,
-):
+    properties: PropertyData | dict | None = None,
+) -> str:
     """
-    Validate a parsed relation, deferring if it contains un-promoted words
-    with low confidence, and otherwise inserting it into the graph.
+    Validate a relation and add it to the graph. If vocabulary is missing,
+    create INVESTIGATE goals and defer the fact.
     """
-    subject_name = (relation.get("subject") or "").strip().lower()
-    object_name = (relation.get("object") or "").strip().lower()
-    relation_type = (
-        relation.get("predicate") or relation.get("verb") or relation.get("relation")
-    )
-    if not subject_name or not object_name or not relation_type:
-        return "error"
+    props = properties or {}
 
-    subj_node = agent_instance._add_or_update_concept_quietly(subject_name)
-    obj_node = agent_instance._add_or_update_concept_quietly(object_name)
-    if not subj_node or not obj_node:
-        return "error"
+    subject_name = agent._clean_phrase(relation["subject"])
+    object_name = agent._clean_phrase(relation["object"])
+    relation_type = relation["verb"]
 
-    provenance = interpretation.get("provenance", "user")
-    confidence = float(interpretation.get("confidence", 0.0))
+    all_words = set(subject_name.split()) | set(object_name.split())
+    unknown_words = [
+        word for word in all_words if not agent.lexicon.is_known_word(word)
+    ]
 
-    def is_node_promoted(node):
-        if not node:
-            return False
-        node_data = agent_instance.graph.graph.nodes.get(node.id, {})
-        return node_data.get("properties", {}).get("lexical_promoted_as") is not None
+    if unknown_words:
+        logger.warning(
+            "Validation failed: Found unknown words in concepts: %s",
+            unknown_words,
+        )
+        for word in unknown_words:
+            goal = f"INVESTIGATE: {word}"
+            if goal not in agent.learning_goals:
+                agent.learning_goals.insert(0, goal)
 
-    is_definitional = relation_type in {
-        "is_a",
-        "is_located_in",
-        "is_part_of",
-        "has_property",
-        "has_capital",
-        "is_capital_of",
-    }
-    is_high_trust_source = (
-        provenance in ("llm_verified", "dictionary", "seed") or confidence >= 0.85
-    )
+        # We must cast the properties dict to the expected type for add_pending_relation
 
-    if is_definitional and is_high_trust_source:
-        if not is_node_promoted(subj_node):
-            promote_word(agent_instance, subject_name, "noun_phrase", confidence=0.9)
-        if not is_node_promoted(obj_node):
-            promote_word(agent_instance, object_name, "noun_phrase", confidence=0.9)
-
-    if not is_node_promoted(subj_node) or not is_node_promoted(obj_node):
-        add_pending_relation(agent_instance, relation, interpretation)
+        add_pending_relation(agent, relation, cast("PropertyData", props))
         return "deferred"
 
-    new_conf = float(interpretation.get("confidence", 0.6))
-    new_neg = bool(interpretation.get("negated", False))
-    new_provenance = interpretation.get("provenance", "user")
+    sub_node = agent._add_or_update_concept(subject_name)
+    obj_node = agent._add_or_update_concept(object_name)
+
+    if not (sub_node and obj_node):
+        return "error_creating_nodes"
+
+    new_conf = float(props.get("confidence", 0.6))
+    new_neg = bool(props.get("negated", False))
+    new_provenance = props.get("provenance", "user")
 
     new_props = {
         "negated": new_neg,
@@ -626,13 +891,12 @@ def validate_and_add_relation(
         "confidence": new_conf,
     }
 
-    existing_edges = [
-        e
-        for e in agent_instance.graph.get_edges_from_node(subj_node.id)
-        if e.type == relation_type
-        and agent_instance.graph.get_node_by_id(e.target)
-        and agent_instance.graph.get_node_by_id(e.target).name == object_name
-    ]
+    existing_edges = []
+    for e in agent.graph.get_edges_from_node(sub_node.id):
+        target_node = agent.graph.get_node_by_id(e.target)
+        # FIX: Add a guard to ensure target_node is not None before accessing .name
+        if target_node and e.type == relation_type and target_node.name == object_name:
+            existing_edges.append(e)
 
     if existing_edges:
         e = existing_edges[0]
@@ -641,27 +905,44 @@ def validate_and_add_relation(
 
         if existing_neg != new_neg:
             if new_conf > existing_conf + 0.2:
-                agent_instance.graph.edges[e.source, e.target, e.id].update(new_props)
+                agent.graph.update_edge_properties(e, new_props)
                 return "replaced"
-            new_props["contradicted"] = True
-            new_props["confidence"] = max(0.05, new_conf * 0.5)
-            agent_instance.graph.add_edge(
-                subj_node,
+
+            contradiction_props = new_props.copy()
+            contradiction_props["contradicted"] = True
+            contradiction_props["confidence"] = max(0.05, new_conf * 0.5)
+            # FIX: Cast the generic dict to the specific PropertyData TypedDict
+            agent.graph.add_edge(
+                sub_node,
                 obj_node,
                 relation_type,
-                properties=new_props,
+                properties=cast("PropertyData", contradiction_props),
             )
             return "contradiction_stored"
+
         merged_conf = max(existing_conf, new_conf)
-        new_props["confidence"] = merged_conf
-        agent_instance.graph.edges[e.source, e.target, e.id].update(new_props)
+        update_props = new_props.copy()
+        update_props["confidence"] = merged_conf
+        agent.graph.update_edge_properties(e, update_props)
         return "inserted"
 
-    agent_instance.graph.add_edge(
-        subj_node,
+    # FIX: Cast the generic dict to the specific PropertyData TypedDict
+    agent.graph.add_edge(
+        sub_node,
         obj_node,
         relation_type,
         new_conf,
-        properties=new_props,
+        properties=cast("PropertyData", new_props),
     )
     return "inserted"
+
+
+def add_pending_relation(
+    agent_instance,
+    relation: dict,
+    interpretation: PropertyData | dict,
+):
+    """Store a relation temporarily until dependent lexicon entries are promoted."""
+    # This function is part of the older system but is now called by our new vocabulary check.
+    # It serves as the mechanism to remember the fact that needs to be re-attempted.
+    agent_instance.pending_relations.append((relation, interpretation, time.time()))

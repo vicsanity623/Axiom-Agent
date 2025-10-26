@@ -1,5 +1,3 @@
-# in tests/test_interpreter.py
-
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -13,15 +11,10 @@ def test_interpreter_init_raises_error_for_missing_model(monkeypatch, tmp_path):
     Covers the FileNotFoundError branch in UniversalInterpreter.__init__.
     Ensures the agent crashes gracefully if the LLM model file is missing.
     """
-    # 1. GIVEN: A path to a model file that does not exist.
     non_existent_path = tmp_path / "this_model_does_not_exist.gguf"
 
-    # We mock the Llama class so the test doesn't actually try to load anything,
-    # it just lets us test the file existence check before it.
     monkeypatch.setattr("axiom.universal_interpreter.Llama", MagicMock())
 
-    # 2. WHEN: We try to initialize the interpreter with this bad path.
-    # 3. THEN: We assert that a FileNotFoundError is raised.
     with pytest.raises(FileNotFoundError, match="Interpreter model not found"):
         _ = UniversalInterpreter(model_path=non_existent_path, load_llm=True)
 
@@ -84,45 +77,36 @@ def test_interpret_with_context_routing(monkeypatch):
     """
     Tests the routing logic of interpret_with_context.
     """
-    # We use a "spy" to see if resolve_context was called.
     resolve_was_called = False
 
     def mock_resolve_context(self, history, new_input):
         nonlocal resolve_was_called
         resolve_was_called = True
-        return new_input  # Return input unchanged for simplicity
+        return new_input
 
-    # Patch the CLASS, which is the correct way to use monkeypatch here.
     monkeypatch.setattr(
         "axiom.universal_interpreter.UniversalInterpreter.resolve_context",
         mock_resolve_context,
     )
 
-    # Create an instance AFTER patching
     interpreter = UniversalInterpreter(load_llm=False)
     history = ["User: What is a raven?"]
 
-    # Case A: Input has a pronoun, should call our spy.
-    resolve_was_called = False  # Reset spy
+    resolve_was_called = False
     interpreter.interpret_with_context("what color is it?", history)
     assert resolve_was_called is True
 
-    # Case B: Input has NO pronoun, should NOT call our spy.
-    resolve_was_called = False  # Reset spy
+    resolve_was_called = False
     interpreter.interpret_with_context("what is a bird?", history)
     assert resolve_was_called is False
 
-    # Case C: History is empty, should NOT call our spy.
-    resolve_was_called = False  # Reset spy
+    resolve_was_called = False
     interpreter.interpret_with_context("what color is it?", [])
     assert resolve_was_called is False
 
 
-# Helper class to simulate a crashing LLM
 class MockFailingLlama:
     def __call__(self, *args, **kwargs):
-        # This special method makes the object callable, like the real Llama object.
-        # We want it to crash every time it's called.
         raise ValueError("Simulated LLM Crash")
 
 
@@ -132,41 +116,30 @@ def test_interpreter_handles_llm_call_failures():
     Ensures that if the LLM call itself raises an exception, the interpreter
     returns a safe, default value instead of crashing the agent.
     """
-    # 1. Setup: Create an interpreter, but replace its 'llm' attribute
-    #    with our fake, crashing version.
     interpreter = UniversalInterpreter(load_llm=False)
-    interpreter.llm = (
-        MockFailingLlama()
-    )  # This simulates the LLM being "loaded" but broken.
+    interpreter.llm = MockFailingLlama()
 
-    # 2. Test the interpret() method's exception handling
     interpret_result = interpreter.interpret("this will cause a crash")
     assert interpret_result["intent"] == "unknown"
     assert "Could not fully interpret" in interpret_result["full_text_rephrased"]
     print("interpret() correctly handled an LLM crash.")
 
-    # 3. Test the resolve_context() method's exception handling
     original_input = "what about it?"
     context_result = interpreter.resolve_context(["User: a raven"], original_input)
-    assert context_result == original_input  # Should fall back to the original input
+    assert context_result == original_input
     print("resolve_context() correctly handled an LLM crash.")
 
-    # 4. Test the break_down_definition() method's exception handling
     breakdown_result = interpreter.break_down_definition("bird", "a feathered animal")
-    assert breakdown_result == []  # Should fall back to an empty list
+    assert breakdown_result == []
     print("break_down_definition() correctly handled an LLM crash.")
 
-    # 5. Test the generate_curious_questions() method's exception handling
     questions_result = interpreter.generate_curious_questions(
         "bird",
         "a bird has wings",
     )
-    assert questions_result == []  # Should fall back to an empty list
+    assert questions_result == []
     print("generate_curious_questions() correctly handled an LLM crash.")
 
-    # 6. Test the synthesize() method's exception handling
     synthesis_result = interpreter.synthesize("a bird is an animal")
-    assert (
-        synthesis_result == "a bird is an animal"
-    )  # Should fall back to the raw input
+    assert synthesis_result == "a bird is an animal"
     print("synthesize() correctly handled an LLM crash.")

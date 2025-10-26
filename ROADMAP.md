@@ -4,9 +4,9 @@ This roadmap documents the evolution of the Axiom Agent, from its foundational a
 
 ***
 
-The Axiom Agent has successfully evolved through its foundational phases. It began with the **"Genesis Engine,"** establishing a stable knowledge graph. The **"Intelligent Learner"** phase enabled autonomous discovery, while the **"Conversational Mind"** gave it the ability to parse complex sentences and learn from its own responses.
+The Axiom Agent has successfully evolved through its foundational phases. It began with the **"Genesis Engine,"** establishing a stable knowledge graph and basic parsing. It then became an **"Intelligent Learner"** with autonomous discovery, a **"Conversational Mind"** with contextual understanding, and underwent a critical **"Stabilization & Hardening"** phase to build a resilient and testable core.
 
-Following this rapid innovation, the Axiom Agent has now completed a critical **"Stabilization & Hardening"** phase. This engineering-focused effort addressed technical debt, dramatically improved the user experience, and fortified the agent's core logic with a comprehensive test suite and more intelligent learning mechanisms. This essential work has created a robust and maintainable platform, paving the way for the agent's next major functional leaps: achieving true **"Semantic Mastery"** with a deeper understanding of language, becoming an **"Autonomous Scholar"** with strategic learning, and finally, evolving into a **"Logical Reasoner"** capable of procedural thought and tool use.
+Following this, the agent has now achieved a new level of intelligence in the **"Autonomous Scholar"** phase. It has moved beyond simple learning to **strategic, goal-oriented research**, driven by a formal `GoalManager`. Most significantly, it now possesses a **`MetacognitiveEngine`**, allowing it to analyze its own performance logs, suggest improvements to its own source code, and verify those fixes in a secure sandbox. This suite of capabilities marks a transition to true autonomy, setting the stage for the next leaps into deeper semantic understanding and procedural reasoning.
 
 ---
 
@@ -59,16 +59,32 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 **Goal:** Solidify the foundation, improve user experience, and make the agent more robust and resilient.
 
 ### Key Features
-*   **Centralized & Robust Architecture:** Refactored the entire project to use a central `config.py` for all file paths, eliminating dozens of bugs. The core learning logic was fortified with a robust deferral system for facts with untrusted words.
-*   **LLM-Powered Fact Verification:** Implemented an LLM-driven "quality gate" (`verify_and_reframe_fact`) that critically evaluates facts found on the web. It rejects irrelevant information and reframes good facts into simple, learnable sentences, fixing major intelligence flaws (e.g., synonym/redirect bugs).
-*   **Real-Time Interactive Learning:** The agent's "Cognitive Reflex" can now perform real-time research. When it encounters an unknown word during conversation, it immediately attempts to define it, enabling a dynamic, interactive learning loop.
-*   **Intelligent Lexicon Promotion:** Created a formal "promotion" system for the lexicon. The agent now distinguishes between knowing a word's definition and trusting it, and automatically promotes words learned from high-confidence sources (like dictionaries or LLM verification).
-*   **Comprehensive Test Suite:** Achieved a fully passing, clean CI/CD pipeline (Ruff, MyPy, Pytest). The test suite was completely overhauled to validate the new, more sophisticated learning and deferral behaviors.
-*   **Streamlined User Experience:** Refactored developer scripts into professional command-line entry points (`axiom-train`, `axiom-teach`, etc.) and automated the LLM download process (`axiom-llm`).
+*   **Centralized & Robust Architecture:** Refactored the entire project to use a central `config.py` for all file paths.
+*   **LLM-Powered Fact Verification:** Implemented an LLM-driven "quality gate" (`verify_and_reframe_fact`) that critically evaluates facts found on the web, rejecting irrelevant information and simplifying good facts.
+*   **Intelligent Lexicon Promotion:** Created a formal "promotion" system for the lexicon, allowing the agent to distinguish between observing a word and trusting its definition.
+*   **Comprehensive Test Suite:** Achieved a fully passing, clean CI/CD pipeline (Ruff, MyPy, Pytest) to validate all cognitive behaviors.
+*   **Streamlined User Experience:** Refactored developer scripts into professional command-line entry points. (`axiom-train`, `axiom-webui`, `axiom-llm`). Axiom is uv ready check the **[CONTRIBUTING.md](CONTRIBUTING.md)** for quick start guide.
 
 ---
 
-# Phase 4 — Semantic Mastery
+# Phase 4 — Autonomous Scholar & Metacognitive Mind (COMPLETE)
+
+**Goal:** Elevate the agent from a simple learner to a strategic, goal-oriented entity capable of introspection and self-improvement.
+
+### Key Features
+*   **Recursive Sub-Goal Learning:** The agent's core learning logic was upgraded to be fully recursive. When it encounters a concept with an unknown word (e.g., "spoken language" without knowing "spoken"), it now **pauses, creates a new high-priority goal to `INVESTIGATE: spoken`**, and then resumes the original task once the prerequisite knowledge is acquired.
+*   **Goal-Oriented Learning:** A formal `GoalManager` was implemented to drive the agent's long-term learning. It can now be given high-level objectives (e.g., "Learn the basics of conversation") and will generate and execute a multi-stage plan to achieve them.
+*   **Advanced Fact Decomposition:** The `UniversalInterpreter` was enhanced with a dedicated `decompose_sentence_to_relations` method. This allows the agent to take complex definitions from any source and reliably break them down into multiple, simple, atomic facts, dramatically improving the quality of its knowledge graph.
+*   **Metacognitive Self-Modification:** The `MetacognitiveEngine` is now operational. It runs on a slow cycle to:
+    1.  **Analyze** its own performance logs (`axiom.log`) for errors and inefficiencies.
+    2.  **Identify** a specific function in its source code as a target for optimization.
+    3.  **Generate** a suggested code fix using an external LLM (Gemini).
+    4.  **Verify** the fix by running the project's full test suite (`check.sh`) in a secure, isolated sandbox.
+    5.  **Report** the result, saving a verified (or failed) code suggestion for human review.
+
+---
+
+# Phase 5 — Semantic Mastery
 
 **Goal:** Deepen the agent's understanding of language nuance, context, and complex relationships.
 
@@ -77,21 +93,6 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 *   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
 *   **Belief Revision System:** Implement a strategy for resolving conflicting facts. When a contradiction is found, the agent will use provenance and confidence scores to decide whether to update its belief, ask for clarification, or maintain both possibilities.
 *   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly, making conversation feel more empathetic and natural.
-
----
-
-# Phase 5 — Autonomous Scholar
-
-**Goal:** Transform the agent from a passive learner into a strategic researcher with long-term goals and the ability to improve itself.
-
-### Key Features
-*   **Goal-Oriented Learning:** Introduce a `GoalManager` that allows the agent to be given high-level learning objectives (e.g., "Become an expert on ancient Rome").
-*   **Strategic Study Plans:** The `KnowledgeHarvester` will use its learning goals to generate and execute multi-step study plans (e.g., find a Wikipedia page, read it, identify key entities, generate curious questions for each entity, then research those questions).
-*   **Dynamic Knowledge Pruning:** Implement a "forgetting" mechanism where facts that are consistently low-activation and low-confidence are periodically removed to keep the graph relevant.
-*   **Metacognitive Self-Modification:**
-    *   **Deliverable:** A `MetacognitiveEngine` that enables the agent to analyze its own performance logs, identify potential flaws or inefficiencies in its source code, and use an external LLM (like Gemini Pro) to generate improvements.
-    *   **Logic:** This engine operates on a low-frequency (e.g., 24-hour) cycle. It uses a robust sandboxing and verification system to test suggested code changes against the project's `pytest` suite before applying them to its own live codebase.
-    *   **Purpose:** To enable true, long-term autonomy, allowing the agent to patch its own bugs and optimize its own logic without direct human intervention.
 
 ---
 

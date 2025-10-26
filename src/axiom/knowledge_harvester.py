@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 # knowledge_harvester.py
@@ -14,11 +15,14 @@ import requests
 import wikipedia
 from nltk.stem import WordNetLemmatizer
 
+from .knowledge_base import validate_and_add_relation
+
 if TYPE_CHECKING:
     from threading import Lock
 
     from axiom.cognitive_agent import CognitiveAgent
     from axiom.graph_core import ConceptNode, RelationshipEdge
+
 
 logger = logging.getLogger(__name__)
 
@@ -76,35 +80,82 @@ class KnowledgeHarvester:
         self.agent.log_autonomous_cycle_completion()
 
     def _resolve_investigation_goal(self, goal: str) -> bool:
-        """Resolve an "INVESTIGATE" goal by finding a word's definition."""
+        """Resolve an "INVESTIGATE" goal by learning its part of speech and definition."""
         match = re.match(r"INVESTIGATE: (.*)", goal)
         if not match:
             return False
-        word_to_learn = match.group(1).lower()
+        term_to_learn = match.group(1).lower()
 
-        print(
-            f"[Study Cycle]: Prioritizing learning goal: To define '{word_to_learn}'.",
+        logger.info(
+            "[Study Cycle]: Prioritizing learning goal: To define '%s'.",
+            term_to_learn,
         )
 
-        api_result = self.get_definition_from_api(word_to_learn)
-        if api_result:
-            part_of_speech, definition = api_result
-            with self.lock:
-                self.agent.lexicon.add_linguistic_knowledge_quietly(
-                    word=word_to_learn,
-                    part_of_speech=part_of_speech,
-                    definition=definition,
-                )
-                if goal in self.agent.learning_goals:
-                    self.agent.learning_goals.remove(goal)
-                self.agent.save_brain()
-            return True
+        is_single_word = " " not in term_to_learn
 
-        print(
-            f"  [Study Cycle]: Dictionary API failed for '{word_to_learn}'. Falling back to web search.",
-        )
+        if is_single_word:
+            logger.info(
+                "  [Study Cycle]: Term is a single word. Prioritizing Dictionary API.",
+            )
+            api_result = self.get_definition_from_api(term_to_learn)
+            if api_result:
+                part_of_speech, definition = api_result
 
-        queries = [f"what is {word_to_learn}", f"define {word_to_learn}", word_to_learn]
+                # We will track success of learning both POS and definition separately.
+                pos_learned = False
+                definition_learned = False
+
+                with self.lock:
+                    # 1. Learn the simple, high-confidence linguistic fact.
+                    pos_relation = {
+                        "subject": term_to_learn,
+                        "verb": "is_a",
+                        "object": part_of_speech,
+                        "properties": {"provenance": "dictionary_api"},
+                    }
+                    # We use validate_and_add_relation directly as it's the core
+                    # of the learning process shown in knowledge_base.py
+                    status_pos = validate_and_add_relation(self.agent, pos_relation)
+                    if status_pos != "deferred":
+                        logger.info(
+                            "  [Study Cycle]: Agent successfully learned the part of speech for '%s'.",
+                            term_to_learn,
+                        )
+                        pos_learned = True
+
+                    # 2. Treat the definition as a full sentence and let the agent decompose it.
+                    # This is the crucial change.
+                    logger.info(
+                        "  [Study Cycle]: Processing definition as a new learning opportunity: '%s'",
+                        definition,
+                    )
+                    definition_learned = self.agent.learn_new_fact_autonomously(
+                        fact_sentence=definition,
+                        source_topic=term_to_learn,
+                    )
+
+                if pos_learned or definition_learned:
+                    logger.info(
+                        "  [Study Cycle]: Successfully learned from Dictionary API."
+                    )
+                    with self.lock:
+                        if goal in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(goal)
+                    return True
+
+        # Fallback to web search if the dictionary failed or it's a multi-word concept.
+        if is_single_word:
+            logger.info(
+                "  [Study Cycle]: Dictionary API failed for '%s'. Falling back to web search.",
+                term_to_learn,
+            )
+        else:
+            logger.info(
+                "  [Study Cycle]: Term is a multi-word concept. Using web search directly.",
+            )
+
+        # (The rest of the web search logic remains the same)
+        queries = [f"what is {term_to_learn}", f"define {term_to_learn}", term_to_learn]
         web_fact = None
         source_topic = None
         for query in queries:
@@ -117,29 +168,36 @@ class KnowledgeHarvester:
             time.sleep(1)
 
         if not web_fact:
-            print(f"  [Study Cycle]: Web search also failed for '{word_to_learn}'.")
+            logger.warning(
+                "  [Study Cycle]: Web search also failed for '%s'.",
+                term_to_learn,
+            )
             return False
 
-        print(f"  [Study Cycle]: Found potential fact from web: '{web_fact}'")
+        logger.info("  [Study Cycle]: Found potential fact from web: '%s'", web_fact)
         with self.lock:
             was_learned = self.agent.learn_new_fact_autonomously(
                 fact_sentence=web_fact,
-                source_topic=source_topic or word_to_learn,
+                source_topic=source_topic or term_to_learn,
             )
 
         if was_learned:
-            print("  [Study Cycle]: Agent successfully learned the new fact.")
+            logger.info(
+                "  [Study Cycle]: Agent successfully learned the new fact from web.",
+            )
             with self.lock:
                 if goal in self.agent.learning_goals:
                     self.agent.learning_goals.remove(goal)
             return True
-        print("  [Study Cycle]: Agent failed to learn from the web fact.")
+
+        logger.warning("  [Study Cycle]: Agent failed to learn from the web fact.")
         return False
 
     def study_cycle(self) -> None:
         """
         Run one full study cycle, driven by the GoalManager's strategic plan.
-        If no active goals exist, it falls back to opportunistic learning.
+        This refactored version is explicitly plan-driven, ensuring that it
+        respects the sequential stages of complex, hierarchical goals.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("\n--- [Study Cycle Started at %s] ---", timestamp)
@@ -147,41 +205,69 @@ class KnowledgeHarvester:
         active_goal = self.agent.goal_manager.get_active_goal()
 
         if active_goal:
-            logger.info(">> Working on active goal: '%s'", active_goal["description"])
+            # --- Plan-Driven Learning ---
+            # An active goal (or goal stage) exists. We must work on its tasks.
+            logger.info(">> Working on active plan: '%s'", active_goal["description"])
 
-            goal_to_resolve = None
-            for sub_goal in active_goal["sub_goals"]:
-                if sub_goal in self.agent.learning_goals:
-                    goal_to_resolve = sub_goal
-                    break
+            # Find the next available task from the active plan's sub-goals.
+            task_to_resolve = next(
+                (
+                    sg
+                    for sg in active_goal["sub_goals"]
+                    if sg in self.agent.learning_goals
+                ),
+                None,
+            )
 
-            if goal_to_resolve:
-                self._resolve_investigation_goal(goal_to_resolve)
+            if task_to_resolve:
+                logger.info("  - Attempting planned task: '%s'", task_to_resolve)
+                resolved = self._resolve_investigation_goal(task_to_resolve)
+
+                if not resolved:
+                    # The task failed. Remove it from the queue to prevent loops.
+                    # _resolve_investigation_goal already removes it on success.
+                    logger.warning(
+                        "Failed to resolve planned task '%s'. Removing from queue.",
+                        task_to_resolve,
+                    )
+                    with self.lock:
+                        if task_to_resolve in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(task_to_resolve)
+
+                # CRITICAL: Always check for completion after every attempt.
+                # This allows the GoalManager to advance to the next stage immediately.
                 self.agent.goal_manager.check_goal_completion(active_goal["id"])
             else:
+                # This can happen if all sub-goals for the stage are done but the
+                # completion check hasn't run yet. Triggering it manually ensures
+                # the next stage can be activated on the next cycle.
                 logger.info(
-                    "No pending sub-goals found for '%s'. Goal might be complete.",
+                    "No pending tasks found for active goal '%s'. Triggering completion check.",
                     active_goal["description"],
                 )
+                self.agent.goal_manager.check_goal_completion(active_goal["id"])
 
         else:
+            # --- Opportunistic Learning ---
+            # No active plan exists. Fall back to the general learning queue or discovery.
+            logger.info("No active plan. Checking for opportunistic learning tasks.")
             if self.agent.learning_goals:
-                logger.info("No active goals. Working on opportunistic learning queue.")
-                goal_to_resolve = self.agent.learning_goals[0]
-                if goal_to_resolve.startswith("INVESTIGATE:"):
-                    resolved = self._resolve_investigation_goal(goal_to_resolve)
+                opportunistic_task = self.agent.learning_goals[0]
+                logger.info(
+                    "  - Attempting opportunistic task: '%s'", opportunistic_task
+                )
 
-                    if not resolved:
-                        logger.warning(
-                            "Failed to resolve opportunistic goal '%s'. Removing from queue.",
-                            goal_to_resolve,
-                        )
-                        with self.lock:
-                            if goal_to_resolve in self.agent.learning_goals:
-                                self.agent.learning_goals.remove(goal_to_resolve)
+                if not self._resolve_investigation_goal(opportunistic_task):
+                    logger.warning(
+                        "Failed to resolve opportunistic task '%s'. Removing from queue.",
+                        opportunistic_task,
+                    )
+                    with self.lock:
+                        if opportunistic_task in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(opportunistic_task)
             else:
                 logger.info(
-                    "Learning queue is empty. Attempting to deepen existing knowledge.",
+                    "Learning queue is empty. Attempting to deepen existing knowledge."
                 )
                 self._deepen_knowledge_of_random_concept()
 
@@ -476,29 +562,19 @@ class KnowledgeHarvester:
         return None
 
     def get_definition_from_api(self, word: str) -> tuple[str, str] | None:
-        """Retrieve a precise definition and part of speech from a dictionary API.
-
-        This is the primary, high-precision tool for resolving "INVESTIGATE"
-        goals. It queries a free public dictionary API for a specific word.
-
-        On success, it extracts the primary part of speech and the first
-        definition, which is a much more reliable source of linguistic
-        knowledge than general web scraping.
-
-        Args:
-            word: The single word to define.
-
-        Returns:
-            A tuple containing the part of speech and the definition string,
-            or None if the word is not found or the API call fails.
         """
-        print(f"[Knowledge Source]: Querying Dictionary API for '{word}'...")
+        Retrieve a precise definition and part of speech from a dictionary API.
+
+        Returns the part of speech and the full definition, which can then be
+        used to construct multiple facts.
+        """
+        logger.info("[Knowledge Source]: Querying Dictionary API for '%s'...", word)
         try:
             url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
             response = requests.get(url, timeout=5)
 
             if response.status_code != 200:
-                print(f"  [Dictionary API]: Word '{word}' not found.")
+                logger.info("  [Dictionary API]: Word '%s' not found.", word)
                 return None
 
             data = response.json()
@@ -515,28 +591,26 @@ class KnowledgeHarvester:
                     first_definition = first_meaning["definitions"][0].get("definition")
 
                     if part_of_speech and first_definition:
-                        article = (
-                            "an"
-                            if part_of_speech.lower().startswith(
-                                ("a", "e", "i", "o", "u"),
-                            )
-                            else "a"
+                        logger.info(
+                            "  [Dictionary API]: Found definition: '%s'",
+                            first_definition,
                         )
-                        definition_sentence = f"{word} is {article} {part_of_speech}."
-
-                        print(
-                            f"  [Dictionary API]: Found definition: '{first_definition}'",
-                        )
-                        print(
-                            f"  [Dictionary API]: Constructed fact: '{definition_sentence}'",
+                        logger.info(
+                            "  [Dictionary API]: Found part of speech: '%s'",
+                            part_of_speech,
                         )
 
+                        # Return both pieces of information for the caller to use.
                         return (part_of_speech, first_definition)
 
         except requests.RequestException as e:
-            print(f"  [Dictionary API]: An error occurred: {e}")
-        except Exception:
-            print(f"  [Dictionary API]: Failed to parse response for '{word}'.")
+            logger.warning("  [Dictionary API]: An error occurred: %s", e)
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(
+                "  [Dictionary API]: Failed to parse response for '%s': %s",
+                word,
+                e,
+            )
 
         return None
 

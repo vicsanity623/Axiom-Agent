@@ -476,6 +476,91 @@ class UniversalInterpreter:
 
         return self.interpret(contextual_input)
 
+    def decompose_sentence_to_relations(
+        self, text: str, main_topic: str | None = None
+    ) -> list[RelationData]:
+        """
+        Uses the LLM to decompose a sentence into a list of atomic relations.
+        This is the primary method for learning from complex sentences.
+        """
+        if self.llm is None:
+            logger.warning("[Interpreter]: LLM is disabled. Cannot decompose text.")
+            return []
+
+        logger.info("  [Interpreter]: Decomposing sentence into atomic facts...")
+
+        topic_context = (
+            f"The primary topic of this sentence is '{main_topic}'. "
+            "Ensure the subject of at least one core relation is this topic or a direct synonym."
+            if main_topic
+            else ""
+        )
+
+        prompt = f"""
+        **ROLE:** You are a knowledge engineering system. Your task is to extract and decompose knowledge from a sentence into a list of simple, atomic semantic relations.
+
+        **TASK:** Analyze the user's sentence and break it down into multiple, simple, atomic relations.
+        - Each relation MUST be a JSON object: {{"subject": "...", "verb": "...", "object": "..."}}
+        - Subjects and objects should be simple concepts (e.g., "cats", "photosynthesis", "the sun").
+        - Verbs should be concise, standardized predicates (e.g., "is_a", "has_property", "causes", "is_part_of"). Use snake_case.
+        - The goal is DECOMPOSITION. One complex sentence should become several simple facts.
+
+        **CONTEXT:** {topic_context}
+
+        **EXAMPLE:**
+        Topic: Photosynthesis
+        Sentence: "Photosynthesis is a process used by plants to convert light energy into chemical energy."
+        Output:
+        [
+          {{"subject": "photosynthesis", "verb": "is_a", "object": "process"}},
+          {{"subject": "photosynthesis", "verb": "is_used_by", "object": "plants"}},
+          {{"subject": "photosynthesis", "verb": "converts", "object": "light energy"}},
+          {{"subject": "light energy", "verb": "is_converted_into", "object": "chemical energy"}}
+        ]
+
+        **SENTENCE TO ANALYZE:**
+        "{text}"
+
+        **RULES:**
+        1.  Return ONLY a valid JSON list of relation objects.
+        2.  Do NOT include markdown, explanations, or any other text outside the JSON list.
+        3.  If the sentence contains no extractable facts, return an empty list `[]`.
+        """
+        try:
+            output = cast(
+                "dict",
+                self.llm(
+                    f"[INST]{prompt}[/INST]",
+                    max_tokens=1024,
+                    stop=["</s>"],
+                    echo=False,
+                    temperature=0.1,
+                ),
+            )
+            response_text = output["choices"][0]["text"].strip()
+
+            # Clean the output to find the JSON list
+            start_bracket = response_text.find("[")
+            end_bracket = response_text.rfind("]")
+            if start_bracket == -1 or end_bracket == -1:
+                return []
+
+            json_str = response_text[start_bracket : end_bracket + 1]
+            relations = json.loads(json_str)
+
+            if isinstance(relations, list):
+                logger.info(
+                    "    - Decomposed sentence into %d atomic relations.",
+                    len(relations),
+                )
+                return cast("list[RelationData]", relations)
+            return []
+        except Exception as e:
+            logger.error(
+                "  [Interpreter Error]: Failed to decompose sentence. Error: %s", e
+            )
+            return []
+
     def break_down_definition(self, subject: str, chunky_definition: str) -> list[str]:
         """Use the LLM to break a complex definition into simple, atomic facts.
 

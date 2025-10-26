@@ -1,13 +1,9 @@
-#!/usr/bin/env python3
-"""
-CLI tool to analyze Axiom logs for performance and optimization targets.
-"""
+"""CLI tool to analyze Axiom logs for performance and optimization targets."""
 
 import logging
 import sys
 from pathlib import Path
 
-# Ensure src/ is on the import path
 sys.path.append(str(Path(__file__).parent / "src"))
 
 from axiom.metacognitive_engine import PerformanceMonitor
@@ -17,6 +13,7 @@ logging.basicConfig(level=logging.INFO, format="[%(levelname)s] %(message)s")
 
 
 def main():
+    """Parse CLI arguments and analyze the specified Axiom log file for optimization targets."""
     import argparse
 
     parser = argparse.ArgumentParser(

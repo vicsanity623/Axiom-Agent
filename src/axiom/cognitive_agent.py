@@ -15,7 +15,15 @@ import threading
 import time
 from datetime import date, datetime
 from functools import lru_cache
-from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Final,
+    NotRequired,
+    TypedDict,
+    cast,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -25,6 +33,7 @@ from thefuzz import process
 
 from .config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE
 from .dictionary_utils import get_word_info_from_wordnet
+from .goal_manager import GoalManager
 from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
 from .knowledge_base import (
     seed_core_vocabulary,
@@ -102,12 +111,19 @@ PROVENANCE_RANK: Final[dict[str, int]] = {
 
 
 class CognitiveAgent:
-    """Orchestrate the primary cognitive functions of the Axiom Agent.
-
-    This class integrates all other components to execute a symbolic-first thought process.
-    """
+    """Orchestrate the primary cognitive functions of the Axiom Agent."""
 
     INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 50
+
+    # CORRECT PLACEMENT: The constant must be inside the class body.
+    _EXCLUSIVE_RELATIONS: ClassVar[frozenset[str]] = frozenset(
+        [
+            "has_name",
+            "is_capital_of",
+            "has_capital",
+            "is_located_in",
+        ],
+    )
 
     def __init__(
         self,
@@ -139,9 +155,10 @@ class CognitiveAgent:
             cache_data: A dictionary representing the interpreter cache.
             inference_mode: If True, disables all learning and saving
                 functionality.
+            enable_llm: If True (default), loads the Language Model for
+                advanced interpretation and synthesis. Set to False to
+                run in a non-LLM mode.
         """
-
-        from .goal_manager import GoalManager
 
         logger.info("Initializing Cognitive Agent...")
         brain_file.parent.mkdir(parents=True, exist_ok=True)
@@ -1335,8 +1352,9 @@ class CognitiveAgent:
 
     def _sanitize_sentence_for_learning(self, sentence: str) -> str:
         """
-        Pre-processes a raw sentence from any source to make it easier for the
-        symbolic parser to understand. This is the main gatekeeper for knowledge.
+        Pre-processes a raw sentence from any source.
+
+        Makes it easier for thesymbolic parser to understand. This is the main gatekeeper for knowledge.
         """
         sanitized = re.sub(r"\s*\(.*?\)\s*", " ", sentence).strip()
 
@@ -1381,202 +1399,250 @@ class CognitiveAgent:
         self,
         relation: RelationData,
     ) -> tuple[bool, str]:
-        """Process a structured fact to learn and integrate it into the graph,
-        including belief revision logic for conflicting exclusive relationships."""
+        """Process a structured fact, handling validation and belief revision.
+
+        This function acts as a high-level orchestrator, delegating the core
+        learning logic to specialized helper methods.
+
+        Notes on typing:
+        - RelationData is a TypedDict where `verb` is NotRequired and other keys may
+        be provided as strings or, in practice, small dicts (e.g. {"name": ...}).
+        - We explicitly cast the raw .get(...) results into narrow Union types
+        before validating to satisfy mypy's `no_implicit_optional` and related flags.
+        """
+        # Phase 1: Preconditions
         if self.inference_mode:
+            return False, "Agent is in read-only mode."
+
+        # relation.get(...) returns Any from a TypedDict access; cast to narrow unions
+        subj_raw = cast("str | dict[str, Any] | None", relation.get("subject"))
+        verb_raw = cast("str | None", relation.get("verb"))
+        obj_raw = cast("str | dict[str, Any] | None", relation.get("object"))
+
+        # Ensure presence of the three core pieces
+        if subj_raw is None or verb_raw is None or obj_raw is None:
             return (
                 False,
-                "I am currently in a read-only mode and cannot learn new facts.",
+                "Incomplete fact structure: requires subject, verb, and object.",
             )
 
-        subject = relation.get("subject")
-        verb = relation.get("verb")
-        object_ = relation.get("object")
-        properties = relation.get("properties")
-        if not all([subject, verb, object_]):
-            return (False, "I couldn't understand the structure of that fact.")
+        # Helper to extract a stable string name from either str or {'name': str}
+        def _extract_name(value: str | dict[str, Any]) -> str | None:
+            """Return the name string from either a string or dict, or None if invalid."""
 
-        subject_name_raw = subject.get("name") if isinstance(subject, dict) else subject
-        if not subject_name_raw:
-            return (False, "Could not determine the subject of the fact.")
-        subject_name = subject_name_raw
+            if isinstance(value, dict):
+                name = value.get("name")
+                if isinstance(name, str):
+                    name_clean = name.strip()
+                    if name_clean:
+                        return name_clean
+                return None
 
-        objects_to_process = [object_]
+            # `value` must be str at this point
+            name_clean = value.strip()
+            return name_clean or None
 
-        if not objects_to_process:
-            return (False, "Could not determine the object(s) of the fact.")
+        subject_name = _extract_name(subj_raw)
+        object_name = _extract_name(obj_raw)
+
+        if subject_name is None:
+            return False, "Could not determine the subject of the fact."
+        if object_name is None:
+            return False, "Could not determine the object of the fact."
+
+        # Detect if the object looks like a long descriptive phrase (defer learning)
+        # (this originates from the suggestion: treat multi-word long objects as descriptions)
+        if len(object_name.split()) > 5:
+            truncated = (
+                (object_name[:60] + "...") if len(object_name) > 60 else object_name
+            )
+            msg = f"Deferred learning: The object '{truncated}' appears to be a description, not a concept."
+            logger.warning(msg)
+            return False, msg
+
+        # Phase 2: Process the fact and update the knowledge base
+        # At this point verb_raw is guaranteed non-None and a str by the earlier guard.
+        verb_cleaned = verb_raw.lower().strip()
 
         logger.info(
-            "  [LEARNING: Processing statement: %s -> %s -> %s]",
+            "  [LEARNING]: Processing: %s -> %s -> %s",
             subject_name,
-            verb,
-            objects_to_process,
+            verb_cleaned,
+            object_name,
         )
+
+        # Increment bookkeeping
         self.learning_iterations += 1
 
-        assert verb is not None
-        verb_cleaned = verb.lower().strip()
+        # Add / update concept nodes (these helpers are expected to accept str)
         sub_node = self._add_or_update_concept(subject_name)
+        obj_node = self._add_or_update_concept(object_name)
 
-        learned_at_least_one = False
-
-        for object_name in objects_to_process:
-            if object_name is None:
-                continue
-
-            relation_type = self.get_relation_type(
-                verb_cleaned,
-                subject_name,
-                object_name,
-            )
-            obj_node = self._add_or_update_concept(object_name)
-            if not (sub_node and obj_node):
-                continue
-
-            exclusive_relations = [
-                "has_name",
-                "is_capital_of",
-                "has_capital",
-                "is_located_in",
-            ]
-
-            rel_props = properties if isinstance(properties, dict) else {}
-            candidate_confidence = float(rel_props.get("confidence", 0.95))
-            candidate_provenance = rel_props.get("provenance", "user")
-            candidate_rank = PROVENANCE_RANK.get(candidate_provenance, 0)
-
-            conflict_edge = None
-            if relation_type in exclusive_relations:
-                conflict_edge = self.graph.find_exclusive_conflict(
-                    sub_node,
-                    relation_type,
-                )
-
-            if conflict_edge:
-                existing_confidence = getattr(conflict_edge, "weight", 0.6)
-                existing_prov = conflict_edge.properties.get("provenance", "unknown")
-                existing_rank = PROVENANCE_RANK.get(existing_prov, 0)
-
-                if (candidate_confidence, candidate_rank) > (
-                    existing_confidence,
-                    existing_rank,
-                ):
-                    logger.warning(
-                        "  [Belief Revision]: New fact is stronger. Deprecating old fact.",
-                    )
-                    self.graph.update_edge_properties(
-                        conflict_edge,
-                        {"superseded_by": "new_fact_pending"},
-                    )
-                    self.graph.update_edge_weight(conflict_edge, 0.2)
-
-                    candidate = {
-                        "subject": subject_name,
-                        "verb": relation_type,
-                        "object": object_name,
-                    }
-                    status = validate_and_add_relation(self, candidate, rel_props)
-                    if status in ("inserted", "replaced"):
-                        learned_at_least_one = True
-
-                elif (candidate_confidence, candidate_rank) < (
-                    existing_confidence,
-                    existing_rank,
-                ):
-                    logger.warning(
-                        "  [Belief Revision]: Existing fact is stronger. Rejecting new fact.",
-                    )
-                    continue
-
-                else:
-                    logger.warning(
-                        "  [Belief Revision]: Stalemate detected. Triggering clarification and creating resolution goal.",
-                    )
-
-                    if hasattr(self, "harvester") and self.harvester:
-                        target_node = self.graph.get_node_by_id(conflict_edge.target)
-                        if target_node:
-                            goal = (
-                                f"RESOLVE_CONFLICT: {subject_name} --[{relation_type}]--> {object_name} "
-                                f"vs {target_node.name}"
-                            )
-                            if goal not in self.learning_goals:
-                                self.learning_goals.append(goal)
-                                self.save_state()
-
-                    return (False, "exclusive_conflict")
-                continue
-
-            edge_exists = any(
-                edge.type == relation_type and edge.target == obj_node.id
-                for edge in self.graph.get_edges_from_node(sub_node.id)
+        if not (sub_node and obj_node):
+            return (
+                False,
+                f"Failed to create concepts for '{subject_name}' or '{object_name}'.",
             )
 
-            if not edge_exists:
-                from .universal_interpreter import PropertyData
+        # Determine relation type and attempt to add/resolve
+        relation_type = self.get_relation_type(verb_cleaned, subject_name, object_name)
 
-                interpretation = cast(
-                    "PropertyData",
-                    {
-                        "confidence": candidate_confidence,
-                        "negated": bool(rel_props.get("negated", False)),
-                        "provenance": candidate_provenance,
-                    },
-                )
-                candidate = {
-                    "subject": subject_name,
-                    "verb": relation_type,
-                    "object": object_name,
-                }
-                status = validate_and_add_relation(self, candidate, interpretation)
+        if relation_type in self._EXCLUSIVE_RELATIONS:
+            was_learned, message = self._resolve_exclusive_conflict(
+                sub_node,
+                obj_node,
+                relation_type,
+                relation,
+            )
+        else:
+            was_learned, message = self._add_new_fact(
+                sub_node,
+                obj_node,
+                relation_type,
+                relation,
+            )
 
-                if status in ("inserted", "replaced"):
-                    logger.info(
-                        "    Learned new fact: %s --[%s]--> %s (status=%s)",
-                        sub_node.name,
-                        relation_type,
-                        obj_node.name,
-                        status,
-                    )
-                    learned_at_least_one = True
-                elif status == "deferred":
-                    logger.info(
-                        "    Deferred learning for %s --[%s]--> %s due to unpromoted lexicon entries.",
-                        sub_node.name,
-                        relation_type,
-                        obj_node.name,
-                    )
-                elif status == "contradiction_stored":
-                    logger.warning(
-                        "    Contradiction detected and stored for %s --[%s]--> %s.",
-                        sub_node.name,
-                        relation_type,
-                        obj_node.name,
-                    )
-                else:
-                    logger.debug(
-                        "    validate_and_add_relation returned status='%s' for %s --[%s]--> %s",
-                        status,
-                        sub_node.name,
-                        relation_type,
-                        obj_node.name,
-                    )
-            else:
-                logger.debug(
-                    "    - Fact already exists: %s --[%s]--> %s",
-                    sub_node.name,
-                    relation_type,
-                    obj_node.name,
-                )
+        if not was_learned:
+            return False, message
 
-        if learned_at_least_one:
+        # Phase 3: Commit changes and finalize state
+        # Clear cached multi-hop facts; this attribute is expected to have cache_clear()
+        try:
             self._gather_facts_multihop.cache_clear()
-            logger.info("  [Cache]: Cleared reasoning cache due to new knowledge.")
-            self.save_brain()
-            self.save_state()
-            return (True, "I understand. I have noted that.")
+        except Exception:
+            # Be conservative: do not fail learning if cache clearing isn't available.
+            logger.debug(
+                "  [Cache]: could not clear reasoning cache (missing cache_clear).",
+            )
 
-        return (True, "deferred")
+        logger.info("  [Cache]: Cleared reasoning cache due to new knowledge.")
+        self.save_brain()
+        self.save_state()
+
+        return True, "I understand. I have noted that."
+
+    def _resolve_exclusive_conflict(
+        self,
+        sub_node: ConceptNode,
+        obj_node: ConceptNode,
+        relation_type: str,
+        relation_data: RelationData,
+    ) -> tuple[bool, str]:
+        """Handle belief revision for relationships that must be unique."""
+        conflict_edge = self.graph.find_exclusive_conflict(sub_node, relation_type)
+        if not conflict_edge:
+            return self._add_new_fact(sub_node, obj_node, relation_type, relation_data)
+
+        rel_props = relation_data.get("properties") or {}
+        candidate_confidence = float(rel_props.get("confidence", 0.95))
+        candidate_provenance = rel_props.get("provenance", "user")
+        candidate_rank = PROVENANCE_RANK.get(candidate_provenance, 0)
+        candidate_strength = (candidate_confidence, candidate_rank)
+
+        existing_confidence = getattr(conflict_edge, "weight", 0.6)
+        existing_prov = conflict_edge.properties.get("provenance", "unknown")
+        existing_rank = PROVENANCE_RANK.get(existing_prov, 0)
+        existing_strength = (existing_confidence, existing_rank)
+
+        if candidate_strength > existing_strength:
+            logger.warning(
+                "  [Belief Revision]: New fact is stronger. Deprecating old fact.",
+            )
+            self.graph.update_edge_properties(
+                conflict_edge,
+                {"superseded_by": obj_node.name},
+            )
+            self.graph.update_edge_weight(conflict_edge, 0.2)
+            return self._add_new_fact(sub_node, obj_node, relation_type, relation_data)
+
+        if candidate_strength < existing_strength:
+            logger.warning(
+                "  [Belief Revision]: Existing fact is stronger. Rejecting new fact.",
+            )
+            return (False, "existing_fact_stronger")
+
+        logger.warning(
+            "  [Belief Revision]: Stalemate detected. Triggering clarification.",
+        )
+        if self.harvester:
+            target_node = self.graph.get_node_by_id(conflict_edge.target)
+            if target_node:
+                goal = (
+                    f"RESOLVE_CONFLICT: {sub_node.name} --[{relation_type}]--> {obj_node.name} "
+                    f"vs {target_node.name}"
+                )
+                if goal not in self.learning_goals:
+                    self.learning_goals.append(goal)
+                    self.save_state()
+        return (False, "exclusive_conflict")
+
+    def _add_new_fact(
+        self,
+        sub_node: ConceptNode,
+        obj_node: ConceptNode,
+        relation_type: str,
+        relation_data: RelationData,
+    ) -> tuple[bool, str]:
+        """Add a new, non-conflicting fact to the knowledge graph."""
+        edge_exists = any(
+            edge.type == relation_type and edge.target == obj_node.id
+            for edge in self.graph.get_edges_from_node(sub_node.id)
+        )
+
+        if edge_exists:
+            logger.debug(
+                "    - Fact already exists: %s --[%s]--> %s",
+                sub_node.name,
+                relation_type,
+                obj_node.name,
+            )
+            return (False, "fact_exists")
+
+        from .universal_interpreter import PropertyData
+
+        rel_props = relation_data.get("properties") or {}
+        interpretation = cast(
+            "PropertyData",
+            {
+                "confidence": float(rel_props.get("confidence", 0.95)),
+                "negated": bool(rel_props.get("negated", False)),
+                "provenance": rel_props.get("provenance", "user"),
+            },
+        )
+        candidate = {
+            "subject": sub_node.name,
+            "verb": relation_type,
+            "object": obj_node.name,
+        }
+        status = validate_and_add_relation(self, candidate, interpretation)
+
+        if status in ("inserted", "replaced"):
+            # FIX: Elevate this critical confirmation log to WARNING for high visibility.
+            logger.warning(
+                "    Learned new fact: %s --[%s]--> %s (status=%s)",
+                sub_node.name,
+                relation_type,
+                obj_node.name,
+                status,
+            )
+            return (True, status)
+
+        if status == "deferred":
+            logger.info(
+                "    Deferred learning for %s --[%s]--> %s.",
+                sub_node.name,
+                relation_type,
+                obj_node.name,
+            )
+        elif status == "contradiction_stored":
+            logger.warning(
+                "    Contradiction detected and stored for %s --[%s]--> %s.",
+                sub_node.name,
+                relation_type,
+                obj_node.name,
+            )
+
+        return (False, status)
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.
@@ -1609,74 +1675,52 @@ class CognitiveAgent:
         return RELATION_TYPE_MAP.get(verb, verb.replace(" ", "_"))
 
     def learn_new_fact_autonomously(
-        self,
-        fact_sentence: str,
-        source_topic: str | None = None,
+        self, fact_sentence: str, source_topic: str | None = None
     ) -> bool:
-        """Process and learn a fact from a raw sentence string.
+        """Learns from a sentence by decomposing it into atomic facts and processing them."""
 
-        This is a high-level wrapper used by the KnowledgeHarvester. It
-        takes a raw sentence, sends it to the LLM interpreter, and if a
-        valid factual statement is returned, it passes the structured
-        relation to the main learning processor.
-
-        Args:
-            fact_sentence: A string containing a potential fact to learn.
-
-        Returns:
-            True if a new fact was successfully learned, False otherwise.
-        """
-        if self.inference_mode:
-            logger.info("[Autonomous Learning]: Skipped. Agent is in inference mode.")
-            return False
         logger.info(
             "[Autonomous Learning]: Attempting to learn fact: '%s'",
             fact_sentence,
         )
-        interpretation = self.interpreter.interpret(fact_sentence)
-        relation = interpretation.get("relation")
-        logger.info(
-            "  [Autonomous Learning]: Interpreted Relation: %s",
-            relation,
+
+        # --- START OF CHANGE ---
+        # Use the new decomposition method instead of the old single-relation interpreter.
+        atomic_relations = self.interpreter.decompose_sentence_to_relations(
+            text=fact_sentence, main_topic=source_topic
         )
-        if interpretation.get("intent") == "statement_of_fact" and relation:
-            if source_topic:
-                relation["subject"] = self._clean_phrase(source_topic)
-            was_learned, response_message = self._process_statement_for_learning(
-                relation,
-            )
-            if was_learned:
-                logger.info(
-                    "[Autonomous Learning]: Successfully learned and saved new fact.",
-                )
 
-                if not source_topic:
-                    return False
-
-                lexicon = getattr(self, "lexicon", None)
-                if lexicon is not None and not lexicon.is_known_word(source_topic):
-                    try:
-                        lexicon.promote_word(source_topic)
-                        logger.info(
-                            "  [Lexicon]: Promoted '%s' after successful autonomous learning.",
-                            source_topic,
-                        )
-                    except Exception as e:
-                        logger.warning(
-                            "  [Lexicon]: Could not promote '%s': %s",
-                            source_topic,
-                            e,
-                        )
-
-                return True
+        if not atomic_relations:
             logger.warning(
-                "[Autonomous Learning]: Failed to process fact. Reason: %s",
-                response_message,
+                "  [Autonomous Learning]: Interpreter could not extract any atomic facts from the sentence."
             )
-        else:
-            logger.warning(
-                "[Autonomous Learning]: Could not interpret the sentence as a statement of fact.",
+            return False
+
+        facts_learned_count = 0
+        for relation_data in atomic_relations:
+            # Add default properties if they don't exist
+            props = relation_data.setdefault("properties", {})
+            props.setdefault("confidence", 0.6)
+            props.setdefault("provenance", "llm_decomposition")
+
+            logger.info(
+                "  [Autonomous Learning]: Interpreted Relation: %s", relation_data
             )
+
+            # Use the existing internal learning function for each atomic fact
+            success, _ = self._process_statement_for_learning(relation_data)
+            if success:
+                facts_learned_count += 1
+
+        if facts_learned_count > 0:
+            logger.info(
+                "[Autonomous Learning]: Successfully learned and saved %d new fact(s).",
+                facts_learned_count,
+            )
+            return True
+        logger.warning(
+            "[Autonomous Learning]: Failed to learn any new facts from the decomposed relations."
+        )
         return False
 
     def _add_or_update_concept(
@@ -1770,7 +1814,7 @@ class CognitiveAgent:
         concept_name2: str,
         weight: float = 0.5,
     ) -> None:
-        """Add a structured fact directly to the knowledge graph WITHOUT logging."
+        """Add a structured fact directly to the knowledge graph WITHOUT logging.
 
         Used for high-volume initial brain seeding.
         """

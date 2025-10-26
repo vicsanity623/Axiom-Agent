@@ -1,10 +1,23 @@
+import sys
+from pathlib import Path
+from typing import cast
+
+import pytest
+
+# Ensure src is in sys.path for imports
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 from axiom.cognitive_agent import CognitiveAgent
+from axiom.knowledge_base import validate_and_add_relation
+from axiom.universal_interpreter import PropertyData, RelationData
 
 
-def make_agent(tmp_path):
+# Test helper fixture
+@pytest.fixture
+def agent(tmp_path: Path) -> CognitiveAgent:
+    """Provides a fresh, non-learning CognitiveAgent for testing."""
     brain_file = tmp_path / "brain.json"
     state_file = tmp_path / "state.json"
-    # If file doesn't exist, CognitiveAgent will create a fresh graph (and seed).
     return CognitiveAgent(
         brain_file=brain_file,
         state_file=state_file,
@@ -13,131 +26,124 @@ def make_agent(tmp_path):
     )
 
 
-def test_lexicon_promotion_and_defer(tmp_path):
-    agent = make_agent(tmp_path)
-    # Use lexicon observe to simulate parser seeing a word used as a verb multiple times
-    word = "flim"
-    for _ in range(4):
-        agent.lexicon.observe_word_pos(word, "verb", confidence=0.5)
-    # Attempt to promote (same logic used by code automatically)
-    promoted = (
-        agent.graph.graph.nodes[agent.graph.get_node_by_name(word).id]
-        .get("properties", {})
-        .get("lexical_promoted_as", None)
-    )
-    # Promotion should happen eventually (threshold 0.8 required)
-    assert promoted == "verb"
-
-    # Now assert a fact using that new verb will be accepted (no longer deferred)
-    agent.chat("Bloop flim Blap.")
-    assert agent.graph.get_node_by_name("bloop") is not None
-    assert agent.graph.get_node_by_name("blap") is not None
-
-
-def test_deferred_insertion_low_confidence(tmp_path):
+def test_process_statement_for_learning_success(agent: CognitiveAgent):
     """
-    Statements with unknown words should be deferred, as their concepts are not yet trusted.
+    Tests the happy path: a valid statement with known vocabulary is learned correctly.
     """
-    # GIVEN: A clean agent and two completely unknown words.
-    agent = make_agent(tmp_path)
-    assert agent.graph.get_node_by_name("newwordify") is None
-    assert agent.graph.get_node_by_name("flangdoodle") is None
+    # Arrange: Use unique, novel concepts to ensure the fact does not already exist.
+    subject_word = "axolotl"
+    object_word = "amphibian"
 
-    # WHEN: The agent processes a low-confidence fact containing these unknown words.
-    from typing import cast
-
-    from axiom.universal_interpreter import PropertyData, RelationData
+    # Explicitly promote the words to satisfy the vocabulary check.
+    agent.lexicon.promote_word(subject_word, "noun")
+    agent.lexicon.promote_word(object_word, "noun")
 
     relation = RelationData(
-        subject="newwordify",
+        subject=subject_word,
         verb="is_a",
-        object="flangdoodle",
-        properties=cast("PropertyData", {"confidence": 0.3, "provenance": "user"}),
-    )
-    ok, msg = agent._process_statement_for_learning(relation)
-
-    # --- THIS IS THE FIX ---
-    # THEN: The learning process should successfully IDENTIFY the situation as a deferral.
-    # We no longer check `ok is False`. We check the specific message.
-    assert msg == "deferred", f"Expected 'deferred' status, but got '{msg}'."
-    # --- END OF FIX ---
-
-    # AND: The edge should NOT have been created in the graph.
-    src = agent.graph.get_node_by_name("newwordify")
-    tgt = agent.graph.get_node_by_name("flangdoodle")
-    assert src is not None, "Node for the subject should have been created."
-    assert tgt is not None, "Node for the object should have been created."
-
-    edges = agent.graph.get_edges_from_node(src.id)
-    assert not any(e.target == tgt.id and e.type == "is_a" for e in edges), (
-        "The relation should have been deferred, not added to the graph."
+        object=object_word,
+        properties=cast("PropertyData", {"confidence": 0.9, "provenance": "user"}),
     )
 
+    # Act
+    was_learned, message = agent._process_statement_for_learning(relation)
 
-def test_auto_promotion_insertion_high_confidence(tmp_path):
+    # Assert
+    assert was_learned is True, f"Learning failed unexpectedly with message: {message}"
+    assert message == "I understand. I have noted that."
+
+    src_node = agent.graph.get_node_by_name(subject_word)
+    tgt_node = agent.graph.get_node_by_name(object_word)
+    assert src_node is not None
+    assert tgt_node is not None
+
+    edges = agent.graph.get_edges_from_node(src_node.id)
+    assert any(e.target == tgt_node.id and e.type == "is_a" for e in edges)
+
+
+def test_validate_and_add_relation_defers_unknown_words(agent: CognitiveAgent):
     """
-    High-confidence definitional statements should auto-promote their words and be inserted immediately.
+    Given a relation containing unknown words, validate_and_add_relation
+    should return 'deferred' and create new INVESTIGATE goals.
     """
-    # GIVEN: A clean agent and two unknown words.
-    agent = make_agent(tmp_path)
-    assert agent.graph.get_node_by_name("blorptufts") is None
-    assert agent.graph.get_node_by_name("feathermass") is None
+    # Arrange
+    assert not agent.lexicon.is_known_word("newwordify")
 
-    # WHEN: The agent learns a high-confidence definitional fact.
-    from typing import cast
-
-    from axiom.universal_interpreter import PropertyData, RelationData
-
-    relation = RelationData(
-        subject="blorptufts",
-        verb="is_a",
-        object="feathermass",
-        properties=cast(
-            "PropertyData",
-            {"confidence": 0.95, "provenance": "llm_verified"},
-        ),
-    )
-    ok, msg = agent._process_statement_for_learning(relation)
-
-    # THEN: The learning operation should succeed.
-    assert ok is True, (
-        f"Expected a successful learning status, but got False with message: '{msg}'."
-    )
-    assert msg == "I understand. I have noted that.", (
-        "The success message is incorrect."
-    )
-
-    # AND: The edge should now exist in the knowledge graph.
-    src = agent.graph.get_node_by_name("blorptufts")
-    tgt = agent.graph.get_node_by_name("feathermass")
-    assert src is not None
-    assert tgt is not None
-
-    edges = agent.graph.get_edges_from_node(src.id)
-    found = any(e.target == tgt.id and e.type == "is_a" for e in edges)
-    assert found, (
-        "The expected edge 'blorptufts --[is_a]--> feathermass' was not found in the graph."
-    )
-
-
-def test_contradiction_storage(tmp_path):
-    agent = make_agent(tmp_path)
-    # Add a base fact as user (high confidence)
-    agent.chat("Paris is the capital of France.")
-    # Now add contradictory fact with low confidence
-    relation = {
-        "subject": "paris",
-        "verb": "is_capital_of",
-        "object": "germany",
-        "properties": {"confidence": 0.6, "provenance": "llm"},
+    relation_dict = {
+        "subject": "newwordify",
+        "verb": "is_a",
+        "object": "flangdoodle",
     }
+    properties = cast("PropertyData", {"confidence": 0.3, "provenance": "user"})
 
-    from axiom.knowledge_base import validate_and_add_relation
+    # Act
+    status = validate_and_add_relation(agent, relation_dict, properties)
 
-    status = validate_and_add_relation(
-        agent,
-        relation,
-        {"confidence": 0.6, "source": "llm"},
+    # Assert
+    assert status == "deferred"
+    assert "INVESTIGATE: newwordify" in agent.learning_goals
+    assert "INVESTIGATE: flangdoodle" in agent.learning_goals
+
+
+def test_belief_revision_rejects_weaker_fact(agent: CognitiveAgent):
+    """
+    Tests that the agent correctly rejects a new, weaker fact that conflicts
+    with a stronger, existing exclusive fact.
+    """
+    # Arrange: Teach a high-confidence "seed" fact.
+    agent.lexicon.promote_word("france", "noun")  # Promote words for this test
+    agent.lexicon.promote_word("paris", "noun")
+    agent.lexicon.promote_word("lyon", "noun")
+
+    initial_fact = RelationData(
+        subject="france",
+        verb="has_capital",
+        object="paris",
+        properties=cast("PropertyData", {"confidence": 1.0, "provenance": "seed"}),
     )
+    agent._process_statement_for_learning(initial_fact)
 
-    assert status in ("contradiction_stored", "deferred", "inserted")
+    # Act: Attempt to learn a weaker, conflicting fact.
+    conflicting_fact = RelationData(
+        subject="france",
+        verb="has_capital",
+        object="lyon",
+        properties=cast("PropertyData", {"confidence": 0.8, "provenance": "user"}),
+    )
+    was_learned, message = agent._process_statement_for_learning(conflicting_fact)
+
+    # Assert: The new fact was not learned, and the correct reason was given.
+    assert was_learned is False
+    assert message == "existing_fact_stronger"
+
+
+def test_belief_revision_handles_stalemate(agent: CognitiveAgent):
+    """
+    Tests that learning a conflicting fact of equal strength triggers a
+    stalemate and signals for clarification.
+    """
+    # Arrange: Teach a user-provided fact.
+    agent.lexicon.promote_word("france", "noun")  # Promote words for this test
+    agent.lexicon.promote_word("paris", "noun")
+    agent.lexicon.promote_word("lyon", "noun")
+
+    initial_fact = RelationData(
+        subject="france",
+        verb="has_capital",
+        object="paris",
+        properties=cast("PropertyData", {"confidence": 0.8, "provenance": "user"}),
+    )
+    agent._process_statement_for_learning(initial_fact)
+
+    # Act: Attempt to learn a conflicting fact of the exact same strength.
+    conflicting_fact = RelationData(
+        subject="france",
+        verb="has_capital",
+        object="lyon",
+        properties=cast("PropertyData", {"confidence": 0.8, "provenance": "user"}),
+    )
+    was_learned, message = agent._process_statement_for_learning(conflicting_fact)
+
+    # Assert: The new fact was not learned, and the stalemate was correctly identified.
+    assert was_learned is False
+    assert message == "exclusive_conflict"

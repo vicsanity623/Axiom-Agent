@@ -46,7 +46,11 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
         scheduler = BackgroundScheduler(daemon=True)
         manager = CycleManager(scheduler, harvester, metacognitive_engine)
 
-        axiom_agent.goal_manager.add_goal("Understand the basics of photosynthesis")
+        axiom_agent.goal_manager.add_goal(
+            "[Stage 1: Foundational Vocabulary]: Learn the core concepts of conversation, including turn-taking, intent, and context. "
+            "[Stage 2: Structural Analysis]: Analyze conversation transcripts to identify and label the stages and patterns of dialogue. "
+            "[Stage 3: Pragmatic Synthesis]: Practice generating contextually appropriate responses that demonstrate understanding of user intent and emotional state."
+        )
 
         manager.start()
         scheduler.start()

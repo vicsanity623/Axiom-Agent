@@ -1,8 +1,15 @@
 # pyproject.toml
 
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+package = true
+
 [project]
 name = "axiom"
-version = "0.5.1"
+version = "0.5.4"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
@@ -11,27 +18,29 @@ readme = {file = "README.md", content-type = "text/markdown"}
 license = {file = "LICENSE"}
 requires-python = ">=3.11"
 dependencies = [
-    "tqdm",
     "APScheduler",
     "Flask",
+    "gradio",
+    "google-generativeai",
     "llama-cpp-python",
     "networkx~=3.5.0",
     "nltk",
-    "requests",
-    "wikipedia",
-    "thefuzz>=0.22.1",
     "python-Levenshtein>=0.25.1",
+    "requests",
+    "rich",
+    "thefuzz>=0.22.1",
+    "tqdm",
+    "typer",
+    "wikipedia",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "ruff>=0.9.2",
     "mypy>=1.18.1",
-    "pytest>=6.0.0",
-    "pytest-cov>=6.0.0",
-    # Moving ngrok here as it's a dev/optional feature
     "pyngrok",
-    # Typing
+    "pytest-cov>=6.0.0",
+    "pytest>=6.0.0",
+    "ruff>=0.9.2",
     "types-requests",
 ]
 
@@ -76,6 +85,7 @@ select = [
 ]
 extend-ignore = [
     "E501",   # line-too-long
+    "COM812",
 ]
 
 [tool.mypy]

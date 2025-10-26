@@ -1,11 +1,9 @@
-# in tests/conftest.py
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
 import pytest
 
-# Move all application imports into the TYPE_CHECKING block.
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -59,7 +57,6 @@ class MockUniversalInterpreter:
         return str(structured_facts)
 
     def interpret(self, user_input: str) -> InterpretData | None:
-        # Must import here because the type is only available in TYPE_CHECKING
         from axiom.universal_interpreter import InterpretData
 
         if "gibberish" in user_input:
@@ -78,7 +75,6 @@ def agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
     """
     A globally available fixture that creates a fresh, clean CognitiveAgent.
     """
-    # We must import the real class at runtime inside the fixture
     from axiom.cognitive_agent import CognitiveAgent
 
     monkeypatch.setattr(
@@ -95,7 +91,6 @@ def blank_agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
     """
     A fixture that provides a CognitiveAgent with a COMPLETELY EMPTY brain.
     """
-    # We must import the real class at runtime inside the fixture
     from axiom.cognitive_agent import CognitiveAgent
 
     monkeypatch.setattr(
