@@ -17,6 +17,7 @@ This project and everyone participating in it are governed by a standard **Code 
 ## ⚙️ Development Environment Setup
 
 The project now uses **[uv](https://github.com/astral-sh/uv)** for environment and dependency management, replacing traditional `pip` and `setup.sh` workflows.
+**uv lockfile has been updated as of 10/25/2025**
 
 ### 1️⃣ Clone the Repository
 
