@@ -26,7 +26,8 @@ class CycleManager:
         self.harvester = harvester
         self.metacognitive_engine = metacognitive_engine
         self.LEARNING_PHASE_DURATION = timedelta(hours=2)
-        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=30)
+        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=45)
+        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=9)
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
 
@@ -39,13 +40,6 @@ class CycleManager:
             "interval",
             minutes=1,
             id="cycle_manager_job",
-        )
-
-        self.scheduler.add_job(
-            self.metacognitive_engine.run_introspection_cycle,
-            "interval",
-            hours=2.5,
-            id="metacognitive_cycle_job",
         )
 
     def _manage_phases(self) -> None:
@@ -63,28 +57,33 @@ class CycleManager:
             self.current_phase == "refinement"
             and elapsed_time >= self.REFINEMENT_PHASE_DURATION
         ):
+            self._start_metacognitive_phase()
+        elif (
+            self.current_phase == "metacognitive"
+            and elapsed_time >= self.METACOGNITIVE_PHASE_DURATION
+        ):
             self._start_learning_phase()
 
     def _clear_all_jobs(self) -> None:
         """Remove all existing cognitive cycle jobs from the scheduler."""
         for job in self.scheduler.get_jobs():
-            if job.id not in ["cycle_manager_job", "metacognitive_cycle_job"]:
+            if job.id not in ["cycle_manager_job"]:
                 job.remove()
 
     def _start_learning_phase(self) -> None:
         """Configure the scheduler to run the Learning Phase cycles."""
-        logger.info("--- [CYCLE MANAGER]: Starting 2-hour LEARNING phase. ---")
+        logger.info("--- [CYCLE MANAGER]: Starting 3-hour LEARNING phase. ---")
         self._clear_all_jobs()
         self.scheduler.add_job(
             self.harvester.study_cycle,
             "interval",
-            minutes=6.5,
+            minutes=5.5,
             id="study_cycle_job",
         )
         self.scheduler.add_job(
             self.harvester.discover_cycle,
             "interval",
-            minutes=30,
+            minutes=20,
             id="discover_cycle_job",
         )
         self.current_phase = "learning"
@@ -92,13 +91,28 @@ class CycleManager:
 
     def _start_refinement_phase(self) -> None:
         """Configure the scheduler to run the Refinement Phase cycles."""
-        logger.info("--- [CYCLE MANAGER]: Starting 30-min REFINEMENT phase. ---")
+        logger.info("--- [CYCLE MANAGER]: Starting 1-hour REFINEMENT phase. ---")
         self._clear_all_jobs()
         self.scheduler.add_job(
             self.harvester.refinement_cycle,
             "interval",
-            minutes=4,
+            minutes=9,
             id="refinement_cycle_job",
         )
+
         self.current_phase = "refinement"
+        self.phase_start_time = datetime.now()
+
+    def _start_metacognitive_phase(self) -> None:
+        """Configure the scheduler to run the Metacognitive Phase cycles."""
+        logger.info("--- [CYCLE MANAGER]: Starting 1-hour METACOGNITIVE phase. ---")
+        self._clear_all_jobs()
+        self.scheduler.add_job(
+            self.metacognitive_engine.run_introspection_cycle,
+            "interval",
+            minutes=5.2,
+            id="metacognitive_cycle_job",
+        )
+
+        self.current_phase = "metacognitive"
         self.phase_start_time = datetime.now()

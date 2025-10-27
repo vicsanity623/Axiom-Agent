@@ -1582,23 +1582,20 @@ class CognitiveAgent:
             )
             return (False, "fact_exists")
 
-        from .universal_interpreter import PropertyData
-
         rel_props = relation_data.get("properties") or {}
-        interpretation = cast(
-            "PropertyData",
-            {
-                "confidence": float(rel_props.get("confidence", 0.95)),
-                "negated": bool(rel_props.get("negated", False)),
-                "provenance": rel_props.get("provenance", "user"),
-            },
-        )
         candidate = {
             "subject": sub_node.name,
             "verb": relation_type,
             "object": obj_node.name,
         }
-        status = validate_and_add_relation(self, candidate, interpretation)
+        caller_name = f"{self.__class__.__name__}._add_new_fact"
+
+        status = validate_and_add_relation(
+            self,
+            dict(candidate),
+            rel_props,
+            caller_name=caller_name,
+        )
 
         if status in ("inserted", "replaced"):
             logger.warning(

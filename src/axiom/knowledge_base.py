@@ -843,6 +843,7 @@ def validate_and_add_relation(
     agent: CognitiveAgent,
     relation: dict,
     properties: PropertyData | dict | None = None,
+    caller_name: str | None = None,
 ) -> str:
     """
     Validate a relation and add it to the graph. If vocabulary is missing,
@@ -860,9 +861,11 @@ def validate_and_add_relation(
     ]
 
     if unknown_words:
+        log_context = f" (in {caller_name})" if caller_name else ""
         logger.warning(
-            "Validation failed: Found unknown words in concepts: %s",
+            "Validation failed: Found unknown words in concepts: %s%s",
             unknown_words,
+            log_context,
         )
         for word in unknown_words:
             goal = f"INVESTIGATE: {word}"
@@ -878,7 +881,7 @@ def validate_and_add_relation(
     if not (sub_node and obj_node):
         return "error_creating_nodes"
 
-    new_conf = float(props.get("confidence", 0.6))
+    new_conf = float(props.get("confidence", 0.95))
     new_neg = bool(props.get("negated", False))
     new_provenance = props.get("provenance", "user")
 

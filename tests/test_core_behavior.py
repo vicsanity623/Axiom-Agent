@@ -1,10 +1,7 @@
-import sys
 from pathlib import Path
 from typing import cast
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.knowledge_base import validate_and_add_relation

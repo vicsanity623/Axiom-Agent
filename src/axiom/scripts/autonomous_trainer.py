@@ -47,9 +47,12 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
         manager = CycleManager(scheduler, harvester, metacognitive_engine)
 
         axiom_agent.goal_manager.add_goal(
-            "[Stage 1: Foundational Vocabulary]: Learn the core concepts of conversation, including turn-taking, intent, and context. "
-            "[Stage 2: Structural Analysis]: Analyze conversation transcripts to identify and label the stages and patterns of dialogue. "
-            "[Stage 3: Pragmatic Synthesis]: Practice generating contextually appropriate responses that demonstrate understanding of user intent and emotional state."
+            "Achieve deep language comprehension by mastering the foundational layers of human communication, from basic word components to complex contextual reasoning. "
+            "[Stage 1: Linguistic Foundations]: Learn the atomic components of language, including the building blocks of words and their origins, to create a robust vocabulary. "
+            "[Stage 2: Grammatical Structure]: Master the rules of syntax to parse sentences and identify the grammatical role of each word and phrase. "
+            "[Stage 3: Semantic Interpretation]: Learn to extract the literal meaning (semantics) of sentences by analyzing the relationships between their grammatical components. "
+            "[Stage 4: Pragmatic Comprehension]: Develop the ability to infer the user's true goal and intent by analyzing the context (pragmatics) surrounding their literal words. "
+            "[Stage 5: World Knowledge Integration]: Ground linguistic understanding in a foundational model of the world, enabling the verification of facts and common-sense reasoning."
         )
 
         manager.start()
