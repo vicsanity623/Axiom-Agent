@@ -1,14 +1,14 @@
 # 🧠 Contributing to the Axiom Agent
 
-Thank you for your interest in contributing to **Axiom Agent** — this is not just another chatbot; it’s an exploration into a new kind of **symbolic-first cognitive architecture**. By contributing, you’re helping to cultivate a mind and push the boundaries of what AI can become.
+Thank you for your interest in contributing to **Axiom Agent**! This is not just another chatbot; it’s an exploration into a new kind of **symbolic-first cognitive architecture** designed for genuine, self-directed learning. By contributing, you are helping to cultivate an artificial mind and push the boundaries of what AI can become.
 
-We welcome all contributions — from bug fixes and documentation to deep architectural work.
+We welcome all contributions, from documentation and bug fixes to deep architectural enhancements.
 
 ---
 
 ## 📜 Code of Conduct
 
-This project and everyone participating in it are governed by a standard **Code of Conduct**. By participating, you agree to uphold this code.
+This project and everyone participating in it are governed by our **Code of Conduct**. By participating, you agree to uphold this code.
 
 ➡️ Please read our [**CODE_OF_CONDUCT.md**](CODE_OF_CONDUCT.md) before contributing.
 
@@ -16,8 +16,7 @@ This project and everyone participating in it are governed by a standard **Code 
 
 ## ⚙️ Development Environment Setup
 
-The project now uses **[uv](https://github.com/astral-sh/uv)** for environment and dependency management, replacing traditional `pip` and `setup.sh` workflows.
-**uv lockfile has been updated as of 10/25/2025**
+The project uses **[uv](https://github.com/astral-sh/uv)** for fast and reliable environment and dependency management.
 
 ### 1️⃣ Clone the Repository
 
@@ -28,104 +27,124 @@ cd Axiom-Agent
 
 ### 2️⃣ Create and Sync the Environment
 
-Use `uv` to create the virtual environment and install dependencies in one step:
+Use `uv` to create a virtual environment and install all necessary dependencies in one command:
 
 ```bash
 uv sync --extra dev
 ```
 
-This automatically creates a `.venv` in the project root and installs:
-*   Core runtime dependencies (Axiom itself as an editable package).
-*   Development tools (`ruff`, `mypy`, `pytest`, etc.).
+This command automatically creates a `.venv` directory and performs two critical actions:
+1.  Installs all core and development dependencies (`ruff`, `mypy`, `pytest`).
+2.  Installs the `axiom` package itself in **editable mode** (`-e`), which means changes you make in the `src/` directory are immediately available when you run any scripts.
 
-> 💡 You no longer need to run `setup.sh` — `uv sync` handles everything.
+> 💡 **Important:** You no longer need `setup.sh` or manual `sys.path` modifications in your tests. The editable install handles everything.
 
-To activate the environment manually if you open a new terminal:
+To activate the environment in a new terminal:
 ```bash
 source .venv/bin/activate
 ```
 
-### 3️⃣ Verify Installation
+### 3️⃣ Download the Local LLM
 
-You can confirm that the Axiom CLI is working by checking the version:
+The agent's `UniversalInterpreter` relies on a local GGUF-formatted language model (large context window). You can download the recommended model using the built-in CLI command:
+
 ```bash
-axiom --version
+axiom-llm
 ```
+This will download the model to the `models/` directory.
 
 ---
 
-## 🧩 Development Workflow
+## 🧩 The Development Workflow: "Train, Observe, Improve"
 
 Axiom follows a **Check → Code → Check → Submit** workflow.
 
-### ✅ 1. Run Quality Checks
+### ✅ 1. Run the Quality Gate
 
-Before and after making changes, run the master check script:
+Before committing any changes, and after you've finished your work, always run the master quality script. This is the same script our CI pipeline uses.
+
 ```bash
 ./check.sh
 ```
-This script runs:
-*   `ruff format` → Automatic code formatting
-*   `ruff check` → Linting and static analysis
-*   `mypy` → Static type checking
-*   `pytest` → The full unit test suite with coverage
+This script ensures your code is compliant by running:
+*   `ruff format --check` → Code Formatting
+*   `ruff check` → Linting & Static Analysis
+*   `mypy` → Strict Static Type Checking
+*   `pytest` → The Full Unit & Integration Test Suite
 
-> If all checks pass, your environment and code are good to go.
+> **A passing `./check.sh` is a mandatory requirement for all pull requests.**
 
-### 💻 2. Develop and Test Using the CLI
+### 🧠 2. Run the Agent & Observe its Behavior
 
-Axiom exposes a unified command-line interface for all primary operations.
+The primary way to develop and test Axiom is to run its autonomous training process and observe its "thought process" in the logs.
 
-| Command                  | Description                                                  |
-| ------------------------ | ------------------------------------------------------------ |
-| `axiom train`            | Run the agent’s autonomous learning cycles.                  |
-| `axiom webui`            | Launch the Gradio-based interactive web UI.                  |
-| `axiom teach`            | Teach the agent facts directly via the terminal.             |
-| `axiom visualize`        | Generate an interactive HTML visualization of the brain.     |
-| `axiom llm`              | Download the recommended local LLM model.                    |
-| `rm -f src/axiom/brain/*`| **Deletes the current brain** for a clean testing session.   |
+| Command | Description |
+|---|---|
+| `axiom-train` | **(Primary Workflow)** Starts the agent's autonomous learning cycles. |
+| `axiom-webui` | Launches an interactive web UI to chat with the agent. |
+| `axiom-teach` | Teach the agent facts directly via the terminal. |
+| `axiom-render` | Generate a snapshot of the brain (axiom.axm)for inference chat used in axiom-webui. |
 
-For a clean testing session, you can reset the symbolic brain:
-```bash
-rm -f src/axiom/brain/*
-```
+**Typical Debugging Session:**
+
+1.  **Start with a clean slate:**
+    ```bash
+    # This command safely removes only the agent's brain and state files.
+    rm -f src/axiom/brain/* data/*
+    ```
+2.  **Run the trainer and watch the logs:**
+    ```bash
+    axiom-train
+    ```
+3.  **Make your code changes** in a separate terminal.
+4.  **Restart the trainer** to see how your changes affect the agent's learning behavior.
+
+### 🤖 3. Working with the Metacognitive Engine
+
+Axiom's most advanced feature is its ability to analyze its own performance and suggest improvements. After a `MetacognitiveEngine` cycle, it generates a `code_suggestion.json` file.
+
+To apply a suggestion:
+1.  **Extract the code:** A utility script is provided to cleanly extract the suggested code.
+    ```bash
+    ./extract_suggestion.py
+    ```
+2.  **Review the diff:** This creates a `code.py` file. Use your IDE or `diff` to compare it with the original source file.
+3.  **Apply and commit:** If you approve (CODE REVIEW the `suggested_solution` is a MUST!! as LLMs can and will usually make mistakes), manually copy the new code into the project, run `./check.sh` one last time, restart `axiom-train`, verify stability and improvements and finally commit the change.
 
 ---
 
 ## 🚀 How to Contribute
 
-We’re currently in **Phase 5: Semantic Mastery** — improving how the agent represents, reasons about, and verifies knowledge.
+We are currently in **Phase 5: Semantic Mastery**. Our focus is on deepening the agent's understanding of language nuance and complex relationships.
 
-### Your First Contribution: Adding Knowledge Provenance
+### Your First Contribution: Enhance the `_clean_phrase` function
 
-A great first contribution is implementing **knowledge provenance**, tracking *where* a fact came from. This is the first goal of the current roadmap phase.
+A great first contribution is to improve the agent's ability to normalize concepts. The `_clean_phrase` method in `cognitive_agent.py` is responsible for cleaning text before it becomes a concept in the knowledge graph. It currently handles parentheses but could be much more robust.
 
 **Steps:**
 
 1.  Fork the repository and create a branch:
     ```bash
-    git checkout -b feature/knowledge-provenance
+    git checkout -b feature/robust-phrase-cleaning
     ```
-2.  Modify the `RelationshipEdge` in `src/axiom/graph_core.py` to include `provenance: str` in its properties.
-3.  Update methods like `validate_and_add_relation()` and `learn_new_fact_autonomously()` to accept and store this provenance value (e.g., `"dictionary_api"`, `"llm_decomposition"`).
-4.  Add or update tests under `tests/` to verify that provenance is correctly saved and retrieved.
-5.  Run `./check.sh` and ensure all checks pass.
-6.  Submit a Pull Request with a clear description of your work.
+2.  Locate the `_clean_phrase` method in `src/axiom/cognitive_agent.py`.
+3.  **Add new logic** to handle other cases, such as removing possessives (e.g., `"word's"` → `"word"`) or stripping leading/trailing articles more effectively.
+4.  **Add a new test** to `tests/test_core_behavior.py` that specifically validates your new cleaning logic.
+5.  Run `./check.sh` to ensure all checks pass.
+6.  Submit a Pull Request with a clear description of the improvement.
 
 ---
 
 ## 🪜 General Contribution Process
 
 1.  **Read the Roadmap:** See the current phase in [**ROADMAP.md**](ROADMAP.md).
-2.  **Find or Propose a Task:** Choose an issue or open a new one.
-3.  **Fork and Branch:** Use a descriptive branch name, e.g., `fix/memory-leak` or `feature/concept-merging`.
-4.  **Test & Check:** Run all local checks and tests.
-5.  **Submit a Pull Request:** Include details on what and why you changed.
+2.  **Find or Propose a Task:** Choose an issue or open a new one to discuss your idea.
+3.  **Fork and Branch:** Use a descriptive branch name (e.g., `fix/memory-leak`, `feature/concept-merging`).
+4.  **Code & Test:** Make your changes and ensure you add or update tests to cover them. (source code currently at `60%+ total coverage` as of `Oct, 27, 2025`)
+5.  **Check & Submit:** Run `./check.sh` and then submit a Pull Request with details on what you changed and why.
 
 ---
 
 ## ❤️ Thank You
 
-Every contribution — no matter the size — helps Axiom grow toward its goal: a system capable of autonomous, interpretable, self-directed learning.
-
-Together, we’re building something truly extraordinary.
+Every contribution helps Axiom grow toward its goal: a system capable of autonomous, interpretable, and self-directed learning. Together, we’re building something truly extraordinary.

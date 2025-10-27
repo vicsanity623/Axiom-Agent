@@ -10,8 +10,8 @@ As a rapidly evolving project, security updates are only provided for the most r
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.4.0   | :white_check_mark: |
-| < 0.3   | :x:                |
+| 0.5.5   | :white_check_mark: |
+| < 0.4   | :x:                |
 
 ## Reporting a Vulnerability
 

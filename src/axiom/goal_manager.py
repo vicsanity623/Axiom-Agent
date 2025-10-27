@@ -87,7 +87,11 @@ class GoalManager:
             "parent_goal": None,
         }
         self.goals[main_goal_id] = main_goal
-        logger.info("New multi-stage goal added: '%s'", main_description)
+        logger.info(
+            "New multi-stage goal added: '%s' with %d stages.",
+            main_description,
+            len(stages),
+        )
 
         stage_goals: list[Goal] = []
         for i, (stage_name, stage_desc) in enumerate(stages):

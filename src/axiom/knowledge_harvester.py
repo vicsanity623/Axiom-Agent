@@ -6,7 +6,8 @@ import random
 import re
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Final
 from urllib.parse import quote
 
 import requests
@@ -25,6 +26,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
+RESEARCH_CACHE_PATH: Final = Path("data/research_cache.json")
 
 
 class LogColors:
@@ -35,6 +37,15 @@ class LogColors:
 
 
 class KnowledgeHarvester:
+    __slots__ = (
+        "agent",
+        "lock",
+        "lemmatizer",
+        "rejected_topics",
+        "cache_path",
+        "researched_terms",
+    )
+
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
         """Initialize the KnowledgeHarvester.
 
@@ -46,7 +57,50 @@ class KnowledgeHarvester:
         self.lock = lock
         self.lemmatizer = WordNetLemmatizer()
         self.rejected_topics: set[str] = set()
+        self.cache_path = RESEARCH_CACHE_PATH
+        self.researched_terms: set[str] = set()
+        self._load_research_cache()
         print("[Knowledge Harvester]: Initialized.")
+
+    def _load_research_cache(self) -> None:
+        """Load the set of researched terms from a JSON file."""
+        if not self.cache_path.exists():
+            logger.info("[Harvester Cache]: No research cache found. Starting fresh.")
+            return
+        try:
+            with self.cache_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    self.researched_terms = set(data)
+                    logger.info(
+                        "[Harvester Cache]: Loaded %d previously researched terms.",
+                        len(self.researched_terms),
+                    )
+                else:
+                    logger.warning(
+                        "[Harvester Cache]: Cache file is malformed; starting fresh."
+                    )
+        except (OSError, json.JSONDecodeError) as e:
+            logger.error(
+                "[Harvester Cache]: Failed to load research cache: %s. Starting fresh.",
+                e,
+            )
+            self.researched_terms = set()
+
+    def _save_research_cache(self) -> None:
+        """Save the current set of researched terms to a JSON file."""
+        try:
+            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.cache_path.open("w", encoding="utf-8") as f:
+                json.dump(list(self.researched_terms), f, indent=4)
+        except OSError as e:
+            logger.error("[Harvester Cache]: Failed to save research cache: %s", e)
+
+    def _mark_as_researched(self, term: str) -> None:
+        """Add a term to the research memory and save to disk."""
+        if term not in self.researched_terms:
+            self.researched_terms.add(term)
+            self._save_research_cache()
 
     def discover_cycle(self) -> None:
         """Run one full discovery cycle to find a new topic to learn.
@@ -83,6 +137,19 @@ class KnowledgeHarvester:
         if not match:
             return False
         term_to_learn = match.group(1).lower()
+
+        if (
+            self.agent.lexicon.is_known_word(term_to_learn)
+            or term_to_learn in self.researched_terms
+        ):
+            logger.info(
+                "[Study Cycle]: Skipping '%s' — already known or researched in previous cycles.",
+                term_to_learn,
+            )
+            with self.lock:
+                if goal in self.agent.learning_goals:
+                    self.agent.learning_goals.remove(goal)
+            return True
 
         logger.info(
             "[Study Cycle]: Prioritizing learning goal: To define '%s'.",
@@ -135,6 +202,8 @@ class KnowledgeHarvester:
                             self.agent.learning_goals.remove(goal)
                     return True
 
+                self._mark_as_researched(term_to_learn)
+
         if is_single_word:
             logger.info(
                 "  [Study Cycle]: Dictionary API failed for '%s'. Falling back to web search.",
@@ -186,17 +255,17 @@ class KnowledgeHarvester:
     def study_cycle(self) -> None:
         """
         Run one full study cycle, driven by the GoalManager's strategic plan.
-        This refactored version is explicitly plan-driven, ensuring that it
-        respects the sequential stages of complex, hierarchical goals.
+        This version is resilient, deprioritizing failed tasks and removing them
+        from the current plan to prevent infinite loops.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("\n--- [Study Cycle Started at %s] ---", timestamp)
 
         active_goal = self.agent.goal_manager.get_active_goal()
+        caller_name = f"{self.__class__.__name__}.study_cycle"
 
         if active_goal:
             logger.info(">> Working on active plan: '%s'", active_goal["description"])
-
             task_to_resolve = next(
                 (
                     sg
@@ -212,37 +281,39 @@ class KnowledgeHarvester:
 
                 if not resolved:
                     logger.warning(
-                        "Failed to resolve planned task '%s'. Removing from queue.",
+                        "Failed to resolve planned task '%s'. Deprioritizing and removing from current plan. (in %s)",
                         task_to_resolve,
+                        caller_name,
                     )
                     with self.lock:
                         if task_to_resolve in self.agent.learning_goals:
                             self.agent.learning_goals.remove(task_to_resolve)
+                            self.agent.learning_goals.append(task_to_resolve)
+
+                        if task_to_resolve in active_goal["sub_goals"]:
+                            active_goal["sub_goals"].remove(task_to_resolve)
 
                 self.agent.goal_manager.check_goal_completion(active_goal["id"])
             else:
                 logger.info(
-                    "No pending tasks found for active goal '%s'. Triggering completion check.",
+                    "No pending tasks for active goal '%s'. Triggering completion check.",
                     active_goal["description"],
                 )
                 self.agent.goal_manager.check_goal_completion(active_goal["id"])
-
         else:
             logger.info("No active plan. Checking for opportunistic learning tasks.")
             if self.agent.learning_goals:
                 opportunistic_task = self.agent.learning_goals[0]
-                logger.info(
-                    "  - Attempting opportunistic task: '%s'", opportunistic_task
-                )
-
                 if not self._resolve_investigation_goal(opportunistic_task):
                     logger.warning(
-                        "Failed to resolve opportunistic task '%s'. Removing from queue.",
+                        "Failed to resolve opportunistic task '%s'. Deprioritizing. (in %s)",
                         opportunistic_task,
+                        caller_name,
                     )
                     with self.lock:
                         if opportunistic_task in self.agent.learning_goals:
                             self.agent.learning_goals.remove(opportunistic_task)
+                            self.agent.learning_goals.append(opportunistic_task)
             else:
                 logger.info(
                     "Learning queue is empty. Attempting to deepen existing knowledge."
@@ -272,12 +343,10 @@ class KnowledgeHarvester:
             print(
                 f"  [Refinement]: Found a chunky fact to refine: '{source_node.name}' --[{edge.type}]--> '{target_node.name}'",
             )
-
             atomic_sentences = self.agent.interpreter.break_down_definition(
                 subject=source_node.name,
                 chunky_definition=target_node.name,
             )
-
             if atomic_sentences:
                 print(
                     f"  [Refinement]: Decomposed into {len(atomic_sentences)} new atomic facts.",
@@ -285,31 +354,57 @@ class KnowledgeHarvester:
                 for sentence in atomic_sentences:
                     with self.lock:
                         self.agent.learn_new_fact_autonomously(sentence)
-
                 with self.lock:
                     graph_edge = self.agent.graph.graph[edge.source][edge.target]
-                    key_to_modify = None
-                    for key, data in graph_edge.items():
-                        if data.get("type") == edge.type:
-                            key_to_modify = key
-                            break
-
+                    key_to_modify = next(
+                        (
+                            key
+                            for key, data in graph_edge.items()
+                            if data.get("type") == edge.type
+                        ),
+                        None,
+                    )
                     if key_to_modify is not None:
                         self.agent.graph.graph[edge.source][edge.target][key_to_modify][
                             "weight"
                         ] = 0.2
                         self.agent.save_brain()
                         print(
-                            "  [Refinement]: Marked original fact as refined by lowering its weight.",
+                            "  [Refinement]: Marked original fact as refined by lowering its weight."
                         )
-
         else:
             print("[Refinement]: No chunky facts found for refinement this cycle.")
 
+        self._prune_research_cache()
+
         print(
-            f"{LogColors.GREEN}--- [Refinement Cycle Finished] ---\n{LogColors.RESET}",
+            f"{LogColors.GREEN}--- [Refinement Cycle Finished] ---\n{LogColors.RESET}"
         )
         self.agent.log_autonomous_cycle_completion()
+
+    def _prune_research_cache(self) -> None:
+        """
+        Clean the research cache by removing terms that are now known to the lexicon.
+        This is a housekeeping task to prevent the cache from growing indefinitely
+        with redundant information.
+        """
+        with self.lock:
+            if not self.researched_terms:
+                return
+
+            prunable_terms = {
+                term
+                for term in self.researched_terms
+                if self.agent.lexicon.is_known_word(term)
+            }
+
+            if prunable_terms:
+                logger.info(
+                    "  [Cache Pruning]: Removing %d fully learned term(s) from the research cache.",
+                    len(prunable_terms),
+                )
+                self.researched_terms -= prunable_terms
+                self._save_research_cache()
 
     def _find_chunky_fact(
         self,

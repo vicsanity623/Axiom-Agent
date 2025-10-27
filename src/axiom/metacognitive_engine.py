@@ -265,28 +265,15 @@ class PerformanceMonitor:
         return best_target
 
     def _parse_log_file(self, log_file: Path) -> _LogAnalysisData:
+        """
+        Parses a log file, correctly associating all events, including special
+        cases like 'Deferred learning', with their true source function.
+        """
         lines = log_file.read_text(encoding="utf-8").splitlines()
         analysis_data = _LogAnalysisData()
         i = 0
         while i < len(lines):
             line = lines[i]
-
-            if "Deferred learning" in line:
-                message = line.strip()
-                target = OptimizationTarget(
-                    file_path=Path("src/axiom/cognitive_agent.py"),
-                    target_name="CognitiveAgent.__init__",
-                    issue_description=(
-                        "High-priority systemic issue: Deferred learning was triggered. "
-                        "This suggests a flaw in the core learning strategy. The agent's "
-                        "`__init__` method is provided as context.\n"
-                        f"Log entry: {message}"
-                    ),
-                    relevant_logs=message,
-                )
-                analysis_data.deferred_targets.append(target)
-                i += 1
-                continue
 
             match = PerformanceMonitor._LOG_PATTERN.search(line)
             if not match:
@@ -295,6 +282,21 @@ class PerformanceMonitor:
 
             message = (match.group("message") or "").strip()
             func = (match.group("function") or "unknown_function").strip()
+
+            if "Deferred learning" in message:
+                message = line.strip()
+                target = OptimizationTarget(
+                    file_path=self._guess_source_file(func),
+                    target_name=func,
+                    issue_description=(
+                        "High-priority systemic issue: Deferred learning was triggered. "
+                        "This suggests a flaw in the core learning strategy."
+                        f"\nLog entry: {line.strip()}"
+                    ),
+                    relevant_logs=line.strip(),
+                )
+                analysis_data.deferred_targets.append(target)
+
             ts_match = PerformanceMonitor._TS_PATTERN.search(line)
             ts = int(time.time())
             if ts_match:
@@ -533,16 +535,36 @@ class PerformanceMonitor:
         )
 
     def _guess_source_file(self, func_name: str) -> Path:
-        mapping = {
-            "_parse_single_clause": "src/axiom/symbolic_parser.py",
-            "process_input": "src/axiom/core_agent.py",
-            "update_graph": "src/axiom/graph_core.py",
-            "CognitiveAgent.LearningProcess": "src/axiom/cognitive_agent.py",
+        """
+        Infers the source file path from a function or method name.
+        This version can handle fully qualified 'ClassName.method_name' strings.
+        """
+        class_to_file_map = {
+            "CognitiveAgent": "src/axiom/cognitive_agent.py",
+            "SymbolicParser": "src/axiom/symbolic_parser.py",
+            "KnowledgeHarvester": "src/axiom/knowledge_harvester.py",
+            "UniversalInterpreter": "src/axiom/universal_interpreter.py",
+            "GoalManager": "src/axiom/goal_manager.py",
+            "LexiconManager": "src/axiom/lexicon_manager.py",
+            "ConceptGraph": "src/axiom/graph_core.py",
         }
-        base = func_name.split(".")[-1]
-        return Path(
-            mapping.get(func_name, mapping.get(base, "src/axiom/unknown_module.py")),
-        )
+
+        if "." in func_name:
+            class_name = func_name.split(".")[0]
+            if class_name in class_to_file_map:
+                return Path(class_to_file_map[class_name])
+        base_mapping = {
+            "_parse_single_clause": "src/axiom/symbolic_parser.py",
+            "update_graph": "src/axiom/graph_core.py",
+        }
+        base_name = func_name.split(".")[-1]
+
+        if func_name in base_mapping:
+            return Path(base_mapping[func_name])
+        if base_name in base_mapping:
+            return Path(base_mapping[base_name])
+
+        return Path("src/axiom/unknown_module.py")
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ import os
 import threading
 import time
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -21,39 +21,95 @@ from .cycle_manager import CycleManager
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_CURRICULUM_GOAL: Final[str] = (
+    "Master the art of language by building a comprehensive model of communication, from sound to meaning. "
+    "[Stage 1: Phonology Foundations]: Learn the basic sound units of language, including syllables and stress patterns. "
+    "[Stage 2: Morphological Analysis]: Understand how words are constructed from roots, prefixes, and suffixes. "
+    "[Stage 3: Syntactic Structures]: Master dependency grammar and phrase structure rules. "
+    "[Stage 4: Semantic Grounding]: Learn to map grammatical structures to their literal meaning. "
+    "[Stage 5: Pragmatic Reasoning]: Develop the ability to infer user intent and context."
+)
+
+CURRICULUM_GENERATION_PROMPT: Final[str] = """
+You are a curriculum design expert for an AI. Your task is to generate a single, high-level, multi-stage learning goal for an AI that is starting from scratch. The goal is to achieve deep, foundational language comprehension.
+
+**RULES:**
+1.  The output MUST be a single, continuous string.
+2.  The string MUST start with a high-level mission statement.
+3.  The string MUST contain between 5 and 7 stages, each formatted as `[Stage X: Title]: Description...`.
+4.  The stages MUST follow a logical progression from concrete fundamentals to abstract reasoning.
+5.  **Crucially, you MUST introduce variation and avoid redundancy.** The AI has already learned the concepts listed in the "Known Concepts" section. Your generated curriculum should focus on related, but distinct, topics to broaden the AI's knowledge. For example, if "phoneme" is known, suggest "syllable structure" or "intonation patterns."
+
+**KNOWN CONCEPTS TO AVOID:**
+{known_concepts}
+
+**EXAMPLE OUTPUT:**
+"{example_curriculum}"
+"""
+
+
+def _generate_foundational_curriculum(agent: CognitiveAgent) -> None:
+    """
+    Generates and adds a new, foundational learning curriculum if no other
+    active goals exist. This version is state-aware, avoiding concepts the
+    agent already knows.
+    """
+    if agent.goal_manager.get_active_goal() or agent.learning_goals:
+        logger.info(
+            "--- [AUTONOMOUS TRAINER]: Found existing goals. Resuming previous learning plan. ---"
+        )
+        return
+
+    logger.info(
+        "--- [AUTONOMOUS TRAINER]: No active goals found. Generating a new, state-aware curriculum. ---"
+    )
+
+    known_concepts = [
+        data["name"]
+        for _, data in agent.graph.graph.nodes(data=True)
+        if data.get("type") == "noun" and " " not in data.get("name", "")
+    ]
+
+    known_concepts_str = ", ".join(sorted(known_concepts)) if known_concepts else "None"
+
+    # Format the prompt, injecting both the known concepts and the default example.
+    prompt = CURRICULUM_GENERATION_PROMPT.format(
+        known_concepts=known_concepts_str, example_curriculum=DEFAULT_CURRICULUM_GOAL
+    )
+
+    new_curriculum_goal = agent.interpreter.synthesize(
+        structured_facts=prompt, mode="creative_writing"
+    )
+
+    if not new_curriculum_goal or "[Stage 1:" not in new_curriculum_goal:
+        logger.error(
+            "--- [AUTONOMOUS TRAINER]: Failed to generate a valid new curriculum from LLM. Using default. ---"
+        )
+        # Fallback to the default if generation fails
+        agent.goal_manager.add_goal(DEFAULT_CURRICULUM_GOAL)
+        return
+
+    agent.goal_manager.add_goal(new_curriculum_goal)
+
 
 def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
     """Initialize the agent and run its autonomous learning cycles indefinitely."""
-
     logger.info("--- [AUTONOMOUS TRAINER]: Starting Axiom Agent Initialization... ---")
     agent_interaction_lock = threading.Lock()
 
     try:
         axiom_agent = CognitiveAgent(
-            brain_file=brain_file,
-            state_file=state_file,
-            inference_mode=False,
+            brain_file=brain_file, state_file=state_file, inference_mode=False
         )
-
         harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
-
         gemini_api_key = os.environ.get("GEMINI_API_KEY")
         metacognitive_engine = MetacognitiveEngine(
-            agent=axiom_agent,
-            gemini_api_key=gemini_api_key,
+            agent=axiom_agent, gemini_api_key=gemini_api_key
         )
-
         scheduler = BackgroundScheduler(daemon=True)
         manager = CycleManager(scheduler, harvester, metacognitive_engine)
 
-        axiom_agent.goal_manager.add_goal(
-            "Achieve deep language comprehension by mastering the foundational layers of human communication, from basic word components to complex contextual reasoning. "
-            "[Stage 1: Linguistic Foundations]: Learn the atomic components of language, including the building blocks of words and their origins, to create a robust vocabulary. "
-            "[Stage 2: Grammatical Structure]: Master the rules of syntax to parse sentences and identify the grammatical role of each word and phrase. "
-            "[Stage 3: Semantic Interpretation]: Learn to extract the literal meaning (semantics) of sentences by analyzing the relationships between their grammatical components. "
-            "[Stage 4: Pragmatic Comprehension]: Develop the ability to infer the user's true goal and intent by analyzing the context (pragmatics) surrounding their literal words. "
-            "[Stage 5: World Knowledge Integration]: Ground linguistic understanding in a foundational model of the world, enabling the verification of facts and common-sense reasoning."
-        )
+        _generate_foundational_curriculum(axiom_agent)
 
         manager.start()
         scheduler.start()
@@ -66,12 +122,11 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
 
     except (KeyboardInterrupt, SystemExit):
         logger.info(
-            "\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---",
+            "\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---"
         )
-    except Exception as exc:
+    except Exception:
         logger.critical(
-            "!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: %s !!!",
-            exc,
+            "!!! [AUTONOMOUS TRAINER]: A CRITICAL UNHANDLED ERROR OCCURRED !!!",
             exc_info=True,
         )
         traceback.print_exc()
@@ -81,9 +136,7 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
 
 def main() -> None:
     """Entry point for the axiom-train command."""
-
     setup_logging()
-
     start_autonomous_training(DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE)
 
 

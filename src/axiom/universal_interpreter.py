@@ -158,7 +158,7 @@ class UniversalInterpreter:
                 self.llm = Llama(
                     model_path=str(model_path),
                     n_gpu_layers=0,
-                    n_ctx=2048,
+                    n_ctx=16384,
                     n_threads=0,
                     n_batch=1024,
                     verbose=False,

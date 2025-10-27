@@ -69,18 +69,15 @@ Following this, the agent has now achieved a new level of intelligence in the **
 
 # Phase 4 — Autonomous Scholar & Metacognitive Mind (COMPLETE)
 
-**Goal:** Elevate the agent from a simple learner to a strategic, goal-oriented entity capable of introspection and self-improvement.
+**Goal:** Elevate the agent from a simple learner to a strategic, goal-oriented entity capable of introspection, self-correction, and persistent, stateful learning.
 
 ### Key Features
-*   **Recursive Sub-Goal Learning:** The agent's core learning logic was upgraded to be fully recursive. When it encounters a concept with an unknown word (e.g., "spoken language" without knowing "spoken"), it now **pauses, creates a new high-priority goal to `INVESTIGATE: spoken`**, and then resumes the original task once the prerequisite knowledge is acquired.
-*   **Goal-Oriented Learning:** A formal `GoalManager` was implemented to drive the agent's long-term learning. It can now be given high-level objectives (e.g., "Learn the basics of conversation") and will generate and execute a multi-stage plan to achieve them.
-*   **Advanced Fact Decomposition:** The `UniversalInterpreter` was enhanced with a dedicated `decompose_sentence_to_relations` method. This allows the agent to take complex definitions from any source and reliably break them down into multiple, simple, atomic facts, dramatically improving the quality of its knowledge graph.
-*   **Metacognitive Self-Modification:** The `MetacognitiveEngine` is now operational. It runs on a slow cycle to:
-    1.  **Analyze** its own performance logs (`axiom.log`) for errors and inefficiencies.
-    2.  **Identify** a specific function in its source code as a target for optimization.
-    3.  **Generate** a suggested code fix using an external LLM (Gemini).
-    4.  **Verify** the fix by running the project's full test suite (`check.sh`) in a secure, isolated sandbox.
-    5.  **Report** the result, saving a verified (or failed) code suggestion for human review.
+*   **Hierarchical Goal-Oriented Learning:** The `GoalManager` was upgraded to support complex, multi-stage curricula. The agent can now parse and execute sequential learning plans, ensuring it masters foundational concepts before proceeding to more advanced topics.
+*   **Dynamic & State-Aware Curriculum Generation:** The `axiom-train` process is no longer static. At startup, it queries the agent's existing knowledge and uses an LLM to **procedurally generate a novel, state-aware curriculum**, ensuring the agent is always working on new material and broadening its understanding.
+*   **Proactive Vocabulary Onboarding:** The core learning validation logic (`validate_and_add_relation`) was re-architected. It no longer fails on unknown words; it now **proactively creates provisional concepts** and generates `INVESTIGATE` goals, solving the "chicken-and-egg" problem of knowledge bootstrapping.
+*   **Resilient Learning Cycles:** The `KnowledgeHarvester`'s `study_cycle` was made more resilient. It now **deprioritizes failing tasks** by moving them to the back of the queue and removing them from the current plan, preventing infinite loops and allowing the agent to make forward progress.
+*   **Persistent, Self-Pruning Research Memory:** The `KnowledgeHarvester` now maintains a persistent `research_cache.json`. This prevents the agent from re-investigating the same terms across reboots. A new `_prune_research_cache` task was added to the `refinement_cycle` to keep this cache lean and efficient.
+*   **Precision Metacognitive Engine:** The `MetacognitiveEngine`'s diagnostic pipeline was fully debugged and hardened. Through self-describing logs, it can now **precisely trace performance issues** (like "Deferred learning") back to the exact source function, enabling it to generate highly relevant and actionable code improvement suggestions.
 
 ---
 
@@ -108,7 +105,19 @@ Following this, the agent has now achieved a new level of intelligence in the **
 
 ---
 
-# Phase 7 — Distributed Mind
+# Phase 7 — The Autonomous Operator
+
+**Goal:** Grant the agent the agency to act upon its own conclusions, evolving from a "Verified Advisor" to a "Human-in-the-Loop Operator."
+
+### Key Features
+*   **Action Proposal System:** Enhance the `MetacognitiveEngine` to not only suggest code changes but also to generate `git patch` files and open draft Pull Requests in a repository.
+*   **Interactive Review:** Develop a conversational interface (CLI or web) where a human developer can review a proposed action (like applying a patch) and give a simple "approve" or "deny" command.
+*   **Automated Execution:** Upon approval, the agent will be granted the ability to execute the verified action (e.g., `git apply patch.diff`, `git commit`, `git push`).
+*   **Rollback Capability:** Implement a safety protocol where the agent can automatically revert its last action if post-deployment monitoring detects a critical failure.
+
+---
+
+# Phase 8 — Distributed Mind
 
 **Goal:** Prepare the agent for massive scalability and collaborative learning.
 

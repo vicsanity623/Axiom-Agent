@@ -861,11 +861,15 @@ def validate_and_add_relation(
     ]
 
     if unknown_words:
-        log_context = f" (in {caller_name})" if caller_name else ""
+        import inspect
+
+        caller_frame = inspect.stack()[1]
+        caller_name = f"{caller_frame.function}"
+
         logger.warning(
-            "Validation failed: Found unknown words in concepts: %s%s",
+            "Validation failed: Found unknown words in concepts: %s (in %s)",
             unknown_words,
-            log_context,
+            caller_name,
         )
         for word in unknown_words:
             goal = f"INVESTIGATE: {word}"

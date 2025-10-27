@@ -1,15 +1,27 @@
 import logging
-import sys
+
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.theme import Theme
+
+custom_theme = Theme(
+    {
+        "info": "bold cyan",
+        "warning": "bold yellow",
+        "error": "bold red",
+        "success": "bold green",
+        "time": "dim white",
+        "border": "bright_black",
+    }
+)
+
+console = Console(theme=custom_theme)
 
 
 def setup_logging():
     """
-    Configure the root logger for the entire Axiom application.
-
-    This function sets up logging to output to both the console (stdout)
-    and a file (`axiom.log`). It ensures a consistent format and silences
-    noisy third-party libraries. This should be called once at the start
-    of any application entry point.
+    Configure rich-enhanced logging for the entire Axiom Agent project.
+    Provides colored, neatly wrapped, and bordered log output for better readability.
     """
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
@@ -17,19 +29,31 @@ def setup_logging():
     if root_logger.hasHandlers():
         root_logger.handlers.clear()
 
-    formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)s] [%(name)s]: %(message)s",
-        datefmt="%H:%M:%S",
+    rich_handler = RichHandler(
+        console=console,
+        rich_tracebacks=True,
+        markup=True,
+        log_time_format="[%H:%M:%S]",
+        show_level=True,
+        show_path=False,
+        omit_repeated_times=False,
+        keywords=["Axiom", "Agent", "Study Cycle", "Goal"],
     )
 
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
-    root_logger.addHandler(stream_handler)
-
+    file_formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] [%(name)s]: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
     file_handler = logging.FileHandler("axiom.log", mode="a", encoding="utf-8")
-    file_handler.setFormatter(formatter)
+    file_handler.setFormatter(file_formatter)
+
+    root_logger.addHandler(rich_handler)
     root_logger.addHandler(file_handler)
 
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
-    logging.info("--- Logging initialized for Axiom Agent ---")
+    console.rule(
+        "[bold cyan]Axiom Agent Logging Initialized[/bold cyan]", style="border"
+    )
+
+    logging.info("[success]Logging successfully initialized for Axiom Agent.[/success]")

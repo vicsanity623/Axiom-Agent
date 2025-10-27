@@ -1386,10 +1386,12 @@ class CognitiveAgent:
             The normalized phrase.
         """
         clean_phrase = phrase.lower().strip()
-        clean_phrase = re.sub(r"[.,!?;']+$", "", clean_phrase)
-        words = clean_phrase.split()
+        clean_phrase = re.sub(r"\s*\([^)]*\)\s*", "", clean_phrase).strip()
 
-        if len(words) > 1 and words[0] in ["a", "an", "the"]:
+        clean_phrase = re.sub(r"[.,!?;']+$", "", clean_phrase)
+
+        words = clean_phrase.split()
+        if len(words) > 1 and words[0] in ("a", "an", "the"):
             return " ".join(words[1:]).strip()
 
         return clean_phrase
@@ -1561,68 +1563,88 @@ class CognitiveAgent:
         return (False, "exclusive_conflict")
 
     def _add_new_fact(
-        self,
+        self: CognitiveAgent,
         sub_node: ConceptNode,
         obj_node: ConceptNode,
         relation_type: str,
         relation_data: RelationData,
     ) -> tuple[bool, str]:
-        """Add a new, non-conflicting fact to the knowledge graph."""
-        edge_exists = any(
+        """Adds a new, non-conflicting fact to the knowledge graph.
+
+        This method first checks if the fact (a relationship of a specific type
+        between two nodes) already exists. If it does not, it proceeds to call
+        the core validation and addition logic. The outcome of that process is
+        logged, and a status is returned.
+
+        Args:
+            sub_node: The subject node of the fact.
+            obj_node: The object node of the fact.
+            relation_type: The type of relationship between the subject and object.
+            relation_data: A dictionary containing additional data about the
+                        relation, such as 'properties'.
+
+        Returns:
+            A tuple containing:
+            - A boolean: `True` if a new fact was successfully learned ('inserted'
+            or 'replaced'), `False` otherwise.
+            - A string: A status code indicating the outcome of the operation
+            (e.g., 'inserted', 'fact_exists', 'deferred').
+        """
+        # 1. Pre-check: Verify if the exact same relation already exists.
+        if any(
             edge.type == relation_type and edge.target == obj_node.id
             for edge in self.graph.get_edges_from_node(sub_node.id)
-        )
-
-        if edge_exists:
+        ):
             logger.debug(
-                "    - Fact already exists: %s --[%s]--> %s",
+                "Fact already exists, skipping: %s --[%s]--> %s",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
             )
-            return (False, "fact_exists")
+            return False, "fact_exists"
 
-        rel_props = relation_data.get("properties") or {}
-        candidate = {
+        # 2. Prepare data for the validation and insertion pipeline.
+        properties = relation_data.get("properties", {})
+        candidate_fact = {
             "subject": sub_node.name,
             "verb": relation_type,
             "object": obj_node.name,
         }
         caller_name = f"{self.__class__.__name__}._add_new_fact"
 
+        # 3. Delegate to the core relation validation and addition logic.
         status = validate_and_add_relation(
-            self,
-            dict(candidate),
-            rel_props,
-            caller_name=caller_name,
+            self, candidate_fact, properties, caller_name=caller_name
         )
 
+        # 4. Process the result and log accordingly.
         if status in ("inserted", "replaced"):
             logger.warning(
-                "    Learned new fact: %s --[%s]--> %s (status=%s)",
+                "Learned new fact: %s --[%s]--> %s (status=%s)",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
                 status,
             )
-            return (True, status)
+            return True, status
 
         if status == "deferred":
             logger.info(
-                "    Deferred learning for %s --[%s]--> %s.",
+                "Deferred learning for %s --[%s]--> %s. (in %s)",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
+                caller_name,
             )
         elif status == "contradiction_stored":
             logger.warning(
-                "    Contradiction detected and stored for %s --[%s]--> %s.",
+                "Contradiction detected and stored for %s --[%s]--> %s.",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
             )
 
-        return (False, status)
+        return False, status
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.
@@ -1659,6 +1681,7 @@ class CognitiveAgent:
     ) -> bool:
         """Learns from a sentence by decomposing it into atomic facts and processing them."""
 
+        caller_name = f"{self.__class__.__name__}.learn_new_fact_autonomously"
         logger.info(
             "[Autonomous Learning]: Attempting to learn fact: '%s'",
             fact_sentence,
@@ -1670,7 +1693,8 @@ class CognitiveAgent:
 
         if not atomic_relations:
             logger.warning(
-                "  [Autonomous Learning]: Interpreter could not extract any atomic facts from the sentence."
+                "  [Autonomous Learning]: Interpreter could not extract any atomic facts from the sentence. (in %s)",
+                caller_name,
             )
             return False
 
@@ -1695,7 +1719,8 @@ class CognitiveAgent:
             )
             return True
         logger.warning(
-            "[Autonomous Learning]: Failed to learn any new facts from the decomposed relations."
+            "[Autonomous Learning]: Failed to learn any new facts from the decomposed relations. (in %s)",
+            caller_name,
         )
         return False
 
