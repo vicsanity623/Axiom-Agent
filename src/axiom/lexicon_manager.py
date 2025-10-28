@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-# src/axiom/lexicon_manager.py
+import logging
 from typing import TYPE_CHECKING
+
+from .universal_interpreter import PropertyData
 
 if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
@@ -80,7 +82,17 @@ class LexiconManager:
         pos_node = self.agent._add_or_update_concept_quietly(part_of_speech)
 
         if word_node and pos_node:
-            self.agent.graph.add_edge(word_node, pos_node, "is_a", weight=0.95)
+            self.agent.graph.add_edge(
+                word_node,
+                pos_node,
+                "is_a",
+                weight=0.95,
+                properties=PropertyData(provenance="seed", confidence=0.95),
+            )
+
+            from axiom import knowledge_base as kb
+
+            kb.promote_word(self.agent, clean_word, part_of_speech, confidence=0.95)
 
             if part_of_speech == "adjective":
                 property_node = self.agent._add_or_update_concept("property")
@@ -101,3 +113,52 @@ class LexiconManager:
                     "has_definition",
                     weight=0.9,
                 )
+
+    def observe_word_pos(self, word: str, pos: str, confidence: float = 0.5) -> None:
+        """
+        Record a POS observation for `word`. Delegates to knowledge_base.record_lexical_observation.
+        """
+        try:
+            from . import knowledge_base as kb
+
+            kb.record_lexical_observation(self.agent, word, pos, confidence)
+        except Exception:
+            logging.getLogger(__name__).debug(
+                "Failed to record lexical observation for %s:%s",
+                word,
+                pos,
+                exc_info=True,
+            )
+
+    def is_promoted_word(self, word: str) -> bool:
+        """Return True only if the word exists and was promoted to the lexicon (trusted)."""
+        clean = self.agent._clean_phrase(word)
+        if not clean:
+            return False
+        node = self.agent.graph.get_node_by_name(clean)
+        if not node:
+            return False
+        props = self.agent.graph.graph.nodes[node.id].get("properties", {})
+        return bool(props.get("lexical_promoted_as"))
+
+    def _promote_word_for_test(self, word: str, pos: str) -> None:
+        """
+        A helper method ONLY for tests. It directly promotes a word to the
+        lexicon, bypassing the normal observation and confidence checks.
+        """
+        node = self.agent._add_or_update_concept_quietly(word)
+        if not node:
+            return
+
+        props = self.agent.graph.graph.nodes[node.id].setdefault("properties", {})
+        props["lexical_promoted_as"] = pos
+        props["lexical_promoted_confidence"] = 1.0
+
+    def promote_word(self, word: str, pos: str, confidence: float = 0.95) -> None:
+        """Wrapper for knowledge_base.promote_word() for consistency."""
+        try:
+            from . import knowledge_base as kb
+
+            kb.promote_word(self.agent, word, pos, confidence)
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to promote word: %s", word)

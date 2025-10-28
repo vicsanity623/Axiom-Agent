@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from contextlib import redirect_stderr
@@ -22,6 +23,7 @@ from .config import DEFAULT_CACHE_FILE, DEFAULT_LLM_PATH
 if TYPE_CHECKING:
     from .graph_core import ConceptNode
 
+logger = logging.getLogger(__name__)
 
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
@@ -58,6 +60,7 @@ Intent: TypeAlias = Literal[
     "meta_question_purpose",
     "meta_question_abilities",
     "command_show_all_facts",
+    "question_by_relation",
 ]
 
 
@@ -66,7 +69,22 @@ class PropertyData(TypedDict, total=False):
 
     effective_date: NotRequired[str]
     location: NotRequired[str]
-    certainty: NotRequired[float]
+    confidence: NotRequired[float]
+    provenance: NotRequired[str]
+    negated: NotRequired[bool]
+    revision_status: NotRequired[
+        Literal[
+            "active",
+            "superseded",
+            "disputed",
+            "replaced",
+            "ignored_lower_provenance",
+            "merged",
+        ]
+    ]
+    superseded_by: NotRequired[str]
+    last_modified: NotRequired[float]
+    confidence_updated: NotRequired[bool]
 
 
 class RelationData(TypedDict, total=False):
@@ -74,7 +92,7 @@ class RelationData(TypedDict, total=False):
 
     subject: str
     verb: NotRequired[str]
-    object: str | dict[str, str] | list[str | dict[str, str]]
+    object: str
     predicate: NotRequired[str]
     relation: NotRequired[str]
     properties: NotRequired[PropertyData]
@@ -95,6 +113,8 @@ class InterpretData(TypedDict):
     relation: RelationData | None
     key_topics: list[str]
     full_text_rephrased: str
+    provenance: NotRequired[str]
+    confidence: NotRequired[float]
 
 
 PRONOUNS: Final = ("it", "its", "they", "them", "their", "he", "she", "his", "her")
@@ -138,7 +158,7 @@ class UniversalInterpreter:
                 self.llm = Llama(
                     model_path=str(model_path),
                     n_gpu_layers=0,
-                    n_ctx=2048,
+                    n_ctx=16384,
                     n_threads=0,
                     n_batch=1024,
                     verbose=False,
@@ -237,12 +257,17 @@ class UniversalInterpreter:
             print(
                 "  [Interpreter Error]: LLM is disabled. Cannot interpret complex input.",
             )
-            return InterpretData(
-                intent="unknown",
-                entities=[],
-                relation=None,
-                key_topics=user_input.split(),
-                full_text_rephrased=f"Could not interpret (LLM disabled): '{user_input}'",
+            return cast(
+                "InterpretData",
+                {
+                    "intent": "unknown",
+                    "entities": [],
+                    "relation": None,
+                    "key_topics": user_input.split(),
+                    "full_text_rephrased": f"Could not interpret (LLM disabled): '{user_input}'",
+                    "provenance": "llm",
+                    "confidence": 0.0,
+                },
             )
 
         cache_key = user_input
@@ -293,18 +318,62 @@ class UniversalInterpreter:
 
             interpretation = cast("InterpretData", raw_interpretation)
 
+            if isinstance(interpretation, dict):
+                interpretation.setdefault("provenance", "llm")
+                interpretation.setdefault("confidence", 0.6)
+                interpretation.setdefault("key_topics", [])
+                interpretation.setdefault("full_text_rephrased", "")
+
+                rel = interpretation.get("relation")
+                if isinstance(rel, dict):
+                    props = rel.setdefault("properties", cast("PropertyData", {}))
+                    props.setdefault("confidence", 0.6)
+                    props.setdefault("provenance", "llm")
+
+                    raw_verb = rel.get("verb", "").lower()
+                    raw_object_text = rel.get("object", "")
+
+                    if re.search(
+                        r"\b(not|never|no|without)\b",
+                        raw_verb,
+                        re.IGNORECASE,
+                    ) or re.search(
+                        r"\b(not|never|no|without)\b",
+                        raw_object_text,
+                        re.IGNORECASE,
+                    ):
+                        props["negated"] = True
+
+                        rel["object"] = re.sub(
+                            r"\b(not|never|no|without)\b",
+                            "",
+                            raw_object_text,
+                            flags=re.IGNORECASE,
+                        ).strip()
+                        rel["verb"] = re.sub(
+                            r"\b(not|never|no|without)\b",
+                            "",
+                            raw_verb,
+                            flags=re.IGNORECASE,
+                        ).strip()
+
+                    interpretation["confidence"] = props.get("confidence", 0.6)
+
             self.interpretation_cache[cache_key] = interpretation
             self._save_cache()
             return interpretation
         except Exception as e:
             print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
-            return InterpretData(
+            return cast(
+                "InterpretData",
                 {
                     "intent": "unknown",
                     "entities": [],
                     "relation": None,
                     "key_topics": user_input.split(),
                     "full_text_rephrased": f"Could not fully interpret: '{user_input}'",
+                    "provenance": "llm",
+                    "confidence": 0.0,
                 },
             )
 
@@ -406,6 +475,90 @@ class UniversalInterpreter:
             contextual_input = self.resolve_context(history, user_input)
 
         return self.interpret(contextual_input)
+
+    def decompose_sentence_to_relations(
+        self, text: str, main_topic: str | None = None
+    ) -> list[RelationData]:
+        """
+        Uses the LLM to decompose a sentence into a list of atomic relations.
+        This is the primary method for learning from complex sentences.
+        """
+        if self.llm is None:
+            logger.warning("[Interpreter]: LLM is disabled. Cannot decompose text.")
+            return []
+
+        logger.info("  [Interpreter]: Decomposing sentence into atomic facts...")
+
+        topic_context = (
+            f"The primary topic of this sentence is '{main_topic}'. "
+            "Ensure the subject of at least one core relation is this topic or a direct synonym."
+            if main_topic
+            else ""
+        )
+
+        prompt = f"""
+        **ROLE:** You are a knowledge engineering system. Your task is to extract and decompose knowledge from a sentence into a list of simple, atomic semantic relations.
+
+        **TASK:** Analyze the user's sentence and break it down into multiple, simple, atomic relations.
+        - Each relation MUST be a JSON object: {{"subject": "...", "verb": "...", "object": "..."}}
+        - Subjects and objects should be simple concepts (e.g., "cats", "photosynthesis", "the sun").
+        - Verbs should be concise, standardized predicates (e.g., "is_a", "has_property", "causes", "is_part_of"). Use snake_case.
+        - The goal is DECOMPOSITION. One complex sentence should become several simple facts.
+
+        **CONTEXT:** {topic_context}
+
+        **EXAMPLE:**
+        Topic: Photosynthesis
+        Sentence: "Photosynthesis is a process used by plants to convert light energy into chemical energy."
+        Output:
+        [
+          {{"subject": "photosynthesis", "verb": "is_a", "object": "process"}},
+          {{"subject": "photosynthesis", "verb": "is_used_by", "object": "plants"}},
+          {{"subject": "photosynthesis", "verb": "converts", "object": "light energy"}},
+          {{"subject": "light energy", "verb": "is_converted_into", "object": "chemical energy"}}
+        ]
+
+        **SENTENCE TO ANALYZE:**
+        "{text}"
+
+        **RULES:**
+        1.  Return ONLY a valid JSON list of relation objects.
+        2.  Do NOT include markdown, explanations, or any other text outside the JSON list.
+        3.  If the sentence contains no extractable facts, return an empty list `[]`.
+        """
+        try:
+            output = cast(
+                "dict",
+                self.llm(
+                    f"[INST]{prompt}[/INST]",
+                    max_tokens=1024,
+                    stop=["</s>"],
+                    echo=False,
+                    temperature=0.1,
+                ),
+            )
+            response_text = output["choices"][0]["text"].strip()
+
+            start_bracket = response_text.find("[")
+            end_bracket = response_text.rfind("]")
+            if start_bracket == -1 or end_bracket == -1:
+                return []
+
+            json_str = response_text[start_bracket : end_bracket + 1]
+            relations = json.loads(json_str)
+
+            if isinstance(relations, list):
+                logger.info(
+                    "    - Decomposed sentence into %d atomic relations.",
+                    len(relations),
+                )
+                return cast("list[RelationData]", relations)
+            return []
+        except Exception as e:
+            logger.error(
+                "  [Interpreter Error]: Failed to decompose sentence. Error: %s", e
+            )
+            return []
 
     def break_down_definition(self, subject: str, chunky_definition: str) -> list[str]:
         """Use the LLM to break a complex definition into simple, atomic facts.
@@ -716,3 +869,56 @@ class UniversalInterpreter:
         except Exception as e:
             print(f"  [Synthesizer Error]: Could not generate fluent text. Error: {e}")
             return structured_facts
+
+    def generate_curriculum(self, high_level_goal: str) -> list[str]:
+        """
+        Uses the LLM to break down a high-level learning goal into a list of
+        essential, prerequisite topics to study.
+        """
+        if self.llm is None:
+            return []
+
+        logger.info(
+            "  [Interpreter]: Generating curriculum for goal '%s'...",
+            high_level_goal,
+        )
+        system_prompt = (
+            "You are a curriculum design expert. Your task is to break down a 'High-Level Goal' into a "
+            "short, prioritized list of the most fundamental, prerequisite concepts needed to understand it. "
+            "These concepts should be simple nouns or short noun phrases."
+        )
+        examples_prompt = (
+            "RULES:\n"
+            "1. Output ONLY a comma-separated list of topics.\n"
+            "2. Prioritize the most foundational concepts first.\n"
+            "3. Do not add numbers, bullets, or any other formatting.\n\n"
+            "Example 1:\n"
+            "High-Level Goal: Become an expert on ancient Rome\n"
+            "Output: Roman Republic, Roman Empire, Julius Caesar, Augustus, Colosseum, Latin\n\n"
+            "Example 2:\n"
+            "High-Level Goal: Understand photosynthesis\n"
+            "Output: plant, cell, sunlight, chlorophyll, water, carbon dioxide, oxygen, glucose"
+        )
+        full_prompt = (
+            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"High-Level Goal: {high_level_goal}\n"
+            f"Output:[/INST]"
+        )
+        try:
+            output = cast(
+                "dict",
+                self.llm(full_prompt, max_tokens=128, stop=["</s>", "\n"], echo=False),
+            )
+            response_text = output["choices"][0]["text"].strip()
+
+            topics = [
+                topic.strip() for topic in response_text.split(",") if topic.strip()
+            ]
+            logger.info("    - Generated curriculum with %d topics.", len(topics))
+            return topics
+        except Exception as e:
+            logger.error(
+                "  [Interpreter Error]: Could not generate curriculum. Error: %s",
+                e,
+            )
+            return []

@@ -1,16 +1,20 @@
 from __future__ import annotations
 
-# knowledge_harvester.py
+import json
+import logging
 import random
 import re
 import time
 from datetime import datetime
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Final
 from urllib.parse import quote
 
 import requests
 import wikipedia
 from nltk.stem import WordNetLemmatizer
+
+from .knowledge_base import validate_and_add_relation
 
 if TYPE_CHECKING:
     from threading import Lock
@@ -18,7 +22,11 @@ if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
     from axiom.graph_core import ConceptNode, RelationshipEdge
 
+
+logger = logging.getLogger(__name__)
+
 wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
+RESEARCH_CACHE_PATH: Final = Path("data/research_cache.json")
 
 
 class LogColors:
@@ -29,7 +37,14 @@ class LogColors:
 
 
 class KnowledgeHarvester:
-    __slots__ = ("agent", "lock", "rejected_topics", "lemmatizer")
+    __slots__ = (
+        "agent",
+        "lock",
+        "lemmatizer",
+        "rejected_topics",
+        "cache_path",
+        "researched_terms",
+    )
 
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
         """Initialize the KnowledgeHarvester.
@@ -42,7 +57,50 @@ class KnowledgeHarvester:
         self.lock = lock
         self.lemmatizer = WordNetLemmatizer()
         self.rejected_topics: set[str] = set()
+        self.cache_path = RESEARCH_CACHE_PATH
+        self.researched_terms: set[str] = set()
+        self._load_research_cache()
         print("[Knowledge Harvester]: Initialized.")
+
+    def _load_research_cache(self) -> None:
+        """Load the set of researched terms from a JSON file."""
+        if not self.cache_path.exists():
+            logger.info("[Harvester Cache]: No research cache found. Starting fresh.")
+            return
+        try:
+            with self.cache_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    self.researched_terms = set(data)
+                    logger.info(
+                        "[Harvester Cache]: Loaded %d previously researched terms.",
+                        len(self.researched_terms),
+                    )
+                else:
+                    logger.warning(
+                        "[Harvester Cache]: Cache file is malformed; starting fresh."
+                    )
+        except (OSError, json.JSONDecodeError) as e:
+            logger.error(
+                "[Harvester Cache]: Failed to load research cache: %s. Starting fresh.",
+                e,
+            )
+            self.researched_terms = set()
+
+    def _save_research_cache(self) -> None:
+        """Save the current set of researched terms to a JSON file."""
+        try:
+            self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with self.cache_path.open("w", encoding="utf-8") as f:
+                json.dump(list(self.researched_terms), f, indent=4)
+        except OSError as e:
+            logger.error("[Harvester Cache]: Failed to save research cache: %s", e)
+
+    def _mark_as_researched(self, term: str) -> None:
+        """Add a term to the research memory and save to disk."""
+        if term not in self.researched_terms:
+            self.researched_terms.add(term)
+            self._save_research_cache()
 
     def discover_cycle(self) -> None:
         """Run one full discovery cycle to find a new topic to learn.
@@ -74,35 +132,89 @@ class KnowledgeHarvester:
         self.agent.log_autonomous_cycle_completion()
 
     def _resolve_investigation_goal(self, goal: str) -> bool:
-        """Resolve an "INVESTIGATE" goal by finding a word's definition."""
+        """Resolve an "INVESTIGATE" goal by learning its part of speech and definition."""
         match = re.match(r"INVESTIGATE: (.*)", goal)
         if not match:
             return False
-        word_to_learn = match.group(1).lower()
+        term_to_learn = match.group(1).lower()
 
-        print(
-            f"[Study Cycle]: Prioritizing learning goal: To define '{word_to_learn}'.",
-        )
-
-        api_result = self.get_definition_from_api(word_to_learn)
-        if api_result:
-            part_of_speech, definition = api_result
+        if (
+            self.agent.lexicon.is_known_word(term_to_learn)
+            or term_to_learn in self.researched_terms
+        ):
+            logger.info(
+                "[Study Cycle]: Skipping '%s' — already known or researched in previous cycles.",
+                term_to_learn,
+            )
             with self.lock:
-                self.agent.lexicon.add_linguistic_knowledge_quietly(
-                    word=word_to_learn,
-                    part_of_speech=part_of_speech,
-                    definition=definition,
-                )
                 if goal in self.agent.learning_goals:
                     self.agent.learning_goals.remove(goal)
-                self.agent.save_brain()
             return True
 
-        print(
-            f"  [Study Cycle]: Dictionary API failed for '{word_to_learn}'. Falling back to web search.",
+        logger.info(
+            "[Study Cycle]: Prioritizing learning goal: To define '%s'.",
+            term_to_learn,
         )
 
-        queries = [f"what is {word_to_learn}", f"define {word_to_learn}", word_to_learn]
+        is_single_word = " " not in term_to_learn
+
+        if is_single_word:
+            logger.info(
+                "  [Study Cycle]: Term is a single word. Prioritizing Dictionary API.",
+            )
+            api_result = self.get_definition_from_api(term_to_learn)
+            if api_result:
+                part_of_speech, definition = api_result
+
+                pos_learned = False
+                definition_learned = False
+
+                with self.lock:
+                    pos_relation = {
+                        "subject": term_to_learn,
+                        "verb": "is_a",
+                        "object": part_of_speech,
+                        "properties": {"provenance": "dictionary_api"},
+                    }
+                    status_pos = validate_and_add_relation(self.agent, pos_relation)
+                    if status_pos != "deferred":
+                        logger.info(
+                            "  [Study Cycle]: Agent successfully learned the part of speech for '%s'.",
+                            term_to_learn,
+                        )
+                        pos_learned = True
+
+                    logger.info(
+                        "  [Study Cycle]: Processing definition as a new learning opportunity: '%s'",
+                        definition,
+                    )
+                    definition_learned = self.agent.learn_new_fact_autonomously(
+                        fact_sentence=definition,
+                        source_topic=term_to_learn,
+                    )
+
+                if pos_learned or definition_learned:
+                    logger.info(
+                        "  [Study Cycle]: Successfully learned from Dictionary API."
+                    )
+                    with self.lock:
+                        if goal in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(goal)
+                    return True
+
+                self._mark_as_researched(term_to_learn)
+
+        if is_single_word:
+            logger.info(
+                "  [Study Cycle]: Dictionary API failed for '%s'. Falling back to web search.",
+                term_to_learn,
+            )
+        else:
+            logger.info(
+                "  [Study Cycle]: Term is a multi-word concept. Using web search directly.",
+            )
+
+        queries = [f"what is {term_to_learn}", f"define {term_to_learn}", term_to_learn]
         web_fact = None
         source_topic = None
         for query in queries:
@@ -115,62 +227,100 @@ class KnowledgeHarvester:
             time.sleep(1)
 
         if not web_fact:
-            print(f"  [Study Cycle]: Web search also failed for '{word_to_learn}'.")
+            logger.warning(
+                "  [Study Cycle]: Web search also failed for '%s'.",
+                term_to_learn,
+            )
             return False
 
-        print(f"  [Study Cycle]: Found potential fact from web: '{web_fact}'")
+        logger.info("  [Study Cycle]: Found potential fact from web: '%s'", web_fact)
         with self.lock:
             was_learned = self.agent.learn_new_fact_autonomously(
                 fact_sentence=web_fact,
-                source_topic=source_topic or word_to_learn,
+                source_topic=source_topic or term_to_learn,
             )
 
         if was_learned:
-            print("  [Study Cycle]: Agent successfully learned the new fact.")
+            logger.info(
+                "  [Study Cycle]: Agent successfully learned the new fact from web.",
+            )
             with self.lock:
                 if goal in self.agent.learning_goals:
                     self.agent.learning_goals.remove(goal)
             return True
-        print("  [Study Cycle]: Agent failed to learn from the web fact.")
+
+        logger.warning("  [Study Cycle]: Agent failed to learn from the web fact.")
         return False
 
     def study_cycle(self) -> None:
-        """Run one full study cycle.
-
-        This cycle has two main priorities:
-        1.  **Resolve Goals:** It first checks for any pending "INVESTIGATE"
-            goals in the agent's learning queue and attempts to resolve them.
-        2.  **Deepen Knowledge:** If the queue is empty, it falls back to the
-            `_deepen_knowledge_of_random_concept` routine to proactively
-            enrich the agent's existing knowledge.
+        """
+        Run one full study cycle, driven by the GoalManager's strategic plan.
+        This version is resilient, deprioritizing failed tasks and removing them
+        from the current plan to prevent infinite loops.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"\n--- [Study Cycle Started at {timestamp}] ---")
+        logger.info("\n--- [Study Cycle Started at %s] ---", timestamp)
 
-        if self.agent.learning_goals:
-            goal_to_resolve = self.agent.learning_goals[0]
-            if goal_to_resolve.startswith("INVESTIGATE:"):
-                goal_resolved = self._resolve_investigation_goal(goal_to_resolve)
-                if not goal_resolved:
-                    print(
-                        f"  [Study Cycle]: {LogColors.YELLOW}Failed to resolve goal '{goal_to_resolve}'. Removing from queue.{LogColors.RESET}",
+        active_goal = self.agent.goal_manager.get_active_goal()
+        caller_name = f"{self.__class__.__name__}.study_cycle"
+
+        if active_goal:
+            logger.info(">> Working on active plan: '%s'", active_goal["description"])
+            task_to_resolve = next(
+                (
+                    sg
+                    for sg in active_goal["sub_goals"]
+                    if sg in self.agent.learning_goals
+                ),
+                None,
+            )
+
+            if task_to_resolve:
+                logger.info("  - Attempting planned task: '%s'", task_to_resolve)
+                resolved = self._resolve_investigation_goal(task_to_resolve)
+
+                if not resolved:
+                    logger.warning(
+                        "Failed to resolve planned task '%s'. Deprioritizing and removing from current plan. (in %s)",
+                        task_to_resolve,
+                        caller_name,
                     )
                     with self.lock:
-                        if goal_to_resolve in self.agent.learning_goals:
-                            self.agent.learning_goals.remove(goal_to_resolve)
+                        if task_to_resolve in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(task_to_resolve)
+                            self.agent.learning_goals.append(task_to_resolve)
 
-                print(
-                    f"{LogColors.GREEN}--- [Study Cycle Finished]: Completed a learning goal task. ---{LogColors.RESET}",
+                        if task_to_resolve in active_goal["sub_goals"]:
+                            active_goal["sub_goals"].remove(task_to_resolve)
+
+                self.agent.goal_manager.check_goal_completion(active_goal["id"])
+            else:
+                logger.info(
+                    "No pending tasks for active goal '%s'. Triggering completion check.",
+                    active_goal["description"],
                 )
-                self.agent.log_autonomous_cycle_completion()
-                return
+                self.agent.goal_manager.check_goal_completion(active_goal["id"])
+        else:
+            logger.info("No active plan. Checking for opportunistic learning tasks.")
+            if self.agent.learning_goals:
+                opportunistic_task = self.agent.learning_goals[0]
+                if not self._resolve_investigation_goal(opportunistic_task):
+                    logger.warning(
+                        "Failed to resolve opportunistic task '%s'. Deprioritizing. (in %s)",
+                        opportunistic_task,
+                        caller_name,
+                    )
+                    with self.lock:
+                        if opportunistic_task in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(opportunistic_task)
+                            self.agent.learning_goals.append(opportunistic_task)
+            else:
+                logger.info(
+                    "Learning queue is empty. Attempting to deepen existing knowledge."
+                )
+                self._deepen_knowledge_of_random_concept()
 
-        print(
-            "[Study Cycle]: No learning goals. Attempting to deepen existing knowledge.",
-        )
-        self._deepen_knowledge_of_random_concept()
-
-        print(f"{LogColors.GREEN}--- [Study Cycle Finished] ---\n{LogColors.RESET}")
+        logger.info("--- [Study Cycle Finished] ---")
         self.agent.log_autonomous_cycle_completion()
 
     def refinement_cycle(self) -> None:
@@ -182,7 +332,7 @@ class KnowledgeHarvester:
         facts. This improves the agent's ability to reason symbolically.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"\n--- [Refinement Cycle Started at {timestamp}] ---")
+        logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
 
         chunky_fact = None
         with self.lock:
@@ -190,47 +340,81 @@ class KnowledgeHarvester:
 
         if chunky_fact:
             source_node, target_node, edge = chunky_fact
-            print(
-                f"  [Refinement]: Found a chunky fact to refine: '{source_node.name}' --[{edge.type}]--> '{target_node.name}'",
+            logger.info(
+                "  [Refinement]: Found a chunky fact to refine: '%s' --[%s]--> '%s'",
+                source_node.name,
+                edge.type,
+                target_node.name,
             )
-
             atomic_sentences = self.agent.interpreter.break_down_definition(
                 subject=source_node.name,
                 chunky_definition=target_node.name,
             )
-
             if atomic_sentences:
-                print(
-                    f"  [Refinement]: Decomposed into {len(atomic_sentences)} new atomic facts.",
+                logger.info(
+                    "  [Refinement]: Decomposed into %d new atomic facts.",
+                    len(atomic_sentences),
                 )
                 for sentence in atomic_sentences:
                     with self.lock:
                         self.agent.learn_new_fact_autonomously(sentence)
-
                 with self.lock:
                     graph_edge = self.agent.graph.graph[edge.source][edge.target]
-                    key_to_modify = None
-                    for key, data in graph_edge.items():
-                        if data.get("type") == edge.type:
-                            key_to_modify = key
-                            break
-
+                    key_to_modify = next(
+                        (
+                            key
+                            for key, data in graph_edge.items()
+                            if data.get("type") == edge.type
+                        ),
+                        None,
+                    )
                     if key_to_modify is not None:
                         self.agent.graph.graph[edge.source][edge.target][key_to_modify][
                             "weight"
                         ] = 0.2
                         self.agent.save_brain()
-                        print(
-                            "  [Refinement]: Marked original fact as refined by lowering its weight.",
+                        logger.info(
+                            "  [Refinement]: Marked original fact as refined by lowering its weight."
                         )
-
         else:
-            print("[Refinement]: No chunky facts found for refinement this cycle.")
+            caller_name = f"{self.__class__.__name__}._find_chunky_fact"
+            logger.warning(
+                "[Refinement]: No chunky facts found for refinement this cycle. (in %s)",
+                caller_name,
+            )
 
-        print(
-            f"{LogColors.GREEN}--- [Refinement Cycle Finished] ---\n{LogColors.RESET}",
+        self._prune_research_cache()
+
+        logger.info(
+            "%s--- [Refinement Cycle Finished] ---\n%s",
+            LogColors.GREEN,
+            LogColors.RESET,
         )
         self.agent.log_autonomous_cycle_completion()
+
+    def _prune_research_cache(self) -> None:
+        """
+        Clean the research cache by removing terms that are now known to the lexicon.
+        This is a housekeeping task to prevent the cache from growing indefinitely
+        with redundant information.
+        """
+        with self.lock:
+            if not self.researched_terms:
+                return
+
+            prunable_terms = {
+                term
+                for term in self.researched_terms
+                if self.agent.lexicon.is_known_word(term)
+            }
+
+            if prunable_terms:
+                logger.info(
+                    "  [Cache Pruning]: Removing %d fully learned term(s) from the research cache.",
+                    len(prunable_terms),
+                )
+                self.researched_terms -= prunable_terms
+                self._save_research_cache()
 
     def _find_chunky_fact(
         self,
@@ -461,29 +645,19 @@ class KnowledgeHarvester:
         return None
 
     def get_definition_from_api(self, word: str) -> tuple[str, str] | None:
-        """Retrieve a precise definition and part of speech from a dictionary API.
-
-        This is the primary, high-precision tool for resolving "INVESTIGATE"
-        goals. It queries a free public dictionary API for a specific word.
-
-        On success, it extracts the primary part of speech and the first
-        definition, which is a much more reliable source of linguistic
-        knowledge than general web scraping.
-
-        Args:
-            word: The single word to define.
-
-        Returns:
-            A tuple containing the part of speech and the definition string,
-            or None if the word is not found or the API call fails.
         """
-        print(f"[Knowledge Source]: Querying Dictionary API for '{word}'...")
+        Retrieve a precise definition and part of speech from a dictionary API.
+
+        Returns the part of speech and the full definition, which can then be
+        used to construct multiple facts.
+        """
+        logger.info("[Knowledge Source]: Querying Dictionary API for '%s'...", word)
         try:
             url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
             response = requests.get(url, timeout=5)
 
             if response.status_code != 200:
-                print(f"  [Dictionary API]: Word '{word}' not found.")
+                logger.info("  [Dictionary API]: Word '%s' not found.", word)
                 return None
 
             data = response.json()
@@ -500,28 +674,25 @@ class KnowledgeHarvester:
                     first_definition = first_meaning["definitions"][0].get("definition")
 
                     if part_of_speech and first_definition:
-                        article = (
-                            "an"
-                            if part_of_speech.lower().startswith(
-                                ("a", "e", "i", "o", "u"),
-                            )
-                            else "a"
+                        logger.info(
+                            "  [Dictionary API]: Found definition: '%s'",
+                            first_definition,
                         )
-                        definition_sentence = f"{word} is {article} {part_of_speech}."
-
-                        print(
-                            f"  [Dictionary API]: Found definition: '{first_definition}'",
-                        )
-                        print(
-                            f"  [Dictionary API]: Constructed fact: '{definition_sentence}'",
+                        logger.info(
+                            "  [Dictionary API]: Found part of speech: '%s'",
+                            part_of_speech,
                         )
 
                         return (part_of_speech, first_definition)
 
         except requests.RequestException as e:
-            print(f"  [Dictionary API]: An error occurred: {e}")
-        except Exception:
-            print(f"  [Dictionary API]: Failed to parse response for '{word}'.")
+            logger.warning("  [Dictionary API]: An error occurred: %s", e)
+        except (json.JSONDecodeError, KeyError) as e:
+            logger.warning(
+                "  [Dictionary API]: Failed to parse response for '%s': %s",
+                word,
+                e,
+            )
 
         return None
 

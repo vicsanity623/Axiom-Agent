@@ -4,9 +4,9 @@ This roadmap documents the evolution of the Axiom Agent, from its foundational a
 
 ***
 
-The Axiom Agent has successfully evolved through its foundational phases. It began with the **"Genesis Engine,"** establishing a stable knowledge graph. The **"Intelligent Learner"** phase enabled autonomous discovery, while the **"Conversational Mind"** gave it the ability to parse complex sentences and learn from its own responses.
+The Axiom Agent has successfully evolved through its foundational phases. It began with the **"Genesis Engine,"** establishing a stable knowledge graph and basic parsing. It then became an **"Intelligent Learner"** with autonomous discovery, a **"Conversational Mind"** with contextual understanding, and underwent a critical **"Stabilization & Hardening"** phase to build a resilient and testable core.
 
-Following this rapid innovation, the Axiom Agent has now completed a critical **"Stabilization & Hardening"** phase. This engineering-focused effort addressed technical debt, dramatically improved the user experience, and fortified the agent's core logic with a comprehensive test suite and more intelligent learning mechanisms. This essential work has created a robust and maintainable platform, paving the way for the agent's next major functional leaps: achieving true **"Semantic Mastery"** with a deeper understanding of language, becoming an **"Autonomous Scholar"** with strategic learning, and finally, evolving into a **"Logical Reasoner"** capable of procedural thought and tool use.
+Following this, the agent has now achieved a new level of intelligence in the **"Autonomous Scholar"** phase. It has moved beyond simple learning to **strategic, goal-oriented research**, driven by a formal `GoalManager`. Most significantly, it now possesses a **`MetacognitiveEngine`**, allowing it to analyze its own performance logs, suggest improvements to its own source code, and verify those fixes in a secure sandbox. This suite of capabilities marks a transition to true autonomy, setting the stage for the next leaps into deeper semantic understanding and procedural reasoning.
 
 ---
 
@@ -59,39 +59,37 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 **Goal:** Solidify the foundation, improve user experience, and make the agent more robust and resilient.
 
 ### Key Features
-*   **Intelligent Learning Pipeline:** Implemented a sentence sanitizer at the core of the agent's cognitive loop, preventing it from learning "garbage facts" from poorly structured external data.
-*   **Robust Parser Fallback:** Implemented a "sanity check" to intelligently fall back to the LLM interpreter when the symbolic parser fails on complex or nonsensical input.
-*   **Enhanced Self-Awareness:** Created specific `meta-` intents and handlers for questions about the agent itself ("who are you?", "what is your purpose?").
-*   **Conversational Resilience:** Integrated fuzzy matching (`thefuzz`) to handle user typos and minor variations in entity names.
-*   **Comprehensive Test Suite:** Achieved high test coverage (>70%) and a fully passing CI/CD pipeline (Ruff, MyPy, Pytest), ensuring all core functionality is verified.
-*   **Streamlined User Experience:**
-    *   Replaced verbose startup logging with clean `tqdm` progress bars.
-    *   Automated LLM model downloading via a simple `axiom-llm` command.
-    *   Refactored developer scripts into professional command-line entry points (e.g., `axiom-train`, `axiom-render`).
-    *   Implemented versioned model rendering to keep the project directory clean.
+*   **Centralized & Robust Architecture:** Refactored the entire project to use a central `config.py` for all file paths.
+*   **LLM-Powered Fact Verification:** Implemented an LLM-driven "quality gate" (`verify_and_reframe_fact`) that critically evaluates facts found on the web, rejecting irrelevant information and simplifying good facts.
+*   **Intelligent Lexicon Promotion:** Created a formal "promotion" system for the lexicon, allowing the agent to distinguish between observing a word and trusting its definition.
+*   **Comprehensive Test Suite:** Achieved a fully passing, clean CI/CD pipeline (Ruff, MyPy, Pytest) to validate all cognitive behaviors.
+*   **Streamlined User Experience:** Refactored developer scripts into professional command-line entry points. (`axiom-train`, `axiom-webui`, `axiom-llm`). Axiom is uv ready check the **[CONTRIBUTING.md](CONTRIBUTING.md)** for quick start guide.
 
 ---
 
-# Phase 4 — Semantic Mastery
+# Phase 4 — Autonomous Scholar & Metacognitive Mind (COMPLETE)
+
+**Goal:** Elevate the agent from a simple learner to a strategic, goal-oriented entity capable of introspection, self-correction, and persistent, stateful learning.
+
+### Key Features
+*   **Hierarchical Goal-Oriented Learning:** The `GoalManager` was upgraded to support complex, multi-stage curricula. The agent can now parse and execute sequential learning plans, ensuring it masters foundational concepts before proceeding to more advanced topics.
+*   **Dynamic & State-Aware Curriculum Generation:** The `axiom-train` process is no longer static. At startup, it queries the agent's existing knowledge and uses an LLM to **procedurally generate a novel, state-aware curriculum**, ensuring the agent is always working on new material and broadening its understanding.
+*   **Proactive Vocabulary Onboarding:** The core learning validation logic (`validate_and_add_relation`) was re-architected. It no longer fails on unknown words; it now **proactively creates provisional concepts** and generates `INVESTIGATE` goals, solving the "chicken-and-egg" problem of knowledge bootstrapping.
+*   **Resilient Learning Cycles:** The `KnowledgeHarvester`'s `study_cycle` was made more resilient. It now **deprioritizes failing tasks** by moving them to the back of the queue and removing them from the current plan, preventing infinite loops and allowing the agent to make forward progress.
+*   **Persistent, Self-Pruning Research Memory:** The `KnowledgeHarvester` now maintains a persistent `research_cache.json`. This prevents the agent from re-investigating the same terms across reboots. A new `_prune_research_cache` task was added to the `refinement_cycle` to keep this cache lean and efficient.
+*   **Precision Metacognitive Engine:** The `MetacognitiveEngine`'s diagnostic pipeline was fully debugged and hardened. Through self-describing logs, it can now **precisely trace performance issues** (like "Deferred learning") back to the exact source function, enabling it to generate highly relevant and actionable code improvement suggestions.
+
+---
+
+# Phase 5 — Semantic Mastery
 
 **Goal:** Deepen the agent's understanding of language nuance, context, and complex relationships.
 
 ### Key Features
-*   **Advanced Relationship Extraction:** Enhance the `KnowledgeHarvester` and `UniversalInterpreter` to extract and represent multi-part relationships (e.g., `(person, born_in, city, on_date, date)`).
-*   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly.
-*   **Knowledge Provenance:** Add metadata to all learned facts, tracking their source (e.g., Wikipedia, user input), timestamp, and confidence score. This is a prerequisite for belief revision.
-*   **Belief Revision System:** Implement a strategy for resolving conflicting facts based on source reliability, confidence, and recency.
-
----
-
-# Phase 5 — Autonomous Scholar
-
-**Goal:** Transform the agent from a passive learner into a strategic researcher with long-term goals.
-
-### Key Features
-*   **Goal-Oriented Learning:** Introduce a `GoalManager` that allows the agent to be given high-level learning objectives (e.g., "Become an expert on ancient Rome").
-*   **Strategic Study Plans:** The `KnowledgeHarvester` will use its learning goals to generate and execute multi-step study plans (e.g., find a Wikipedia page, read it, identify key entities, generate curious questions for each entity, then research those questions).
-*   **Dynamic Knowledge Pruning:** Implement a "forgetting" mechanism where facts that are consistently low-activation and low-confidence are periodically removed to keep the graph relevant.
+*   **Knowledge Provenance & Confidence Scoring:** Add metadata to all learned facts, tracking their source (`user`, `llm_verified`, `dictionary`), timestamp, and confidence score. This is a prerequisite for belief revision.
+*   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
+*   **Belief Revision System:** Implement a strategy for resolving conflicting facts. When a contradiction is found, the agent will use provenance and confidence scores to decide whether to update its belief, ask for clarification, or maintain both possibilities.
+*   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly, making conversation feel more empathetic and natural.
 
 ---
 
@@ -101,24 +99,28 @@ Following this rapid innovation, the Axiom Agent has now completed a critical **
 
 ### Key Features
 *   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use. Each tool will be a specialized function for tasks the knowledge graph cannot perform.
-*   **Mathematical Capability (First Tool):**
-    *   **Deliverable:** A `MathTool` that integrates a symbolic math library like `SymPy`.
-    *   **Logic:** The `SymbolicParser` and `UniversalInterpreter` will be trained to recognize a new `question_math` intent.
-    *   **Flow:** When this intent is detected, `_process_intent` will route the mathematical expression to the `MathTool` for execution, and the result will be returned to the user.
-*   **Real-Time Data (Second Tool):**
-    *   **Deliverable:** A `WebSearchTool` (e.g., using a Google/DuckDuckGo API) and a `CurrentDateTool`.
-    *   **Logic:** The agent will be taught to recognize questions it cannot answer from its static knowledge (e.g., "What is the weather in New York?", "Who won the game last night?").
-    *   **Flow:** The agent will learn to route these questions to the appropriate tool to fetch live data from the internet.
-*   **Code Execution (Advanced Tool):**
-    *   **Deliverable:** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
-    *   **Flow:** For questions like "What are the first 10 prime numbers?", the agent will learn to write and execute a small script instead of trying to find the answer in its knowledge graph.
+*   **Mathematical Capability (First Tool):** A `MathTool` that integrates a symbolic math library like `SymPy`.
+*   **Real-Time Data (Second Tool):** A `WebSearchTool` and a `CurrentDateTool` to fetch live data from the internet.
+*   **Code Execution (Advanced Tool):** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
 
 ---
 
-# Phase 7 — Distributed Mind
+# Phase 7 — The Autonomous Operator
+
+**Goal:** Grant the agent the agency to act upon its own conclusions, evolving from a "Verified Advisor" to a "Human-in-the-Loop Operator."
+
+### Key Features
+*   **Action Proposal System:** Enhance the `MetacognitiveEngine` to not only suggest code changes but also to generate `git patch` files and open draft Pull Requests in a repository.
+*   **Interactive Review:** Develop a conversational interface (CLI or web) where a human developer can review a proposed action (like applying a patch) and give a simple "approve" or "deny" command.
+*   **Automated Execution:** Upon approval, the agent will be granted the ability to execute the verified action (e.g., `git apply patch.diff`, `git commit`, `git push`).
+*   **Rollback Capability:** Implement a safety protocol where the agent can automatically revert its last action if post-deployment monitoring detects a critical failure.
+
+---
+
+# Phase 8 — Distributed Mind
 
 **Goal:** Prepare the agent for massive scalability and collaborative learning.
 
 ### Key Features
-*   **Pluggable Graph Backends:** Refactor `ConceptGraph` to be an interface, with the current in-memory NetworkX implementation as the default and a new implementation for a graph database (e.g., Neo4j, RedisGraph) as an option for large-scale deployments.
-*   **Agent Federation:** Design a protocol that allows multiple Axiom Agents to query each other's knowledge, share facts, and collaborate on learning goals.
+*   **Pluggable Graph Backends:** Refactor `ConceptGraph` to be an interface with options for graph databases (e.g., Neo4j).
+*   **Agent Federation:** Design a protocol that allows multiple Axiom Agents to query each other's knowledge and collaborate.

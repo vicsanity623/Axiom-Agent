@@ -35,6 +35,7 @@ brain.zip
 # Ignore any large dataset directories
 /Axiom_Voice_Dataset/
 /Curriculum/
+/data/
 
 # -----------------------------------------------------------------------------
 # Log & Output Files
@@ -47,6 +48,12 @@ waker.log
 /facts/
 /analysis_reports/
 /docs/
+/lib/
+/visualizations/
+*.metacog_baseline.json
+code_suggestion.json
+extract_suggestion.py
+code.py
 
 # -----------------------------------------------------------------------------
 # System & Editor Files
@@ -66,6 +73,7 @@ desktop.ini
 # Ignore personal or temporary files
 notes.txt
 Voicetrain.txt
+.env
 *.wav
 *.csv
 interpreter_cache.json

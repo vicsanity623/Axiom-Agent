@@ -11,9 +11,19 @@ import json
 import logging
 import os
 import re
+import threading
+import time
 from datetime import date, datetime
 from functools import lru_cache
-from typing import TYPE_CHECKING, ClassVar, Final, NotRequired, TypedDict
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Final,
+    NotRequired,
+    TypedDict,
+    cast,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -23,8 +33,14 @@ from thefuzz import process
 
 from .config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE
 from .dictionary_utils import get_word_info_from_wordnet
+from .goal_manager import GoalManager
 from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
-from .knowledge_base import seed_core_vocabulary, seed_domain_knowledge
+from .knowledge_base import (
+    seed_core_vocabulary,
+    seed_domain_knowledge,
+    validate_and_add_relation,
+)
+from .knowledge_harvester import KnowledgeHarvester
 from .lexicon_manager import LexiconManager
 from .symbolic_parser import SymbolicParser
 from .universal_interpreter import (
@@ -83,14 +99,30 @@ CONTRACTION_MAP: Final[dict[str, str]] = {
     "aren't": "are not",
 }
 
+PROVENANCE_RANK: Final[dict[str, int]] = {
+    "seed": 5,
+    "dictionary_api": 4,
+    "llm_verified": 3,
+    "wikipedia": 2,
+    "duckduckgo": 2,
+    "user_input": 1,
+    "llm": 1,
+}
+
 
 class CognitiveAgent:
-    """Orchestrate the primary cognitive functions of the Axiom Agent.
+    """Orchestrate the primary cognitive functions of the Axiom Agent."""
 
-    This class integrates all other components to execute a symbolic-first thought process.
-    """
+    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 350
 
-    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 50
+    _EXCLUSIVE_RELATIONS: ClassVar[frozenset[str]] = frozenset(
+        [
+            "has_name",
+            "is_capital_of",
+            "has_capital",
+            "is_located_in",
+        ],
+    )
 
     def __init__(
         self,
@@ -122,7 +154,11 @@ class CognitiveAgent:
             cache_data: A dictionary representing the interpreter cache.
             inference_mode: If True, disables all learning and saving
                 functionality.
+            enable_llm: If True (default), loads the Language Model for
+                advanced interpretation and synthesis. Set to False to
+                run in a non-LLM mode.
         """
+
         logger.info("Initializing Cognitive Agent...")
         brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.brain_file = brain_file
@@ -132,11 +168,22 @@ class CognitiveAgent:
         if self.inference_mode:
             logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
+        self.interaction_lock = threading.Lock()
+
         self.interpreter = UniversalInterpreter(load_llm=enable_llm)
         self.lexicon: LexiconManager = LexiconManager(self)
         self.parser: SymbolicParser = SymbolicParser(self)
         self.lemmatizer = WordNetLemmatizer()
+
+        self.goal_manager: GoalManager = GoalManager(self)
+
         self.learning_goals: list[str] = []
+        self.pending_relations: list[tuple[RelationData, dict, float]] = []
+        self.recently_researched: dict[str, float] = {}
+
+        self.harvester: KnowledgeHarvester | None = None
+        if not self.inference_mode:
+            self.harvester = KnowledgeHarvester(agent=self, lock=self.interaction_lock)
 
         if load_from_file:
             logger.info("   - Loading brain from file: %s", self.brain_file)
@@ -221,6 +268,16 @@ class CognitiveAgent:
         expanded_input = self._expand_contractions(sanitized_input)
         contextual_input = self._resolve_references(expanded_input)
         normalized_input = self._preprocess_self_reference(contextual_input)
+        for w, t in list(self.recently_researched.items()):
+            if time.time() - t < 600:
+                if w in user_input.lower():
+                    logger.info(
+                        "  [Cognitive Reflex]: Skipping '%s' (cooldown active).",
+                        w,
+                    )
+                    return f"I’m still processing what I learned about '{w}'. Let's move on for now."
+            else:
+                del self.recently_researched[w]
         interpretations: list[InterpretData] | None = self.parser.parse(
             normalized_input,
         )
@@ -242,20 +299,56 @@ class CognitiveAgent:
         if not interpretations or is_bad_parse:
             words = normalized_input.lower().split()
             unknown_words = [
-                re.sub(r"[^\w\s]", "", w)
+                re.sub(r"[^\w\s-]", "", w)
                 for w in words
-                if w and not self.lexicon.is_known_word(re.sub(r"[^\w\s]", "", w))
+                if w and not self.lexicon.is_known_word(re.sub(r"[^\w\s-]", "", w))
             ]
+
             if unknown_words:
                 word_to_learn = sorted(set(unknown_words))[0]
                 goal = f"INVESTIGATE: {word_to_learn}"
+
                 if goal not in self.learning_goals:
                     self.learning_goals.append(goal)
                     logger.info(
                         "  [Cognitive Reflex]: Unknown word '%s', added to learning goals.",
                         word_to_learn,
                     )
-                return f"New word '{word_to_learn}' discovered, I must research it before I can understand."
+
+                if self.harvester and not self.inference_mode:
+                    logger.info(
+                        "  [Cognitive Reflex]: Attempting real-time research for '%s'...",
+                        word_to_learn,
+                    )
+                    was_resolved = self.harvester._resolve_investigation_goal(goal)
+
+                    if was_resolved:
+                        logger.info(
+                            "  [Cognitive Reflex]: Succeeded. Checking integration status...",
+                        )
+
+                        if self.lexicon.is_known_word(word_to_learn):
+                            logger.info(
+                                "  [Cognitive Reflex]: New knowledge integrated. Re-evaluating input once.",
+                            )
+                            self.recently_researched[word_to_learn] = time.time()
+                            return self._chat_reentry_once(user_input)
+
+                        logger.warning(
+                            "  [Cognitive Reflex]: '%s' still not promoted after research. Halting recursion.",
+                            word_to_learn,
+                        )
+                        return (
+                            f"I studied '{word_to_learn}', but couldn't connect it clearly yet. "
+                            "I'll remember it for future learning."
+                        )
+
+                    logger.warning("  [Cognitive Reflex]: Real-time research failed.")
+                    return (
+                        f"I discovered a new word, '{word_to_learn}', but my attempt to research it "
+                        "in real-time failed. I will study it later."
+                    )
+                return f"New word '{word_to_learn}' discovered. I must study it before I can understand."
 
             if not is_bad_parse:
                 logger.warning(
@@ -326,6 +419,18 @@ class CognitiveAgent:
                                 self._process_statement_for_learning(new_rel)
 
         return final_response
+
+    def _chat_reentry_once(self, user_input: str) -> str:
+        """Safely re-enter chat() once after learning, avoiding infinite recursion."""
+        if getattr(self, "_has_reentered_chat", False):
+            logger.warning("  [Safety]: Prevented recursive chat() re-entry.")
+            return "I've already reconsidered that input after learning something new."
+
+        self._has_reentered_chat = True
+        try:
+            return self.chat(user_input)
+        finally:
+            self._has_reentered_chat = False
 
     def _resolve_references(self, text: str) -> str:
         """Resolve simple pronouns using the stored interpretations from history."""
@@ -623,6 +728,27 @@ class CognitiveAgent:
         if intent == "question_yes_no" and relation:
             return self._answer_yes_no_question(relation)
 
+        if intent == "question_by_relation" and relation:
+            subject = relation.get("subject")
+            verb = relation.get("verb")
+
+            if subject and verb:
+                corrected_subject = self._get_corrected_entity(subject)
+                subject_node = self.graph.get_node_by_name(corrected_subject)
+
+                if subject_node:
+                    for edge in self.graph.get_edges_from_node(subject_node.id):
+                        if edge.type == verb:
+                            target_node = self.graph.get_node_by_id(edge.target)
+                            if target_node:
+                                property_name = verb.replace("has_", "").replace(
+                                    "_",
+                                    " ",
+                                )
+                                return f"The {property_name} of {subject.capitalize()} is {target_node.name.capitalize()}."
+
+            return f"I don't have information about the {relation.get('verb', 'property').replace('has_', '')} of {subject}."
+
         if intent in ("question_about_entity", "question_about_concept") and relation:
             start_concept = relation.get("subject")
             end_concept = relation.get("object")
@@ -698,35 +824,32 @@ class CognitiveAgent:
             indicating that the knowledge base is empty or lacks strong facts.
         """
         all_facts = []
-        reconstructed_edges = []
-        for u, v, data in self.graph.graph.edges(data=True):
-            full_data = data.copy()
-            full_data["source"] = u
-            full_data["target"] = v
-            reconstructed_edges.append(RelationshipEdge.from_dict(full_data))
 
-        if not reconstructed_edges:
+        all_edges = self.graph.get_all_edges()
+
+        if not all_edges:
             return "My knowledge base is currently empty."
 
-        sorted_edges = sorted(
-            reconstructed_edges,
+        high_confidence_edges = sorted(
+            [
+                edge
+                for edge in all_edges
+                if edge.type != "might_relate" and edge.weight >= 0.8
+            ],
             key=lambda edge: edge.weight,
             reverse=True,
         )
-        for edge in sorted_edges:
-            if edge.type == "might_relate" or edge.weight < 0.8:
-                continue
 
-            source_node_data = self.graph.graph.nodes.get(edge.source)
-            target_node_data = self.graph.graph.nodes.get(edge.target)
+        for edge in high_confidence_edges:
+            source_node = self.graph.get_node_by_id(edge.source)
+            target_node = self.graph.get_node_by_id(edge.target)
 
-            if source_node_data and target_node_data:
+            if source_node and target_node:
                 fact_string = (
-                    f"- {source_node_data.get('name').capitalize()} "
+                    f"- {source_node.name.capitalize()} "
                     f"--[{edge.type}]--> "
-                    f"{target_node_data.get('name').capitalize()} "
-                    f"(Weight: {edge.weight:.2f}, "
-                    f"Salience: {edge.access_count})"
+                    f"{target_node.name.capitalize()} "
+                    f"(Weight: {edge.weight:.2f})"
                 )
                 all_facts.append(fact_string)
 
@@ -1225,8 +1348,9 @@ class CognitiveAgent:
 
     def _sanitize_sentence_for_learning(self, sentence: str) -> str:
         """
-        Pre-processes a raw sentence from any source to make it easier for the
-        symbolic parser to understand. This is the main gatekeeper for knowledge.
+        Pre-processes a raw sentence from any source.
+
+        Makes it easier for thesymbolic parser to understand. This is the main gatekeeper for knowledge.
         """
         sanitized = re.sub(r"\s*\(.*?\)\s*", " ", sentence).strip()
 
@@ -1259,10 +1383,12 @@ class CognitiveAgent:
             The normalized phrase.
         """
         clean_phrase = phrase.lower().strip()
-        clean_phrase = re.sub(r"[.,!?;']+$", "", clean_phrase)
-        words = clean_phrase.split()
+        clean_phrase = re.sub(r"\s*\([^)]*\)\s*", "", clean_phrase).strip()
 
-        if len(words) > 1 and words[0] in ["a", "an", "the"]:
+        clean_phrase = re.sub(r"[.,!?;']+$", "", clean_phrase)
+
+        words = clean_phrase.split()
+        if len(words) > 1 and words[0] in ("a", "an", "the"):
             return " ".join(words[1:]).strip()
 
         return clean_phrase
@@ -1271,126 +1397,246 @@ class CognitiveAgent:
         self,
         relation: RelationData,
     ) -> tuple[bool, str]:
-        """Process a structured fact to learn and integrate it into the graph."""
+        """Process a structured fact, handling validation and belief revision."""
         if self.inference_mode:
+            return False, "Agent is in read-only mode."
+
+        subj_raw = cast("str | dict[str, Any] | list | None", relation.get("subject"))
+        verb_raw = cast("str | None", relation.get("verb"))
+        obj_raw = cast("str | dict[str, Any] | list | None", relation.get("object"))
+
+        if subj_raw is None or verb_raw is None or obj_raw is None:
             return (
                 False,
-                "I am currently in a read-only mode and cannot learn new facts.",
+                "Incomplete fact structure: requires subject, verb, and object.",
             )
 
-        subject = relation.get("subject")
-        verb = relation.get("verb")
-        object_ = relation.get("object")
-        properties = relation.get("properties")
-        if not all([subject, verb, object_]):
-            return (False, "I couldn't understand the structure of that fact.")
+        def _extract_name(value: str | dict[str, Any] | list) -> str | None:
+            """
+            Return the name string from a string, dict, or list.
+            This version is hardened to handle list inputs from the LLM.
+            """
+            if isinstance(value, list):
+                value = " ".join(str(v) for v in value)
 
-        subject_name_raw = subject.get("name") if isinstance(subject, dict) else subject
-        if not subject_name_raw:
-            return (False, "Could not determine the subject of the fact.")
-        subject_name = subject_name_raw
+            if isinstance(value, dict):
+                name = value.get("name")
+                if isinstance(name, str):
+                    name_clean = name.strip()
+                    if name_clean:
+                        return name_clean
+                return None
 
-        objects_to_process = []
-        if isinstance(object_, list):
-            for item in object_:
-                if isinstance(item, dict):
-                    name = item.get("entity") or item.get("name")
-                else:
-                    name = item
+            name_clean = value.strip()
+            return name_clean or None
 
-                if name:
-                    objects_to_process.append(name)
-        else:
-            name = object_.get("name") if isinstance(object_, dict) else object_
-            if name:
-                objects_to_process.append(name)
+        subject_name = _extract_name(subj_raw)
+        object_name = _extract_name(obj_raw)
 
-        if not objects_to_process:
-            return (False, "Could not determine the object(s) of the fact.")
+        if subject_name is None:
+            return False, "Could not determine the subject of the fact."
+        if object_name is None:
+            return False, "Could not determine the object of the fact."
+
+        if len(object_name.split()) > 5:
+            truncated = (
+                (object_name[:60] + "...") if len(object_name) > 60 else object_name
+            )
+            msg = f"Deferred learning: The object '{truncated}' appears to be a description, not a concept."
+            logger.warning(msg)
+            return False, msg
+
+        verb_cleaned = verb_raw.lower().strip()
 
         logger.info(
-            "  [LEARNING: Processing statement: %s -> %s -> %s]",
+            "  [LEARNING]: Processing: %s -> %s -> %s",
             subject_name,
-            verb,
-            objects_to_process,
+            verb_cleaned,
+            object_name,
         )
+
         self.learning_iterations += 1
 
-        assert verb is not None
-        verb_cleaned = verb.lower().strip()
         sub_node = self._add_or_update_concept(subject_name)
+        obj_node = self._add_or_update_concept(object_name)
 
-        for object_name in objects_to_process:
-            relation_type = self.get_relation_type(
-                verb_cleaned,
-                subject_name,
-                object_name,
+        if not (sub_node and obj_node):
+            return (
+                False,
+                f"Failed to create concepts for '{subject_name}' or '{object_name}'.",
             )
-            exclusive_relations = [
-                "has_name",
-                "is_capital_of",
-                "has_capital",
-                "is_located_in",
-            ]
-            if relation_type in exclusive_relations and sub_node:
-                for edge in self.graph.get_edges_from_node(sub_node.id):
-                    if edge.type == relation_type:
-                        existing_target_data = self.graph.graph.nodes[edge.target]
-                        if existing_target_data.get("name") != self._clean_phrase(
-                            object_name,
-                        ):
-                            logger.warning(
-                                "  [Curiosity]: CONTRADICTION DETECTED (Exclusive Relationship)!",
-                            )
-                            return (False, "exclusive_conflict")
 
-        learned_at_least_one = False
-        for object_name in objects_to_process:
-            relation_type = self.get_relation_type(
-                verb_cleaned,
-                subject_name,
-                object_name,
+        relation_type = self.get_relation_type(verb_cleaned, subject_name, object_name)
+
+        if relation_type in self._EXCLUSIVE_RELATIONS:
+            was_learned, message = self._resolve_exclusive_conflict(
+                sub_node,
+                obj_node,
+                relation_type,
+                relation,
             )
-            obj_node = self._add_or_update_concept(object_name)
-            if sub_node and obj_node:
-                edge_exists = any(
-                    edge.type == relation_type and edge.target == obj_node.id
-                    for edge in self.graph.get_edges_from_node(sub_node.id)
+        else:
+            was_learned, message = self._add_new_fact(
+                sub_node,
+                obj_node,
+                relation_type,
+                relation,
+            )
+
+        if not was_learned:
+            return False, message
+
+        try:
+            self._gather_facts_multihop.cache_clear()
+        except Exception:
+            logger.debug(
+                "  [Cache]: could not clear reasoning cache (missing cache_clear).",
+            )
+
+        logger.info("  [Cache]: Cleared reasoning cache due to new knowledge.")
+        self.save_brain()
+        self.save_state()
+
+        return True, "I understand. I have noted that."
+
+    def _resolve_exclusive_conflict(
+        self,
+        sub_node: ConceptNode,
+        obj_node: ConceptNode,
+        relation_type: str,
+        relation_data: RelationData,
+    ) -> tuple[bool, str]:
+        """Handle belief revision for relationships that must be unique."""
+        conflict_edge = self.graph.find_exclusive_conflict(sub_node, relation_type)
+        if not conflict_edge:
+            return self._add_new_fact(sub_node, obj_node, relation_type, relation_data)
+
+        rel_props = relation_data.get("properties") or {}
+        candidate_confidence = float(rel_props.get("confidence", 0.95))
+        candidate_provenance = rel_props.get("provenance", "user")
+        candidate_rank = PROVENANCE_RANK.get(candidate_provenance, 0)
+        candidate_strength = (candidate_confidence, candidate_rank)
+
+        existing_confidence = getattr(conflict_edge, "weight", 0.6)
+        existing_prov = conflict_edge.properties.get("provenance", "unknown")
+        existing_rank = PROVENANCE_RANK.get(existing_prov, 0)
+        existing_strength = (existing_confidence, existing_rank)
+
+        if candidate_strength > existing_strength:
+            logger.warning(
+                "  [Belief Revision]: New fact is stronger. Deprecating old fact.",
+            )
+            self.graph.update_edge_properties(
+                conflict_edge,
+                {"superseded_by": obj_node.name},
+            )
+            self.graph.update_edge_weight(conflict_edge, 0.2)
+            return self._add_new_fact(sub_node, obj_node, relation_type, relation_data)
+
+        if candidate_strength < existing_strength:
+            logger.warning(
+                "  [Belief Revision]: Existing fact is stronger. Rejecting new fact.",
+            )
+            return (False, "existing_fact_stronger")
+
+        logger.warning(
+            "  [Belief Revision]: Stalemate detected. Triggering clarification.",
+        )
+        if self.harvester:
+            target_node = self.graph.get_node_by_id(conflict_edge.target)
+            if target_node:
+                goal = (
+                    f"RESOLVE_CONFLICT: {sub_node.name} --[{relation_type}]--> {obj_node.name} "
+                    f"vs {target_node.name}"
+                )
+                if goal not in self.learning_goals:
+                    self.learning_goals.append(goal)
+                    self.save_state()
+        return (False, "exclusive_conflict")
+
+    def _add_new_fact(
+        self: CognitiveAgent,
+        sub_node: ConceptNode,
+        obj_node: ConceptNode,
+        relation_type: str,
+        relation_data: RelationData,
+    ) -> tuple[bool, str]:
+        """Adds a new fact by delegating to the core validation and addition logic.
+
+        This method constructs a candidate fact and passes it to the centralized
+        `validate_and_add_relation` function. This function encapsulates the
+        complete learning strategy, including checks for existing facts,
+        contradictions, and other deferral conditions. The outcome of the
+        operation is logged, and a status is returned.
+
+        By centralizing the validation, this method avoids performing partial or
+        potentially outdated pre-checks, ensuring that the core learning strategy
+        is the single source of truth.
+
+        Args:
+            sub_node: The subject node of the fact.
+            obj_node: The object node of the fact.
+            relation_type: The type of relationship between the subject and object.
+            relation_data: A dictionary containing additional data about the
+                        relation, such as 'properties'.
+
+        Returns:
+            A tuple containing:
+            - A boolean: `True` if a new fact was successfully learned ('inserted'
+            or 'replaced'), `False` otherwise.
+            - A string: A status code indicating the outcome of the operation
+            (e.g., 'inserted', 'fact_exists', 'deferred').
+        """
+        properties = relation_data.get("properties", {})
+        candidate_fact = {
+            "subject": sub_node.name,
+            "verb": relation_type,
+            "object": obj_node.name,
+        }
+        caller_name = f"{self.__class__.__name__}._add_new_fact"
+
+        status = validate_and_add_relation(
+            self, candidate_fact, properties, caller_name=caller_name
+        )
+
+        was_learned = status in ("inserted", "replaced")
+
+        if was_learned:
+            logger.info(
+                "Learned new fact: %s --[%s]--> %s (status=%s)",
+                sub_node.name,
+                relation_type,
+                obj_node.name,
+                status,
+            )
+        else:
+            # Handle non-learning outcomes by logging the specific status.
+            if status == "fact_exists":
+                logger.debug(
+                    "Fact already exists, skipping: %s --[%s]--> %s",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                )
+            elif status == "deferred":
+                # ELEVATED: Deferred learning is a high-priority systemic issue
+                # that warrants a warning for increased visibility.
+                logger.warning(
+                    "Deferred learning for %s --[%s]--> %s. (in %s)",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                    caller_name,
+                )
+            elif status == "contradiction_stored":
+                logger.warning(
+                    "Contradiction detected and stored for %s --[%s]--> %s.",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
                 )
 
-                if not edge_exists:
-                    self.graph.add_edge(
-                        sub_node,
-                        obj_node,
-                        relation_type,
-                        0.9,
-                        properties=properties,
-                    )
-                    logger.info(
-                        "    Learned new fact: %s --[%s]--> %s with properties %s",
-                        sub_node.name,
-                        relation_type,
-                        obj_node.name,
-                        properties,
-                    )
-
-                    learned_at_least_one = True
-                else:
-                    logger.debug(
-                        "    - Fact already exists: %s --[%s]--> %s",
-                        sub_node.name,
-                        relation_type,
-                        obj_node.name,
-                    )
-
-        if learned_at_least_one:
-            self._gather_facts_multihop.cache_clear()
-            logger.info("  [Cache]: Cleared reasoning cache due to new knowledge.")
-            self.save_brain()
-            self.save_state()
-            return (True, "I understand. I have noted that.")
-
-        return (True, "I have processed that information.")
+        return was_learned, status
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.
@@ -1423,55 +1669,51 @@ class CognitiveAgent:
         return RELATION_TYPE_MAP.get(verb, verb.replace(" ", "_"))
 
     def learn_new_fact_autonomously(
-        self,
-        fact_sentence: str,
-        source_topic: str | None = None,
+        self, fact_sentence: str, source_topic: str | None = None
     ) -> bool:
-        """Process and learn a fact from a raw sentence string.
+        """Learns from a sentence by decomposing it into atomic facts and processing them."""
 
-        This is a high-level wrapper used by the KnowledgeHarvester. It
-        takes a raw sentence, sends it to the LLM interpreter, and if a
-        valid factual statement is returned, it passes the structured
-        relation to the main learning processor.
-
-        Args:
-            fact_sentence: A string containing a potential fact to learn.
-
-        Returns:
-            True if a new fact was successfully learned, False otherwise.
-        """
-        if self.inference_mode:
-            logger.info("[Autonomous Learning]: Skipped. Agent is in inference mode.")
-            return False
+        caller_name = f"{self.__class__.__name__}.learn_new_fact_autonomously"
         logger.info(
             "[Autonomous Learning]: Attempting to learn fact: '%s'",
             fact_sentence,
         )
-        interpretation = self.interpreter.interpret(fact_sentence)
-        relation = interpretation.get("relation")
-        logger.info(
-            "  [Autonomous Learning]: Interpreted Relation: %s",
-            relation,
+
+        atomic_relations = self.interpreter.decompose_sentence_to_relations(
+            text=fact_sentence, main_topic=source_topic
         )
-        if interpretation.get("intent") == "statement_of_fact" and relation:
-            if source_topic:
-                relation["subject"] = self._clean_phrase(source_topic)
-            was_learned, response_message = self._process_statement_for_learning(
-                relation,
-            )
-            if was_learned:
-                logger.info(
-                    "[Autonomous Learning]: Successfully learned and saved new fact.",
-                )
-                return True
+
+        if not atomic_relations:
             logger.warning(
-                "[Autonomous Learning]: Failed to process fact. Reason: %s",
-                response_message,
+                "  [Autonomous Learning]: Interpreter could not extract any atomic facts from the sentence. (in %s)",
+                caller_name,
             )
-        else:
-            logger.warning(
-                "[Autonomous Learning]: Could not interpret the sentence as a statement of fact.",
+            return False
+
+        facts_learned_count = 0
+        for relation_data in atomic_relations:
+            props = relation_data.setdefault("properties", {})
+            props.setdefault("confidence", 0.6)
+            props.setdefault("provenance", "llm_decomposition")
+
+            logger.info(
+                "  [Autonomous Learning]: Interpreted Relation: %s", relation_data
             )
+
+            success, _ = self._process_statement_for_learning(relation_data)
+            if success:
+                facts_learned_count += 1
+
+        if facts_learned_count > 0:
+            logger.info(
+                "[Autonomous Learning]: Successfully learned and saved %d new fact(s).",
+                facts_learned_count,
+            )
+            return True
+        logger.warning(
+            "[Autonomous Learning]: Failed to learn any new facts from the decomposed relations. (in %s)",
+            caller_name,
+        )
         return False
 
     def _add_or_update_concept(
@@ -1565,7 +1807,7 @@ class CognitiveAgent:
         concept_name2: str,
         weight: float = 0.5,
     ) -> None:
-        """Add a structured fact directly to the knowledge graph WITHOUT logging."
+        """Add a structured fact directly to the knowledge graph WITHOUT logging.
 
         Used for high-volume initial brain seeding.
         """

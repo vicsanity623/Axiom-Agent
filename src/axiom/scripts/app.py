@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import threading
 import time
@@ -20,7 +21,11 @@ from pyngrok import ngrok
 from ..cognitive_agent import CognitiveAgent
 from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, STATIC_DIR, TEMPLATE_DIR
 from ..knowledge_harvester import KnowledgeHarvester
+from ..logging_config import setup_logging
+from ..metacognitive_engine import MetacognitiveEngine
 from .cycle_manager import CycleManager
+
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder=str(TEMPLATE_DIR), static_folder=str(STATIC_DIR))
 
@@ -37,7 +42,7 @@ def load_agent() -> None:
         if axiom_agent is None and agent_status != "loading":
             agent_status = "loading"
             try:
-                print("--- Starting Axiom Agent Initialization... ---")
+                logger.info("--- Starting Axiom Agent Initialization... ---")
 
                 axiom_agent = CognitiveAgent(
                     brain_file=DEFAULT_BRAIN_FILE,
@@ -50,17 +55,26 @@ def load_agent() -> None:
                 )
                 scheduler = BackgroundScheduler(daemon=True)
 
-                manager = CycleManager(scheduler, harvester)
+                gemini_api_key = os.environ.get("GEMINI_API_KEY")
+                metacognitive_engine = MetacognitiveEngine(
+                    agent=axiom_agent,
+                    gemini_api_key=gemini_api_key,
+                )
+                manager = CycleManager(scheduler, harvester, metacognitive_engine)
+
                 manager.start()
 
                 scheduler.start()
 
                 agent_status = "ready"
-                print("--- Axiom Agent is Ready! ---")
+                logger.info("--- Axiom Agent is Ready! ---")
             except Exception as exc:
                 agent_status = f"error: {exc}"
-                print(f"!!! CRITICAL ERROR INITIALIZING AGENT: {exc} !!!")
-
+                logger.critical(
+                    "!!! CRITICAL ERROR INITIALIZING AGENT: %s !!!",
+                    exc,
+                    exc_info=True,
+                )
                 traceback.print_exc()
 
 
@@ -84,18 +98,7 @@ def service_worker() -> Response:
 
 @app.route("/status")
 def status() -> str | Response:
-    """Provide the agent's loading status and trigger initialization.
-
-    This endpoint is polled by the front-end. On the very first call,
-    it triggers the `load_agent` function in a background thread to
-    begin the resource-intensive initialization process.
-
-    Subsequent calls will return the current status ('loading', 'ready',
-    or 'error') without re-triggering the load.
-
-    Returns:
-        A JSON response with a 'status' key indicating the agent's state.
-    """
+    """Provide the agent's loading status and trigger initialization."""
     global agent_status
     if agent_status == "uninitialized":
         threading.Thread(target=load_agent).start()
@@ -105,20 +108,7 @@ def status() -> str | Response:
 
 @app.route("/chat", methods=["POST"])
 def chat() -> tuple[Response, int] | Response:
-    """Handle an incoming user message and return the agent's response.
-
-    This is the main API endpoint for conversation. It waits until the
-    agent is fully initialized, then accepts a JSON payload with a
-    'message' key.
-
-    The user's message is passed to the agent's chat method within a
-    thread-safe lock. The agent's reply is returned in a JSON object
-    with a 'response' key.
-
-    Returns:
-        A JSON response with the agent's reply, or a JSON error
-        object with an appropriate HTTP status code on failure.
-    """
+    """Handle an incoming user message and return the agent's response."""
     start_time = time.time()
     while agent_status != "ready":
         if agent_status.startswith("error"):
@@ -139,24 +129,18 @@ def chat() -> tuple[Response, int] | Response:
 
     try:
         with agent_interaction_lock:
-            print("  [Lock]: User chat acquired lock.")
+            logger.debug("  [Lock]: User chat acquired lock.")
             agent_response = axiom_agent.chat(user_message)
-        print("  [Lock]: User chat released lock.")
+        logger.debug("  [Lock]: User chat released lock.")
         return jsonify({"response": agent_response})
     except Exception as e:
-        print(f"!!! ERROR DURING CHAT PROCESSING: {e} !!!")
-
+        logger.error("!!! ERROR DURING CHAT PROCESSING: %s !!!", e, exc_info=True)
         traceback.print_exc()
         return jsonify({"error": f"An internal error occurred: {e}"}), 500
 
 
 def run() -> None:
-    """Parse command-line arguments and start the Flask web server.
-
-    This function sets up the main application entry point. It handles
-    the optional '--ngrok' flag to expose the local server to the
-    internet via a public URL.
-    """
+    """Parse command-line arguments and start the Flask web server."""
     parser = argparse.ArgumentParser(description="Run the Axiom Agent Training App.")
     parser.add_argument(
         "--ngrok",
@@ -170,17 +154,18 @@ def run() -> None:
         if authtoken:
             ngrok.set_auth_token(authtoken)
         else:
-            print(
+            logger.warning(
                 "[ngrok Warning]: NGROK_AUTHTOKEN environment variable not set. Using anonymous tunnel.",
             )
 
         public_url = ngrok.connect(7500)
-        print(f" * ngrok tunnel is active at: {public_url}")
+        logger.info(" * ngrok tunnel is active at: %s", public_url)
 
     app.run(host="0.0.0.0", port=7500, debug=False)
 
 
 def main() -> None:
+    setup_logging()
     run()
 
 
