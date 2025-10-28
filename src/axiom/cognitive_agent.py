@@ -113,7 +113,7 @@ PROVENANCE_RANK: Final[dict[str, int]] = {
 class CognitiveAgent:
     """Orchestrate the primary cognitive functions of the Axiom Agent."""
 
-    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 50
+    INTERPRETER_REBOOT_THRESHOLD: ClassVar[int] = 350
 
     _EXCLUSIVE_RELATIONS: ClassVar[frozenset[str]] = frozenset(
         [
@@ -824,35 +824,32 @@ class CognitiveAgent:
             indicating that the knowledge base is empty or lacks strong facts.
         """
         all_facts = []
-        reconstructed_edges = []
-        for u, v, data in self.graph.graph.edges(data=True):
-            full_data = data.copy()
-            full_data["source"] = u
-            full_data["target"] = v
-            reconstructed_edges.append(RelationshipEdge.from_dict(full_data))
 
-        if not reconstructed_edges:
+        all_edges = self.graph.get_all_edges()
+
+        if not all_edges:
             return "My knowledge base is currently empty."
 
-        sorted_edges = sorted(
-            reconstructed_edges,
+        high_confidence_edges = sorted(
+            [
+                edge
+                for edge in all_edges
+                if edge.type != "might_relate" and edge.weight >= 0.8
+            ],
             key=lambda edge: edge.weight,
             reverse=True,
         )
-        for edge in sorted_edges:
-            if edge.type == "might_relate" or edge.weight < 0.8:
-                continue
 
-            source_node_data = self.graph.graph.nodes.get(edge.source)
-            target_node_data = self.graph.graph.nodes.get(edge.target)
+        for edge in high_confidence_edges:
+            source_node = self.graph.get_node_by_id(edge.source)
+            target_node = self.graph.get_node_by_id(edge.target)
 
-            if source_node_data and target_node_data:
+            if source_node and target_node:
                 fact_string = (
-                    f"- {source_node_data.get('name').capitalize()} "
+                    f"- {source_node.name.capitalize()} "
                     f"--[{edge.type}]--> "
-                    f"{target_node_data.get('name').capitalize()} "
-                    f"(Weight: {edge.weight:.2f}, "
-                    f"Salience: {edge.access_count})"
+                    f"{target_node.name.capitalize()} "
+                    f"(Weight: {edge.weight:.2f})"
                 )
                 all_facts.append(fact_string)
 
@@ -1400,23 +1397,13 @@ class CognitiveAgent:
         self,
         relation: RelationData,
     ) -> tuple[bool, str]:
-        """Process a structured fact, handling validation and belief revision.
-
-        This function acts as a high-level orchestrator, delegating the core
-        learning logic to specialized helper methods.
-
-        Notes on typing:
-        - RelationData is a TypedDict where `verb` is NotRequired and other keys may
-        be provided as strings or, in practice, small dicts (e.g. {"name": ...}).
-        - We explicitly cast the raw .get(...) results into narrow Union types
-        before validating to satisfy mypy's `no_implicit_optional` and related flags.
-        """
+        """Process a structured fact, handling validation and belief revision."""
         if self.inference_mode:
             return False, "Agent is in read-only mode."
 
-        subj_raw = cast("str | dict[str, Any] | None", relation.get("subject"))
+        subj_raw = cast("str | dict[str, Any] | list | None", relation.get("subject"))
         verb_raw = cast("str | None", relation.get("verb"))
-        obj_raw = cast("str | dict[str, Any] | None", relation.get("object"))
+        obj_raw = cast("str | dict[str, Any] | list | None", relation.get("object"))
 
         if subj_raw is None or verb_raw is None or obj_raw is None:
             return (
@@ -1424,8 +1411,13 @@ class CognitiveAgent:
                 "Incomplete fact structure: requires subject, verb, and object.",
             )
 
-        def _extract_name(value: str | dict[str, Any]) -> str | None:
-            """Return the name string from either a string or dict, or None if invalid."""
+        def _extract_name(value: str | dict[str, Any] | list) -> str | None:
+            """
+            Return the name string from a string, dict, or list.
+            This version is hardened to handle list inputs from the LLM.
+            """
+            if isinstance(value, list):
+                value = " ".join(str(v) for v in value)
 
             if isinstance(value, dict):
                 name = value.get("name")
@@ -1569,12 +1561,17 @@ class CognitiveAgent:
         relation_type: str,
         relation_data: RelationData,
     ) -> tuple[bool, str]:
-        """Adds a new, non-conflicting fact to the knowledge graph.
+        """Adds a new fact by delegating to the core validation and addition logic.
 
-        This method first checks if the fact (a relationship of a specific type
-        between two nodes) already exists. If it does not, it proceeds to call
-        the core validation and addition logic. The outcome of that process is
-        logged, and a status is returned.
+        This method constructs a candidate fact and passes it to the centralized
+        `validate_and_add_relation` function. This function encapsulates the
+        complete learning strategy, including checks for existing facts,
+        contradictions, and other deferral conditions. The outcome of the
+        operation is logged, and a status is returned.
+
+        By centralizing the validation, this method avoids performing partial or
+        potentially outdated pre-checks, ensuring that the core learning strategy
+        is the single source of truth.
 
         Args:
             sub_node: The subject node of the fact.
@@ -1590,20 +1587,6 @@ class CognitiveAgent:
             - A string: A status code indicating the outcome of the operation
             (e.g., 'inserted', 'fact_exists', 'deferred').
         """
-        # 1. Pre-check: Verify if the exact same relation already exists.
-        if any(
-            edge.type == relation_type and edge.target == obj_node.id
-            for edge in self.graph.get_edges_from_node(sub_node.id)
-        ):
-            logger.debug(
-                "Fact already exists, skipping: %s --[%s]--> %s",
-                sub_node.name,
-                relation_type,
-                obj_node.name,
-            )
-            return False, "fact_exists"
-
-        # 2. Prepare data for the validation and insertion pipeline.
         properties = relation_data.get("properties", {})
         candidate_fact = {
             "subject": sub_node.name,
@@ -1612,39 +1595,48 @@ class CognitiveAgent:
         }
         caller_name = f"{self.__class__.__name__}._add_new_fact"
 
-        # 3. Delegate to the core relation validation and addition logic.
         status = validate_and_add_relation(
             self, candidate_fact, properties, caller_name=caller_name
         )
 
-        # 4. Process the result and log accordingly.
-        if status in ("inserted", "replaced"):
-            logger.warning(
+        was_learned = status in ("inserted", "replaced")
+
+        if was_learned:
+            logger.info(
                 "Learned new fact: %s --[%s]--> %s (status=%s)",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
                 status,
             )
-            return True, status
+        else:
+            # Handle non-learning outcomes by logging the specific status.
+            if status == "fact_exists":
+                logger.debug(
+                    "Fact already exists, skipping: %s --[%s]--> %s",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                )
+            elif status == "deferred":
+                # ELEVATED: Deferred learning is a high-priority systemic issue
+                # that warrants a warning for increased visibility.
+                logger.warning(
+                    "Deferred learning for %s --[%s]--> %s. (in %s)",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                    caller_name,
+                )
+            elif status == "contradiction_stored":
+                logger.warning(
+                    "Contradiction detected and stored for %s --[%s]--> %s.",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                )
 
-        if status == "deferred":
-            logger.info(
-                "Deferred learning for %s --[%s]--> %s. (in %s)",
-                sub_node.name,
-                relation_type,
-                obj_node.name,
-                caller_name,
-            )
-        elif status == "contradiction_stored":
-            logger.warning(
-                "Contradiction detected and stored for %s --[%s]--> %s.",
-                sub_node.name,
-                relation_type,
-                obj_node.name,
-            )
-
-        return False, status
+        return was_learned, status
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb.

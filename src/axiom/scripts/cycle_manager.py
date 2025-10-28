@@ -27,10 +27,10 @@ class CycleManager:
         self.metacognitive_engine = metacognitive_engine
 
         # TESTING DURATIONS
-        self.LEARNING_PHASE_DURATION = timedelta(minutes=25)
-        self.DISCOVERY_PHASE_DURATION = timedelta(minutes=10)
+        self.LEARNING_PHASE_DURATION = timedelta(hours=2.8)
+        self.DISCOVERY_PHASE_DURATION = timedelta(minutes=35.2)
         self.REFINEMENT_PHASE_DURATION = timedelta(minutes=5)
-        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=9.5)
+        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=5)
 
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
@@ -39,11 +39,10 @@ class CycleManager:
         """Start the first phase and schedule all cognitive cycles."""
         self._start_learning_phase()
 
-        # Check phases every 2 minutes for faster testing
         self.scheduler.add_job(
             self._manage_phases,
             "interval",
-            minutes=2,
+            minutes=1,
             id="cycle_manager_job",
         )
 
@@ -100,7 +99,7 @@ class CycleManager:
         self.scheduler.add_job(
             self.harvester.discover_cycle,
             "interval",
-            minutes=1,
+            minutes=5,
             id="discover_cycle_job",
         )
         self.current_phase = "discovery"
@@ -113,7 +112,7 @@ class CycleManager:
         self.scheduler.add_job(
             self.harvester.refinement_cycle,
             "interval",
-            minutes=9,
+            minutes=2,
             id="refinement_cycle_job",
         )
         self.current_phase = "refinement"
@@ -126,7 +125,7 @@ class CycleManager:
         self.scheduler.add_job(
             self.metacognitive_engine.run_introspection_cycle,
             "interval",
-            minutes=5.9,
+            minutes=2,
             id="metacognitive_cycle_job",
         )
         self.current_phase = "metacognitive"

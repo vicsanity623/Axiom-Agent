@@ -997,6 +997,13 @@ class MetacognitiveEngine:
         It identifies a problem, generates a fix, verifies it in a sandbox,
         and saves a detailed report for human review.
         """
+        suggestion_file = Path("code_suggestion.json")
+        if suggestion_file.exists() and suggestion_file.stat().st_size > 0:
+            logger.info(
+                "[Metacognition]: Skipping cycle: A pending suggestion exists at '%s' awaiting human review.",
+                suggestion_file,
+            )
+            return
         if not self.analysis_bridge:
             return
 

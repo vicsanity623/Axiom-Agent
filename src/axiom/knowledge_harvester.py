@@ -332,7 +332,7 @@ class KnowledgeHarvester:
         facts. This improves the agent's ability to reason symbolically.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"\n--- [Refinement Cycle Started at {timestamp}] ---")
+        logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
 
         chunky_fact = None
         with self.lock:
@@ -340,16 +340,20 @@ class KnowledgeHarvester:
 
         if chunky_fact:
             source_node, target_node, edge = chunky_fact
-            print(
-                f"  [Refinement]: Found a chunky fact to refine: '{source_node.name}' --[{edge.type}]--> '{target_node.name}'",
+            logger.info(
+                "  [Refinement]: Found a chunky fact to refine: '%s' --[%s]--> '%s'",
+                source_node.name,
+                edge.type,
+                target_node.name,
             )
             atomic_sentences = self.agent.interpreter.break_down_definition(
                 subject=source_node.name,
                 chunky_definition=target_node.name,
             )
             if atomic_sentences:
-                print(
-                    f"  [Refinement]: Decomposed into {len(atomic_sentences)} new atomic facts.",
+                logger.info(
+                    "  [Refinement]: Decomposed into %d new atomic facts.",
+                    len(atomic_sentences),
                 )
                 for sentence in atomic_sentences:
                     with self.lock:
@@ -369,16 +373,22 @@ class KnowledgeHarvester:
                             "weight"
                         ] = 0.2
                         self.agent.save_brain()
-                        print(
+                        logger.info(
                             "  [Refinement]: Marked original fact as refined by lowering its weight."
                         )
         else:
-            print("[Refinement]: No chunky facts found for refinement this cycle.")
+            caller_name = f"{self.__class__.__name__}._find_chunky_fact"
+            logger.warning(
+                "[Refinement]: No chunky facts found for refinement this cycle. (in %s)",
+                caller_name,
+            )
 
         self._prune_research_cache()
 
-        print(
-            f"{LogColors.GREEN}--- [Refinement Cycle Finished] ---\n{LogColors.RESET}"
+        logger.info(
+            "%s--- [Refinement Cycle Finished] ---\n%s",
+            LogColors.GREEN,
+            LogColors.RESET,
         )
         self.agent.log_autonomous_cycle_completion()
 
