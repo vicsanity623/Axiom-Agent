@@ -28,23 +28,13 @@ console = Console(theme=custom_theme)
 def setup_logging():
     """
     Configure rich-enhanced logging for the Axiom Agent project.
-
     This setup provides two handlers:
     1. A rich, colored console handler for interactive development.
     2. A plain-text, rotating file handler for persistent logging, which is
        used by the MetacognitiveEngine for self-analysis.
-
-    The log level can be configured via the AXIOM_LOG_LEVEL environment variable.
     """
-    log_file = os.getenv("AXIOM_LOG_FILE", "axiom.log")
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(log_file),
-            logging.StreamHandler(),
-        ],
-    )
+    logging.captureWarnings(True)
+
     axiom_logger = logging.getLogger("axiom")
 
     if axiom_logger.hasHandlers():
@@ -72,10 +62,11 @@ def setup_logging():
         "%(asctime)s [%(levelname)-5.5s] [%(name)s]: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-
-    # This allows the E2E test's `cwd` to correctly isolate the log file.
+    
+    # Allow the log file path to be configured via an environment variable for testing.
+    log_file_path = os.getenv("AXIOM_LOG_FILE", "axiom.log")
     file_handler = RotatingFileHandler(
-        "axiom.log",
+        log_file_path,
         mode="a",
         maxBytes=5 * 1024 * 1024,
         backupCount=3,
@@ -87,6 +78,7 @@ def setup_logging():
     # Set log levels for noisy third-party libraries.
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("py.warnings").setLevel(logging.WARNING)
 
     axiom_logger.info(
         "[success]Logging successfully initialized for Axiom Agent.[/success]"

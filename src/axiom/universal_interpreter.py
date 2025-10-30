@@ -530,14 +530,23 @@ class UniversalInterpreter:
             response_text = self._run_llm_completion_with_retries(
                 f"[INST]{prompt}[/INST]", max_tokens=1024, temperature=0.1
             )
+            if not response_text:
+                logger.warning("  [Interpreter Warning]: LLM returned an empty response for decomposition.")
+                return []
 
             start_bracket = response_text.find("[")
             end_bracket = response_text.rfind("]")
             if start_bracket == -1 or end_bracket == -1:
+                logger.warning("  [Interpreter Warning]: LLM response did not contain a JSON list. Output: %s", response_text)
                 return []
 
             json_str = response_text[start_bracket : end_bracket + 1]
-            relations = json.loads(json_str)
+            try:
+                relations = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error("  [Interpreter Error]: Failed to decompose sentence. Error: %s", e)
+                logger.debug("  [Interpreter Debug]: Malformed JSON from LLM:\n%s", json_str)
+                return []
 
             if isinstance(relations, list):
                 logger.info(
@@ -545,10 +554,13 @@ class UniversalInterpreter:
                     len(relations),
                 )
                 return cast("list[RelationData]", relations)
+            
+            logger.warning("  [Interpreter Warning]: LLM returned valid JSON, but it was not a list. Output: %s", json_str)
             return []
+            
         except Exception as e:
             logger.error(
-                "  [Interpreter Error]: Failed to decompose sentence. Error: %s", e
+                "  [Interpreter Error]: An unexpected error occurred during decomposition. Error: %s", e
             )
             return []
 

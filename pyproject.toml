@@ -59,6 +59,7 @@ axiom-teach = "axiom.scripts.cnt:main"
 axiom-visualize = "axiom.scripts.visualize_brain:main" # Added for HTML visualization
 axiom-webui = "axiom.scripts.app_model:main"
 axiom-webui_app = "axiom.scripts.app:main"
+axiom-metatest = "axiom.scripts.test_metacog:main"
 
 
 # --- Tool Configurations ---

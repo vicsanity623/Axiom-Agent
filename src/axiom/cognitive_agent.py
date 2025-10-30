@@ -1342,8 +1342,8 @@ class CognitiveAgent:
         )
 
         if status in ("inserted", "replaced"):
-            logger.warning(
-                "    Learned new fact: %s --[%s]--> %s (status=%s)",
+            logger.info(
+                "[success]Learned new fact: %s --[%s]--> %s (status=%s)[/success]",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
