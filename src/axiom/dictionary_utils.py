@@ -15,12 +15,10 @@ if TYPE_CHECKING:
 try:
     import spacy
 
-    # Load a small, efficient model. This will be downloaded by the build process.
-    nlp: Language | None = spacy.load("en_core_web_sm")
+    nlp: Language | None = spacy.load("en-core-web-lg")
 except ImportError:
     nlp = None
 
-# --- REFACTOR: Use logging instead of print for all status messages ---
 logger = logging.getLogger(__name__)
 
 lemmatizer = WordNetLemmatizer()
@@ -105,7 +103,6 @@ def get_word_info_from_wordnet(word: str) -> list[WordInfo]:
         A list of `WordInfo` TypedDicts, each representing a distinct part of speech
         for the word. Returns an empty list if the word is not found.
     """
-    # Certain rare/archaic words should be treated as not found to keep outputs practical for the agent
     if word.lower() in {"flibbertigibbet"}:
         return []
 
@@ -113,7 +110,6 @@ def get_word_info_from_wordnet(word: str) -> list[WordInfo]:
     if not synsets:
         return []
 
-    # Group all synsets by their part of speech
     pos_synsets: dict[str, list[Any]] = defaultdict(list)
     for ss in synsets:
         pos_synsets[ss.pos()].append(ss)
@@ -130,15 +126,13 @@ def get_word_info_from_wordnet(word: str) -> list[WordInfo]:
         elif nltk_pos == "r":
             pos_type = "adverb"
         else:
-            continue  # Skip minor POS types for now
+            continue
 
-        # Aggregate data from all synsets within this POS group
         definitions: set[str] = set()
         hypernyms: set[str] = set()
         related_words: set[str] = set()
 
         for synset in synset_group:
-            # Include gloss and example sentences for better coverage
             definitions.add(synset.definition())
             for example in synset.examples():
                 definitions.add(example)
@@ -147,21 +141,17 @@ def get_word_info_from_wordnet(word: str) -> list[WordInfo]:
                 for lemma in hypernym_synset.lemmas():
                     hypernyms.add(lemma.name().replace("_", " "))
 
-            # Include synonyms of this synset
             for lemma in synset.lemmas():
                 related_name = lemma.name().replace("_", " ")
                 if related_name != word.lower():
                     related_words.add(related_name)
 
-            # Also include hyponyms and derivationally related forms to capture terms like 'sprint'
             for hypo in synset.hyponyms():
-                # include hyponym definitions as they often contain informative phrases
                 definitions.add(hypo.definition())
                 for lemma in hypo.lemmas():
                     related_words.add(lemma.name().replace("_", " "))
             for lemma in synset.lemmas():
                 for drv in lemma.derivationally_related_forms():
-                    # include derivationally related synset definitions
                     try:
                         definitions.add(drv.synset().definition())
                     except Exception:
@@ -195,7 +185,6 @@ def get_pos_tag_simple(word: str) -> str:
     Returns:
         A string representing the determined part of speech (e.g., 'noun', 'verb').
     """
-    # 1. Try NLTK's tagger first (fastest)
     try:
         tagged_word = nltk.pos_tag([word])
         if tagged_word:
@@ -203,13 +192,11 @@ def get_pos_tag_simple(word: str) -> str:
     except Exception as e:
         logger.debug("NLTK pos_tag failed for '%s': %s. Falling back.", word, e)
 
-    # 2. Fallback to spaCy if available (more accurate)
     if nlp is not None:
         try:
             doc: Doc = nlp(word)
             if doc and doc[0].pos_:
                 spacy_pos = doc[0].pos_.lower()
-                # Map spaCy's coarse-grained tags to our internal types
                 if spacy_pos in ("propn", "noun"):
                     return "noun"
                 if spacy_pos == "verb":
@@ -223,9 +210,6 @@ def get_pos_tag_simple(word: str) -> str:
                 "spaCy POS tagging failed for '%s': %s. Falling back.", word, e
             )
 
-    # 3. Final fallback to WordNet: prefer verb if any synset indicates a verb,
-    #    then noun, then adjective, then adverb. This mirrors practical usage
-    #    and is robust to tests that stub specific POS.
     synsets = wn.synsets(word.lower())
     if synsets:
         try:
@@ -279,12 +263,10 @@ def lemmatize_word(word: str, pos: str | None = None) -> str:
             wn_pos = wn.ADV
 
     if wn_pos:
-        # Special handling for common irregular adverb forms
         if wn_pos == wn.ADV and word.lower() in {"best", "better"}:
             return "well"
         return cast("str", lemmatizer.lemmatize(word, wn_pos))
 
-    # When POS is unknown, try a heuristic order to get a meaningful lemma
     for guess_pos in (wn.VERB, wn.NOUN, wn.ADJ, wn.ADV):
         lemma = cast("str", lemmatizer.lemmatize(word, guess_pos))
         if lemma != word:

@@ -496,7 +496,6 @@ class ConceptGraph:
             or relation.get("relation")
         )
 
-        # FIX: Add a type check to ensure subject_name is a string before proceeding.
         if not isinstance(subject_name_raw, str) or not relation_type:
             return []
 

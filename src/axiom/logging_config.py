@@ -6,12 +6,10 @@ from rich.console import Console
 from rich.logging import RichHandler
 from rich.theme import Theme
 
-# Allow log level to be configured via environment variable, defaulting to INFO.
 log_level_str = os.getenv("AXIOM_LOG_LEVEL", "INFO").upper()
 LOG_LEVEL = getattr(logging, log_level_str, logging.INFO)
 
 
-# Encapsulate console and theme for clarity.
 custom_theme = Theme(
     {
         "info": "bold cyan",
@@ -43,7 +41,6 @@ def setup_logging():
     axiom_logger.setLevel(LOG_LEVEL)
     axiom_logger.propagate = False
 
-    # --- 1. CONSOLE HANDLER (Rich, Colored Output) ---
     rich_handler = RichHandler(
         console=console,
         rich_tracebacks=True,
@@ -57,13 +54,11 @@ def setup_logging():
     rich_handler.setFormatter(logging.Formatter("%(message)s"))
     axiom_logger.addHandler(rich_handler)
 
-    # --- 2. FILE HANDLER (Plain Text for Metacognition) ---
     file_formatter = logging.Formatter(
         "%(asctime)s [%(levelname)-5.5s] [%(name)s]: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     
-    # Allow the log file path to be configured via an environment variable for testing.
     log_file_path = os.getenv("AXIOM_LOG_FILE", "axiom.log")
     file_handler = RotatingFileHandler(
         log_file_path,
@@ -75,7 +70,6 @@ def setup_logging():
     file_handler.setFormatter(file_formatter)
     axiom_logger.addHandler(file_handler)
 
-    # Set log levels for noisy third-party libraries.
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("py.warnings").setLevel(logging.WARNING)

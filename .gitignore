@@ -16,7 +16,7 @@ interpreter_cache.json
 *.egg-info/
 /axiom_agent.egg-info/
 .coverage
-axiom/
+
 
 
 # -----------------------------------------------------------------------------

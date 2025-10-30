@@ -277,7 +277,6 @@ class KnowledgeHarvester:
             )
 
             if task_to_resolve is not None:
-                # Normalize the task into a string
                 if isinstance(task_to_resolve, dict):
                     task_str = str(task_to_resolve.get("description", ""))
                 else:
@@ -312,7 +311,6 @@ class KnowledgeHarvester:
             if self.agent.learning_goals:
                 opportunistic_task = self.agent.learning_goals[0]
 
-                # Normalize the task into a string
                 if isinstance(opportunistic_task, dict):
                     task_str = str(opportunistic_task.get("description", ""))
                 else:
@@ -339,12 +337,8 @@ class KnowledgeHarvester:
         self.agent.log_autonomous_cycle_completion()
 
     def refinement_cycle(self) -> None:
-        """Run one full introspection and refinement cycle.
-
-        This cycle allows the agent to improve the quality of its own knowledge.
-        It searches for "chunky" facts (e.g., long, definitional concepts)
-        and uses the LLM to break them down into smaller, more precise, atomic
-        facts. This improves the agent's ability to reason symbolically.
+        """
+        Run one full introspection and refinement cycle with transactional logic.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
@@ -356,41 +350,47 @@ class KnowledgeHarvester:
         if chunky_fact:
             source_node, target_node, edge = chunky_fact
             logger.info(
-                "  [Refinement]: Found a chunky fact to refine: '%s' --[%s]--> '%s'",
+                "[info]  [Refinement]: Found a chunky fact to refine: '%s' --[%s]--> '%s'[/info]",
                 source_node.name,
                 edge.type,
                 target_node.name,
             )
+            
+            full_sentence = f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name}."
+            
             atomic_sentences = self.agent.interpreter.break_down_definition(
                 subject=source_node.name,
-                chunky_definition=target_node.name,
+                chunky_definition=full_sentence,
             )
+            
             if atomic_sentences:
                 logger.info(
                     "  [Refinement]: Decomposed into %d new atomic facts.",
                     len(atomic_sentences),
                 )
+                
+                facts_learned_count = 0
                 for sentence in atomic_sentences:
                     with self.lock:
-                        self.agent.learn_new_fact_autonomously(sentence)
-                with self.lock:
-                    graph_edge = self.agent.graph.graph[edge.source][edge.target]
-                    key_to_modify = next(
-                        (
-                            key
-                            for key, data in graph_edge.items()
-                            if data.get("type") == edge.type
-                        ),
-                        None,
-                    )
-                    if key_to_modify is not None:
-                        self.agent.graph.graph[edge.source][edge.target][key_to_modify][
-                            "weight"
-                        ] = 0.2
-                        self.agent.save_brain()
-                        logger.info(
-                            "  [Refinement]: Marked original fact as refined by lowering its weight."
-                        )
+                        if self.agent.learn_new_fact_autonomously(sentence):
+                            facts_learned_count += 1
+                
+                if facts_learned_count > 0:
+                    with self.lock:
+                        graph_edge_data = self.agent.graph.graph.get_edge_data(edge.source, edge.target)
+                        if graph_edge_data:
+                            key_to_modify = next(
+                                (key for key, data in graph_edge_data.items() if data.get("id") == edge.id),
+                                None,
+                            )
+                            if key_to_modify is not None:
+                                self.agent.graph.graph[edge.source][edge.target][key_to_modify]["weight"] = 0.2
+                                self.agent.save_brain()
+                                logger.info(
+                                    "  [Refinement]: Marked original fact as refined by lowering its weight."
+                                )
+                else:
+                    logger.warning("  [Refinement]: Failed to learn any new atomic facts from the decomposition.")
         else:
             caller_name = f"{self.__class__.__name__}._find_chunky_fact"
             logger.warning(
@@ -413,6 +413,10 @@ class KnowledgeHarvester:
         This is a housekeeping task to prevent the cache from growing indefinitely
         with redundant information.
         """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
+
+        chunky_fact = None
         with self.lock:
             if not self.researched_terms:
                 return
@@ -449,27 +453,37 @@ class KnowledgeHarvester:
         potential_facts = []
         all_edges = self.agent.graph.get_all_edges()
 
+        def is_chunky(node_name: str) -> bool:
+            """A helper to determine if a node's name represents a complex definition."""
+            words = node_name.split()
+            has_verb_indicator = any(
+                word.endswith("s") or word.endswith("ed") or word.endswith("ing")
+                for word in words if len(word) > 3
+            )
+            is_long_phrase = len(words) >= 5
+            return is_long_phrase or (len(words) >= 3 and has_verb_indicator)
+
         for edge in all_edges:
             if edge.type in {"is_a", "defines", "describes"} and edge.weight >= 0.8:
                 target_node = self.agent.graph.get_node_by_id(edge.target)
-                if target_node:
-                    word_count = len(target_node.name.split())
-                    if 3 <= word_count <= 25:
-                        source_node = self.agent.graph.get_node_by_id(edge.source)
-                        if source_node:
-                            potential_facts.append((source_node, target_node, edge))
+                if target_node and is_chunky(target_node.name):
+                    source_node = self.agent.graph.get_node_by_id(edge.source)
+                    if source_node:
+                        potential_facts.append((source_node, target_node, edge))
 
-        if not potential_facts:
-            logger.info(
-                "[Refinement]: No chunky facts found with strict criteria, retrying with relaxed threshold..."
-            )
-            for edge in all_edges:
-                if edge.weight >= 0.3:
-                    target_node = self.agent.graph.get_node_by_id(edge.target)
-                    if target_node and len(target_node.name.split()) >= 3:
-                        source_node = self.agent.graph.get_node_by_id(edge.source)
-                        if source_node:
-                            potential_facts.append((source_node, target_node, edge))
+        if potential_facts:
+            return random.choice(potential_facts)
+
+        logger.info(
+            "[Refinement]: No chunky facts found with strict criteria, retrying with relaxed threshold..."
+        )
+        for edge in all_edges:
+            if edge.weight >= 0.3:
+                target_node = self.agent.graph.get_node_by_id(edge.target)
+                if target_node and is_chunky(target_node.name):
+                    source_node = self.agent.graph.get_node_by_id(edge.source)
+                    if source_node:
+                        potential_facts.append((source_node, target_node, edge))
 
         return random.choice(potential_facts) if potential_facts else None
 

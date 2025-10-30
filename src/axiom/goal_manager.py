@@ -34,7 +34,6 @@ class GoalManager:
         self._goal_counter += 1
         return f"goal_{self._goal_counter}"
 
-    # --- NEW: Helper method to provide a random creative seed ---
     def _get_random_pedagogical_style(self) -> str:
         """Selects a random pedagogical style to ensure topic variety."""
         styles = [
@@ -84,7 +83,6 @@ class GoalManager:
         self.goals[goal_id] = goal
         logger.info("New simple goal added: '%s' (Priority: %d)", description, priority)
 
-        # FIX: Inject a random style to ensure variety.
         topics = self.agent.interpreter.generate_curriculum(
             description, style=self._get_random_pedagogical_style()
         )
@@ -129,7 +127,6 @@ class GoalManager:
         for i, (stage_name, stage_desc) in enumerate(stages):
             stage_id = self._get_next_goal_id()
 
-            # FIX: Inject a random style for each stage to maximize variety.
             topics = self.agent.interpreter.generate_curriculum(
                 stage_desc.strip(), style=self._get_random_pedagogical_style()
             )

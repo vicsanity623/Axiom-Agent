@@ -176,9 +176,7 @@ class LexiconManager:
             props = data.get("properties", {})
             observations = props.get("lexical_observations")
             if isinstance(observations, dict):
-                # Use a copy of items to allow modification during iteration
                 for pos, confidences in list(observations.items()):
-                    # Filter out low-confidence scores
                     surviving_confidences = [
                         conf for conf in confidences if conf >= threshold
                     ]
@@ -189,7 +187,6 @@ class LexiconManager:
                             )
                             observations[pos] = surviving_confidences
                     else:
-                        # If no scores survive, remove the POS entry entirely
                         pruned_count += len(confidences)
                         del observations[pos]
         if pruned_count > 0:

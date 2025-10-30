@@ -9,7 +9,7 @@ package = true
 
 [project]
 name = "axiom"
-version = "0.5.8"
+version = "0.5.7"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
@@ -24,18 +24,23 @@ dependencies = [
     "google-generativeai",
     "llama-cpp-python",
     "networkx~=3.5.0",
+    "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
     "nltk",
     "python-Levenshtein>=0.25.1",
     "requests",
     "rich",
     "pyvis",
-    "spacy>=3.7.2,<3.8.0",
+    "spacy>=3.7.0",
     "thefuzz>=0.22.1",
     "tqdm",
     "typer",
     "wikipedia",
     "scipy",
+    "blis>=0.9.0",
 ]
+
+# if you want the small version of en core web use this:
+    # en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 [project.optional-dependencies]
 dev = [
@@ -60,6 +65,8 @@ axiom-visualize = "axiom.scripts.visualize_brain:main" # Added for HTML visualiz
 axiom-webui = "axiom.scripts.app_model:main"
 axiom-webui_app = "axiom.scripts.app:main"
 axiom-metatest = "axiom.scripts.test_metacog:main"
+axiom-extract = "axiom.scripts.extract_code_suggestion:main"
+axiom-analyze = "axiom.scripts.analyze_logs:main"
 
 
 # --- Tool Configurations ---

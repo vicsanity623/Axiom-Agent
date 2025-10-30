@@ -79,7 +79,6 @@ def render_axiom_model() -> None:
     version_str = get_next_version()
     logger.info("--- Starting Axiom Mind Renderer [Version: %s] ---", version_str)
 
-    # --- Step 1: Wait for File Lock ---
     max_wait_seconds = 10
     wait_interval = 1
     waited_time = 0
@@ -95,7 +94,6 @@ def render_axiom_model() -> None:
         time.sleep(wait_interval)
         waited_time += wait_interval
 
-    # --- Step 2: Validate Brain File Content ---
     if not brain_file.exists():
         logger.critical("Source file '%s' not found.", brain_file)
         logger.critical(
@@ -109,7 +107,6 @@ def render_axiom_model() -> None:
             logger.critical("Brain file '%s' is empty. Aborting render.", brain_file)
             return
 
-        # Try to parse the JSON to ensure it's valid
         brain_data = json.loads(brain_content)
         logger.info("✅ Brain file is valid and contains data.")
 
@@ -122,7 +119,6 @@ def render_axiom_model() -> None:
         logger.critical("Failed to read or validate brain file. Error: %s", e)
         return
 
-    # --- Step 3: Proceed with Packaging ---
     RENDERED_DIR.mkdir(exist_ok=True)
     output_filename = RENDERED_DIR / f"Axiom_{version_str}.axm"
     version_data = {
@@ -133,7 +129,6 @@ def render_axiom_model() -> None:
 
     try:
         with zipfile.ZipFile(output_filename, "w", zipfile.ZIP_DEFLATED) as zf:
-            # Use the validated content we already loaded
             zf.writestr("brain.json", json.dumps(brain_data))
             logger.info("   - Compressing validated brain data...")
 

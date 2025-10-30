@@ -39,7 +39,6 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 """
 
 
-# FIX: Rename the function definition to match its new, more descriptive name.
 def _generate_or_set_initial_goal(
     agent: CognitiveAgent, custom_goal: str | None
 ) -> None:
@@ -128,7 +127,6 @@ def start_autonomous_training(
         scheduler = BackgroundScheduler(daemon=True)
         manager = CycleManager(scheduler, harvester, metacognitive_engine)
 
-        # This call is now correct because the function definition has been renamed.
         _generate_or_set_initial_goal(axiom_agent, initial_goal)
 
         manager.start()
@@ -188,7 +186,6 @@ def main() -> None:
     args = parser.parse_args()
 
     start_autonomous_training(args.brain_file, args.state_file, initial_goal=args.goal)
-    # Removed the print statement as it's not needed for a background process.
 
 
 if __name__ == "__main__":

@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Apply LRU cache to the imported function for performance
 get_word_info_from_wordnet = lru_cache(maxsize=None)(get_word_info_from_wordnet)
 
 LEXICON_PROMOTION_THRESHOLD = 0.8
@@ -748,7 +747,6 @@ def promote_word(
     props["lexical_promoted_confidence"] = confidence
     props.pop("lexical_observations", None)
 
-    # After promoting a word, re-process any pending relations that might now be valid.
     for rel, interp, ts in list(getattr(agent_instance, "pending_relations", [])):
         sub = (rel.get("subject") or "").lower()
         obj = (rel.get("object") or "").lower()
@@ -858,7 +856,6 @@ def validate_and_add_relation(
     ]
 
     if unknown_words:
-        # Use the provided caller_name or inspect the stack as a fallback
         final_caller_name = caller_name
         if not final_caller_name:
             caller_frame = inspect.stack()[1]
@@ -907,13 +904,10 @@ def validate_and_add_relation(
         existing_neg = bool(e.properties.get("negated", False))
 
         if existing_neg != new_neg:
-            # A direct contradiction is found.
             if new_conf > existing_conf + 0.2:
-                # New fact is much stronger, overwrite the old one.
                 agent.graph.update_edge_properties(e, new_props)
                 return "replaced"
 
-            # Store the weaker, contradictory fact for now.
             contradiction_props = new_props.copy()
             contradiction_props["contradicted"] = True
             contradiction_props["confidence"] = max(0.05, new_conf * 0.5)
@@ -924,7 +918,6 @@ def validate_and_add_relation(
                 properties=cast("PropertyData", contradiction_props),
             )
 
-            # Create a high-priority goal to investigate this specific contradiction.
             clarify_goal = f"CLARIFY: {subject_name} {relation_type} {object_name}"
             if clarify_goal not in agent.learning_goals:
                 agent.learning_goals.insert(0, clarify_goal)
@@ -935,14 +928,12 @@ def validate_and_add_relation(
 
             return "contradiction_stored"
 
-        # If not a contradiction, merge confidence with the existing fact.
         merged_conf = max(existing_conf, new_conf)
         update_props = new_props.copy()
         update_props["confidence"] = merged_conf
         agent.graph.update_edge_properties(e, update_props)
-        return "inserted"  # Semantically, we are updating, but for the caller, it's a successful insertion.
+        return "inserted"
 
-    # No existing edge found, add a new one.
     agent.graph.add_edge(
         sub_node,
         obj_node,

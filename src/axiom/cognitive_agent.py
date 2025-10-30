@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import threading
+from thefuzz import fuzz
 from datetime import date, datetime
 from functools import lru_cache
 from typing import (
@@ -211,27 +212,21 @@ class CognitiveAgent:
         if self.is_awaiting_clarification:
             return self._handle_clarification(user_input)
 
-        # 1. Pre-processing and Interpretation
         interpretations = self._get_interpretation(user_input)
 
-        # 2. Cognitive Reflex for Unknowns
         if not interpretations:
             reflex_response = self._handle_cognitive_reflex(user_input)
             if reflex_response:
                 return reflex_response
 
-            # If reflex doesn't handle it, it's a total failure
             return "I'm sorry, I was unable to understand that."
 
-        # 3. History and Intent Processing
         self._update_history(interpretations)
         structured_response = self._process_intent(interpretations[0], user_input)
 
-        # 4. Learning from Additional Clauses
         if len(interpretations) > 1:
             self._learn_from_extra_clauses(interpretations[1:])
 
-        # 5. Response Synthesis and Introspection
         final_response, synthesizer_was_used = self._synthesize_response(
             structured_response, user_input
         )
@@ -248,10 +243,8 @@ class CognitiveAgent:
         contextual_input = self._resolve_references(expanded_input)
         normalized_input = self._preprocess_self_reference(contextual_input)
 
-        # Symbolic-first approach
         interpretations = self.parser.parse(normalized_input)
 
-        # LLM Fallback
         if not interpretations:
             logger.warning(
                 "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter."
@@ -268,7 +261,7 @@ class CognitiveAgent:
         unknown_words = [w for w in words if w and not self.lexicon.is_known_word(w)]
 
         if not unknown_words:
-            return None  # Not an unknown word problem
+            return None
 
         word_to_learn = sorted(set(unknown_words))[0]
         goal = f"INVESTIGATE: {word_to_learn}"
@@ -598,7 +591,6 @@ class CognitiveAgent:
             if was_learned:
                 return "I understand. I have noted that."
             if learn_msg == "exclusive_conflict":
-                # ... (clarification logic is complex and can remain) ...
                 pass
             return f"I tried to record that fact but something went wrong: {learn_msg}"
 
@@ -606,25 +598,30 @@ class CognitiveAgent:
             return self._answer_yes_no_question(relation)
 
         if intent == "question_by_relation" and relation:
-            # ... (logic can remain) ...
-            pass
+            subject_raw = relation.get("subject")
+            subject_name = self._extract_name_from_relation(subject_raw)
+            
+            verb = relation.get("verb")
 
-        if intent in ("question_about_entity", "question_about_concept") and relation:
-            # ... (multi-hop logic can remain) ...
-            pass
+            if subject_name and verb:
+                corrected_subject = self._get_corrected_entity(subject_name)
+                subject_node = self.graph.get_node_by_name(corrected_subject)
 
-        if intent in ("question_about_entity", "question_about_concept"):
-            entity_name_raw = entities[0]["name"] if entities else user_input
-            entity_name = entity_name_raw if isinstance(entity_name_raw, str) else ""
-            corrected_entity_name = self._get_corrected_entity(entity_name)
-            response = self._answer_question_about(corrected_entity_name, user_input)
-            return (
-                response
-                if response is not None
-                else f"I don't have any specific information about '{corrected_entity_name}' right now."
-            )
+                if subject_node:
+                    for edge in self.graph.get_edges_from_node(subject_node.id):
+                        if edge.type == verb:
+                            target_node = self.graph.get_node_by_id(edge.target)
+                            if target_node:
+                                property_name = verb.replace("has_", "").replace(
+                                    "_",
+                                    " ",
+                                )
+                                return f"The {property_name} of {subject_name.capitalize()} is {target_node.name.capitalize()}."
 
+            return f"I don't have information about the {relation.get('verb', 'property').replace('has_', '')} of {subject_name or 'that'}."
+        
         return "I'm not sure how to process that. Could you rephrase?"
+
 
     def _find_specific_fact(self, subject_name: str, relation_type: str) -> str | None:
         """Finds all facts of a specific type related to a subject and formats them."""
@@ -1143,6 +1140,31 @@ class CognitiveAgent:
 
         return clean_phrase
 
+    def _extract_name_from_relation(
+        self, value: str | dict[str, Any] | list | None
+    ) -> str | None:
+        """
+        Extracts a clean name string from a relation's subject or object.
+        This is hardened to handle the various data types returned by the LLM.
+        """
+        if value is None:
+            return None
+        
+        if isinstance(value, list):
+            value = " ".join(str(v) for v in value)
+
+        if isinstance(value, dict):
+            name = value.get("name")
+            if isinstance(name, str):
+                name_clean = name.strip()
+                if name_clean:
+                    return self._clean_phrase(name_clean)
+            return None
+
+        name_clean = value.strip()
+        return self._clean_phrase(name_clean) or None
+
+
     def _process_statement_for_learning(
         self,
         relation: RelationData,
@@ -1161,32 +1183,21 @@ class CognitiveAgent:
                 "Incomplete fact structure: requires subject, verb, and object.",
             )
 
-        def _extract_name(value: str | dict[str, Any] | list) -> str | None:
-            """
-            Return the name string from a string, dict, or list.
-            This version is hardened to handle list inputs from the LLM.
-            """
-            if isinstance(value, list):
-                value = " ".join(str(v) for v in value)
-
-            if isinstance(value, dict):
-                name = value.get("name")
-                if isinstance(name, str):
-                    name_clean = name.strip()
-                    if name_clean:
-                        return name_clean
-                return None
-
-            name_clean = value.strip()
-            return name_clean or None
-
-        subject_name = _extract_name(subj_raw)
-        object_name = _extract_name(obj_raw)
+        subject_name = self._extract_name_from_relation(subj_raw)
+        object_name = self._extract_name_from_relation(obj_raw)
 
         if subject_name is None:
             return False, "Could not determine the subject of the fact."
         if object_name is None:
             return False, "Could not determine the object of the fact."
+
+        if subject_name == object_name or fuzz.ratio(subject_name, object_name) > 95:
+            logger.info(
+                "  [Learning Filter]: Skipping trivial fact (subject and object are too similar: '%s' vs '%s').",
+                subject_name,
+                object_name,
+            )
+            return (False, "trivial_fact")
 
         if len(object_name.split()) > 5:
             truncated = (
@@ -1380,7 +1391,7 @@ class CognitiveAgent:
             "is named",
         ]:
             if len(object_.split()) == 1 and object_[0].isupper():
-                return "has name"  # Use space, not underscore
+                return "has name"
 
         return RELATION_TYPE_MAP.get(cleaned_verb, cleaned_verb)
 

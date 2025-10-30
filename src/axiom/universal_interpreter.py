@@ -251,7 +251,7 @@ class UniversalInterpreter:
     ) -> str:
         """Runs the LLM completion with retry and backoff logic."""
         retries = 3
-        backoff_factor = 2  # seconds
+        backoff_factor = 2
 
         for attempt in range(retries):
             try:

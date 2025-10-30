@@ -18,8 +18,7 @@ logger = logging.getLogger(__name__)
 try:
     import spacy
 
-    # Load a small, efficient model once
-    nlp: Language | None = spacy.load("en_core_web_sm")
+    nlp: Language | None = spacy.load("en-core-web-lg")
     logger.info("spaCy loaded successfully for POS tagging fallback.")
 except ImportError:
     nlp = None
@@ -52,7 +51,6 @@ class SymbolicParser:
         "PROPERTY_KEYWORDS",
         "AMBIGUOUS_PROPERTY_VERBS",
         "PROPERTY_OF_QUESTION_PATTERN",
-        # --- NEW: Added pattern for passive voice ---
         "PASSIVE_VOICE_PATTERN",
     )
 
@@ -85,7 +83,6 @@ class SymbolicParser:
             r"(?P<prep_object>.+?)\.*$",
             re.IGNORECASE,
         )
-        # --- NEW: Added pattern for simple passive voice ---
         self.PASSIVE_VOICE_PATTERN = re.compile(
             r"(?i)^(?P<object>.+?)\s+(is|are|was|were)\s+(?P<verb>\w+)\s+by\s+(?P<subject>.+?)\.*$",
         )
@@ -170,37 +167,10 @@ class SymbolicParser:
         including a refinement step to decompose complex objects.
         """
         logger.debug(f"  [Symbolic Parser]: Attempting to parse sentence: '{text}'")
+        # --- CHANGED: Removed hardcoded meta-question checks. ---
+        # This logic is now handled by the CognitiveAgent's pre-processing
+        # and standard intent routing, which is more robust.
         clean_text = text.lower().strip().rstrip("?")
-        if clean_text in ("who are you", "what are you"):
-            return [
-                InterpretData(
-                    intent="meta_question_self",
-                    entities=[{"name": "agent", "type": "CONCEPT"}],
-                    relation=None,
-                    key_topics=[],
-                    full_text_rephrased="",
-                )
-            ]
-        if clean_text in ("what is your purpose", "what's your purpose"):
-            return [
-                InterpretData(
-                    intent="meta_question_purpose",
-                    entities=[{"name": "agent", "type": "CONCEPT"}],
-                    relation=None,
-                    key_topics=[],
-                    full_text_rephrased="",
-                )
-            ]
-        if clean_text in ("what can you do", "what are your abilities"):
-            return [
-                InterpretData(
-                    intent="meta_question_abilities",
-                    entities=[{"name": "agent", "type": "CONCEPT"}],
-                    relation=None,
-                    key_topics=[],
-                    full_text_rephrased="",
-                )
-            ]
         if clean_text == "show all facts":
             return [
                 InterpretData(
@@ -224,12 +194,10 @@ class SymbolicParser:
 
         final_interpretations: list[InterpretData] = []
 
-        # --- FIX: Helper to safely convert union types to string for processing ---
         def to_str(value: str | list[Any] | dict[str, Any] | None) -> str:
             if isinstance(value, str):
                 return value
             if isinstance(value, dict):
-                # Ensure the extracted name is a string, default to empty string
                 name = value.get("name", "")
                 return str(name) if name is not None else ""
             if isinstance(value, list):
@@ -240,7 +208,6 @@ class SymbolicParser:
             final_interpretations.append(interp)
             relation = interp.get("relation")
             if relation:
-                # Use the safe conversion helper
                 subject_str = to_str(relation.get("subject"))
                 object_str = to_str(relation.get("object"))
 
@@ -254,7 +221,6 @@ class SymbolicParser:
                         object_str,
                     )
                     for ref_rel in refined_relations:
-                        # Ensure refined parts are also strings before use
                         ref_subject = to_str(ref_rel.get("subject"))
                         ref_object = to_str(ref_rel.get("object"))
                         ref_verb = to_str(ref_rel.get("verb"))
@@ -366,14 +332,12 @@ class SymbolicParser:
                     key_topics=[subject, prep_object],
                     full_text_rephrased=raw_clause,
                 )
-        # --- NEW: Check for passive voice ---
         passive_match = self.PASSIVE_VOICE_PATTERN.match(raw_clause)
         if passive_match:
             groups = passive_match.groupdict()
             subject = self.agent._clean_phrase(groups["subject"])
             verb = self.agent._clean_phrase(groups["verb"])
             object_ = self.agent._clean_phrase(groups["object"])
-            # Invert to active voice for the relation
             relation = RelationData(subject=subject, verb=verb, object=object_)
             return InterpretData(
                 intent="statement_of_fact",
@@ -385,7 +349,6 @@ class SymbolicParser:
                 key_topics=[subject, object_],
                 full_text_rephrased=raw_clause,
             )
-        # --- END NEW ---
         svo_match = self.SVO_PATTERN.match(raw_clause)
         if svo_match:
             groups = svo_match.groupdict()
@@ -580,7 +543,6 @@ class SymbolicParser:
         clean_word = word.lower().strip()
         word_node = self.agent.graph.get_node_by_name(clean_word)
         if not word_node:
-            # Fallback to spaCy for external POS tagging if word is unknown
             if nlp:
                 doc = nlp(clean_word)
                 if doc and doc[0].pos_.lower() == pos:
