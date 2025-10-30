@@ -501,3 +501,29 @@ def test_learn_new_fact_autonomously_processing_fails(
 
     result = agent.learn_new_fact_autonomously("Invalid fact", "topic")
     assert result is False
+
+
+def test_learn_new_fact_autonomously_sets_default_properties(
+    agent: CognitiveAgent, monkeypatch
+):
+    """Test that autonomous learning sets default confidence and provenance."""
+    captured_relations = []
+
+    def capture_relation(relation: RelationData) -> tuple[bool, str]:
+        captured_relations.append(relation)
+        return True, "success"
+
+    mock_relations = [RelationData(subject="test", verb="is_a", object="example")]
+
+    monkeypatch.setattr(
+        agent.interpreter,
+        "decompose_sentence_to_relations",
+        lambda text, main_topic: mock_relations,
+    )
+    monkeypatch.setattr(agent, "_process_statement_for_learning", capture_relation)
+
+    result = agent.learn_new_fact_autonomously("Test is an example", "testing")
+    assert result is True
+    assert len(captured_relations) == 1
+    assert captured_relations[0]["properties"]["confidence"] == 0.6
+    assert captured_relations[0]["properties"]["provenance"] == "llm_decomposition"
