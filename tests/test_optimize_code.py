@@ -59,6 +59,29 @@ def test_no_target_found_for_clean_log(tmp_path: Path):
     assert target is None
 
 
+def test_deferred_learning_correctly_identifies_source_function(tmp_path: Path):
+    """
+    Given a log file with a 'Deferred learning' entry that includes the source function,
+    the monitor should prioritize this and correctly identify the source function.
+    """
+    log_text = (
+        "2025-10-24T07:00:00 [Cognitive Agent]: Deferred learning for Fact123 "
+        "(in CognitiveAgent._process_statement_for_learning)"
+    )
+    log_file = tmp_path / "deferred.log"
+    log_file.write_text(log_text, encoding="utf-8")
+    monitor = PerformanceMonitor()
+
+    target = monitor.find_optimization_target(log_file)
+
+    assert isinstance(target, OptimizationTarget)
+
+    assert target.target_name == "CognitiveAgent._process_statement_for_learning"
+
+    assert "Deferred learning was triggered" in target.issue_description
+    assert "Fact123" in target.issue_description
+
+
 def test_baselines_are_saved_even_when_no_target_is_found(tmp_path: Path):
     """
     The monitor should always save its updated statistical baselines at the
