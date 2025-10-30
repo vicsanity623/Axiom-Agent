@@ -80,10 +80,16 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 
 | Command | Description |
 |---|---|
+| `axiom-llm` | Auto downloads the powerful yet compact enough **LLM** to run on older pcs and CPUs. |
 | `axiom-train` | **(Primary Workflow)** Starts the agent's autonomous learning cycles. |
 | `axiom-webui` | Launches an interactive web UI to chat with the agent. |
 | `axiom-teach` | Teach the agent facts directly via the terminal. |
 | `axiom-render` | Generate a snapshot of the brain (axiom.axm)for inference chat used in axiom-webui. |
+| `axiom-visualize` | Creates a interactive view of the brain showing most edges. |
+| `axiom-metatest` | Runs a fast test to verify setup is intact for the ```self-heal``` intorspection of source code. |
+| `axiom-extract` | The LLM used in the meta cognitive engine phase may suggest a source code for review. This is the most powerful part of the system thus far. |
+| `axiom-analyze` | A standalone run of the self introspection on source code. This is meant as a suggestion (REVIEW THIS AS ALL LLMs will tend to produce bad code) |
+
 
 **Typical Debugging Session:**
 
@@ -106,10 +112,10 @@ Axiom's most advanced feature is its ability to analyze its own performance and 
 To apply a suggestion:
 1.  **Extract the code:** A utility script is provided to cleanly extract the suggested code.
     ```bash
-    ./extract_suggestion.py
+    axiom-extract
     ```
 2.  **Review the diff:** This creates a `code.py` file. Use your IDE or `diff` to compare it with the original source file.
-3.  **Apply and commit:** If you approve (CODE REVIEW the `suggested_solution` is a MUST!! as LLMs can and will usually make mistakes), manually copy the new code into the project, run `./check.sh` one last time, restart `axiom-train`, verify stability and improvements and finally commit the change.
+3.  **Apply and commit:** If you approve (CODE REVIEW the `suggested_solution` is a MUST!! as **LLMs** can and will usually make mistakes), manually copy the new code into the project, run `./check.sh` one last time, restart `axiom-train`, verify stability and improvements and finally commit the change.
 
 ---
 
