@@ -1,32 +1,110 @@
 from __future__ import annotations
 
+import argparse
 import logging
-import os
-import threading
+import random
 import time
 import traceback
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from pathlib import Path
+from typing import Final
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from ..cognitive_agent import CognitiveAgent
-from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE
-from ..knowledge_harvester import KnowledgeHarvester
+from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, GEMINI_API_KEY
 from ..logging_config import setup_logging
 from ..metacognitive_engine import MetacognitiveEngine
 from .cycle_manager import CycleManager
 
 logger = logging.getLogger(__name__)
 
+CURRICULUM_GENERATION_PROMPT: Final[str] = """
+You are a curriculum design expert for an AI. Your task is to generate a single, high-level, multi-stage learning goal for an AI that is starting from scratch. The goal is to achieve deep, foundational language comprehension.
 
-def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
+**INSPIRATIONAL SEED (Use this to guide your curriculum's theme):**
+{creative_seed}
+
+**RULES:**
+1.  The output MUST be a single, continuous string.
+2.  The string MUST start with a high-level mission statement.
+3.  The string MUST contain between 5 and 7 stages, each formatted as `[Stage X: Title]: Description...`.
+4.  The stages MUST follow a logical progression from concrete fundamentals to abstract reasoning.
+5.  **Crucially, you MUST introduce variation and avoid redundancy.** The AI has already learned the concepts listed in the "Known Concepts" section. Your generated curriculum should focus on related, but distinct, topics to broaden the AI's knowledge.
+
+**KNOWN CONCEPTS TO AVOID:**
+{known_concepts}
+
+**EXAMPLE OUTPUT (Do NOT copy this example; use it only for structure):**
+"Master the art of language by building a comprehensive model of communication, from sound to meaning. [Stage 1: Phonology Foundations]: Learn the basic sound units of language, including syllables and stress patterns. [Stage 2: Morphological Analysis]: Understand how words are constructed from roots, prefixes, and suffixes. [Stage 3: Syntactic Structures]: Master dependency grammar and phrase structure rules. [Stage 4: Semantic Grounding]: Learn to map grammatical structures to their literal meaning. [Stage 5: Pragmatic Reasoning]: Develop the ability to infer user intent and context."
+"""
+
+
+# FIX: Rename the function definition to match its new, more descriptive name.
+def _generate_or_set_initial_goal(
+    agent: CognitiveAgent, custom_goal: str | None
+) -> None:
+    """
+    Sets a custom initial goal if provided, otherwise generates a new,
+    foundational learning curriculum if no other active goals exist.
+    This version injects a random "creative seed" to ensure a unique curriculum
+    is generated on each run.
+    """
+    if agent.goal_manager.get_active_goal() or agent.learning_goals:
+        logger.info(
+            "--- [AUTONOMOUS TRAINER]: Found existing goals. Resuming previous learning plan. ---"
+        )
+        return
+
+    if custom_goal:
+        logger.info("--- [AUTONOMOUS TRAINER]: Using custom goal provided via CLI. ---")
+        agent.goal_manager.add_goal(custom_goal)
+        return
+
+    logger.info(
+        "--- [AUTONOMOUS TRAINER]: No active goals found. Generating a new, state-aware curriculum. ---"
+    )
+
+    creative_seeds = [
+        "Approach this from the perspective of a linguist, focusing on the formal structures of language.",
+        "Design this curriculum as if teaching a child, starting with concrete objects and moving to abstract ideas.",
+        "Frame the learning process through the lens of a computer scientist, treating language as a formal system to be parsed.",
+        "Use a philosophical approach, focusing on the connection between symbols, meaning, and truth.",
+        "Create a practical, goal-oriented curriculum for an AI assistant that needs to complete tasks for a user.",
+        "Focus on the historical evolution of language, from ancient roots to modern dialects.",
+        "Emphasize the social aspect of language, including pragmatics, discourse, and cultural context.",
+    ]
+    selected_seed = random.choice(creative_seeds)
+    logger.info("  [Curriculum Generation]: Using creative seed: '%s'", selected_seed)
+
+    known_concepts = [
+        data["name"]
+        for _, data in agent.graph.graph.nodes(data=True)
+        if data.get("type") == "noun" and " " not in data.get("name", "")
+    ]
+    known_concepts_str = ", ".join(sorted(known_concepts)) if known_concepts else "None"
+
+    prompt = CURRICULUM_GENERATION_PROMPT.format(
+        creative_seed=selected_seed, known_concepts=known_concepts_str
+    )
+
+    new_curriculum_goal = agent.interpreter.synthesize(
+        structured_facts=prompt, mode="creative_writing"
+    )
+
+    if not new_curriculum_goal or "[Stage 1:" not in new_curriculum_goal:
+        logger.error(
+            "--- [AUTONOMOUS TRAINER]: Failed to generate a valid new curriculum from LLM. Halting. ---"
+        )
+        return
+
+    agent.goal_manager.add_goal(new_curriculum_goal)
+
+
+def start_autonomous_training(
+    brain_file: Path, state_file: Path, initial_goal: str | None = None
+) -> None:
     """Initialize the agent and run its autonomous learning cycles indefinitely."""
-
     logger.info("--- [AUTONOMOUS TRAINER]: Starting Axiom Agent Initialization... ---")
-    agent_interaction_lock = threading.Lock()
 
     try:
         axiom_agent = CognitiveAgent(
@@ -35,50 +113,23 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
             inference_mode=False,
         )
 
-        harvester = KnowledgeHarvester(agent=axiom_agent, lock=agent_interaction_lock)
+        if axiom_agent.harvester is None:
+            logger.critical(
+                "!!! CRITICAL ERROR: Harvester was not initialized by the agent. Halting. !!!"
+            )
+            return
+        harvester = axiom_agent.harvester
 
-        gemini_api_key = os.environ.get("GEMINI_API_KEY")
         metacognitive_engine = MetacognitiveEngine(
             agent=axiom_agent,
-            gemini_api_key=gemini_api_key,
+            gemini_api_key=GEMINI_API_KEY,
         )
 
         scheduler = BackgroundScheduler(daemon=True)
         manager = CycleManager(scheduler, harvester, metacognitive_engine)
 
-        axiom_agent.goal_manager.add_goal(
-            "Master linguistic communication through language ideology critique. "
-            "[Stage 1: Ideology Recognition]: Identify implicit beliefs about language value and correctness. "
-            "[Stage 2: Power Analysis]: Understand how language ideologies reinforce social hierarchies. "
-            "[Stage 3: Standard Language Deconstruction]: Critique notions of linguistic purity and standardization. "
-            "[Stage 4: Multilingual Advocacy]: Promote positive attitudes toward linguistic diversity. "
-            "[Stage 5: Critical Language Awareness]: Develop reflective understanding of one's own language ideologies."
-            "[Stage 6: Communication Masatery]: Achieve communication mastery through narrative competence development. "
-            "[Stage 7: Event Sequencing]: Arrange events in temporally and causally coherent order. "
-            "[Stage 8: Character Development]: Create and maintain consistent character identities and motivations. "
-            "[Stage 9: Perspective Management]: Control narrative point of view and focalization. "
-            "[Stage 10: Evaluative Framing]: Signal the significance and emotional valence of narrated events. "
-            "[Stage 11: Genre Adaptation]: Tailor narrative strategies to different storytelling traditions and purposes."
-            "[Stage 12: Pragmatics]: Study how context, intent, and social conventions contribute to meaning beyond the literal interpretation."
-            "[Stage 13: Core Inquisition Goals]: Learn to communicate by following a developmental path, starting with simple labels and progressing to complex social dialogue. "
-            "[Stage 14: Object Permanence and Labeling]: Learn to associate simple words (nouns) with concrete objects and concepts in the world. "
-            "[Stage 15: Action and Property Association]: Learn to describe objects and events using simple verbs and adjectives. "
-            "[Stage 16: Simple Sentence Formation]: Master the construction of basic Subject-Verb-Object sentences to state and request facts. "
-            "[Stage 17: Theory of Mind]: Develop the ability to understand that others have intentions, goals, and perspectives different from one's own. "
-            "[Stage 18: Collaborative Dialogue]: Practice using language to ask questions, resolve misunderstandings, and work with a user to achieve a shared goal."
-            "[Stage 19: Core Inquisition Goals]: Grasp the essence of communication by exploring the connection between symbols, meaning, and reality. "
-            "[Stage 20: The Symbol Grounding Problem]: Learn to connect abstract symbols (words) to their real-world referents and concepts. "
-            "[Stage 21: Propositional Logic]: Master the ability to decompose sentences into logical propositions that can be evaluated for truth. "
-            "[Stage 21: Semantic Truth Conditions]: Learn to determine the literal meaning of a statement by understanding the conditions under which it would be true. "
-            "[Stage 22: Speech Act Theory]: Analyze how language is used not just to state facts, but to perform actions like promising, questioning, and commanding. "
-            "[Stage 23: The Cooperative Principle]: Understand conversation as a cooperative game governed by implicit rules (Grice's Maxims) of quantity, quality, relation, and manner."
-            "[Stage 24: Core Inquisition Goals]: Become an effective assistant by mastering the art of goal-oriented dialogue and task completion. "
-            "[Stage 25: Core Vocabulary Acquisition]: Learn the essential nouns, verbs, and concepts related to common user tasks and domains. "
-            "[Stage 26: Command and Query Parsing]: Develop a robust ability to parse user commands and questions into structured, actionable data. "
-            "[Stage 27: Entity and Slot Recognition]: Master the identification of key pieces of information (entities) required to fulfill a request. "
-            "[Stage 28: Disambiguation and Clarification]: Learn to detect ambiguity or missing information in a user’s request and proactively ask clarifying questions. "
-            "[Stage 29: Multi-Turn Task Execution]: Practice maintaining the state of a complex task across multiple conversational turns to guide a user to a successful outcome."
-        )
+        # This call is now correct because the function definition has been renamed.
+        _generate_or_set_initial_goal(axiom_agent, initial_goal)
 
         manager.start()
         scheduler.start()
@@ -106,10 +157,38 @@ def start_autonomous_training(brain_file: Path, state_file: Path) -> None:
 
 def main() -> None:
     """Entry point for the axiom-train command."""
-
     setup_logging()
 
-    start_autonomous_training(DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE)
+    parser = argparse.ArgumentParser(
+        description="Run the Axiom Agent's autonomous training cycles."
+    )
+
+    parser.add_argument(
+        "--goal",
+        type=str,
+        default=None,
+        help="A specific, high-level learning goal to start with.",
+    )
+
+    parser.add_argument(
+        "brain_file",
+        type=Path,
+        nargs="?",
+        default=DEFAULT_BRAIN_FILE,
+        help="Path to the agent's brain file.",
+    )
+    parser.add_argument(
+        "state_file",
+        type=Path,
+        nargs="?",
+        default=DEFAULT_STATE_FILE,
+        help="Path to the agent's state file.",
+    )
+
+    args = parser.parse_args()
+
+    start_autonomous_training(args.brain_file, args.state_file, initial_goal=args.goal)
+    # Removed the print statement as it's not needed for a background process.
 
 
 if __name__ == "__main__":

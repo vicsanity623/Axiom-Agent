@@ -16,18 +16,19 @@ interpreter_cache.json
 *.egg-info/
 /axiom_agent.egg-info/
 .coverage
+axiom/
 
 
 # -----------------------------------------------------------------------------
 # Project-Specific Data & Models
 # -----------------------------------------------------------------------------
 # Ignore all files in the brain folder but keep one
-/src/axiom/brain
+brain/
 brain.zip
 !brain/.gitkeep
 
 # Ignore the directory containing large, rendered model snapshots
-/src/axiom/rendered/
+rendered/
 
 # Ignore the directory for LLM files
 /models/
@@ -36,6 +37,7 @@ brain.zip
 /Axiom_Voice_Dataset/
 /Curriculum/
 /data/
+/scripts/
 
 # -----------------------------------------------------------------------------
 # Log & Output Files
@@ -54,6 +56,7 @@ waker.log
 code_suggestion.json
 extract_suggestion.py
 code.py
+savedfacts.txt
 
 # -----------------------------------------------------------------------------
 # System & Editor Files

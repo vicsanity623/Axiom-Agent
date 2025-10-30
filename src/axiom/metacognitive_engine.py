@@ -100,11 +100,10 @@ class _LogAnalysisData:
     entries_by_func: dict[str, list[_LogEntry]] = field(
         default_factory=lambda: defaultdict(list),
     )
-    deferred_targets: list[OptimizationTarget] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
-# PerformanceMonitor - Refactored for Robustness
+# PerformanceMonitor - Analyzes logs for optimization targets
 # ---------------------------------------------------------------------------
 
 
@@ -283,19 +282,6 @@ class PerformanceMonitor:
             message = (match.group("message") or "").strip()
             func = (match.group("function") or "unknown_function").strip()
 
-            if "Deferred learning" in message:
-                message = line.strip()
-                target = OptimizationTarget(
-                    file_path=self._guess_source_file(func),
-                    target_name=func,
-                    issue_description=(
-                        "High-priority systemic issue: Deferred learning was triggered. "
-                        "This suggests a flaw in the core learning strategy."
-                        f"\nLog entry: {line.strip()}"
-                    ),
-                    relevant_logs=line.strip(),
-                )
-                analysis_data.deferred_targets.append(target)
 
             ts_match = PerformanceMonitor._TS_PATTERN.search(line)
             ts = int(time.time())
@@ -457,11 +443,20 @@ class PerformanceMonitor:
         scored_candidates: dict[str, tuple[float, list[str]]],
     ) -> OptimizationTarget | None:
         """Selects the best target from scored candidates or high-priority alerts."""
-        if analysis_data.deferred_targets:
-            logger.warning(
-                "[Metacognition]: Prioritizing 'Deferred learning' issue over other anomalies.",
-            )
-            return analysis_data.deferred_targets[0]
+        
+        for func, entries in analysis_data.entries_by_func.items():
+            first_error_entry = next((e for e in entries if e.traceback), None)
+            if first_error_entry and first_error_entry.traceback:
+                logger.warning(
+                    "[Metacognition]: Prioritizing critical error (traceback) in '%s'.", func
+                )
+                return OptimizationTarget(
+                    file_path=self._guess_source_file(func),
+                    target_name=func,
+                    issue_description=f"A critical error with a traceback occurred in `{func}`.",
+                    relevant_logs=first_error_entry.traceback,
+                )
+
         if not scored_candidates:
             return None
 
@@ -991,7 +986,7 @@ class MetacognitiveEngine:
                 e,
             )
 
-    def run_introspection_cycle(self):
+    def run_introspection_cycle(self) -> None:
         """
         Executes one full self-analysis cycle in 'Verified Advisory Mode'.
         It identifies a problem, generates a fix, verifies it in a sandbox,
@@ -1011,45 +1006,43 @@ class MetacognitiveEngine:
         logger.info("--- [METACOGNITIVE CYCLE STARTED (Verified Advisory Mode)] ---")
         logger.info("=" * 80)
 
-        log_file = Path("axiom.log")
-        target = self.performance_monitor.find_optimization_target(log_file)
-        if not target:
-            logger.info("--- [METACOGNITIVE CYCLE FINISHED]: No targets found. ---")
-            return
+        try:
+            log_file = Path("axiom.log")
+            target = self.performance_monitor.find_optimization_target(log_file)
+            if not target:
+                return
 
-        function_name = target.target_name.split(".")[-1]
-        problematic_code = self.code_introspector.get_function_source(
-            target.file_path,
-            function_name,
-        )
-        if not problematic_code:
+            function_name = target.target_name.split(".")[-1]
+            problematic_code = self.code_introspector.get_function_source(
+                target.file_path,
+                function_name,
+            )
+            if not problematic_code:
+                return
+
+            suggested_code = self.analysis_bridge.get_code_suggestion(
+                problematic_code,
+                target.issue_description,
+                target.relevant_logs,
+            )
+            if not suggested_code:
+                return
+
+            is_safe = self.sandbox_verifier.verify_change(
+                target.file_path,
+                function_name,
+                suggested_code,
+            )
+
+            self._save_suggestion_report(target, suggested_code, is_safe)
+
+        except Exception as e:
             logger.error(
-                "--- [METACOGNITIVE CYCLE FAILED]: Could not retrieve source code for target. ---",
+                "--- [METACOGNITIVE CYCLE FAILED]: An unexpected error occurred: %s ---",
+                e,
+                exc_info=True,
             )
-            return
-
-        suggested_code = self.analysis_bridge.get_code_suggestion(
-            problematic_code,
-            target.issue_description,
-            target.relevant_logs,
-        )
-        if not suggested_code:
-            logger.warning(
-                "--- [METACOGNITIVE CYCLE FINISHED]: External LLM provided no suggestion. ---",
-            )
-            return
-
-        is_safe = self.sandbox_verifier.verify_change(
-            target.file_path,
-            function_name,
-            suggested_code,
-        )
-
-        self._save_suggestion_report(target, suggested_code, is_safe)
-
-        logger.info("=" * 80)
-        logger.info("--- [METACOGNITIVE CYCLE FINISHED SUCCESSFULLY] ---")
-        logger.info(
-            "Verified suggestion saved to code_suggestion.json for human review.",
-        )
-        logger.info("=" * 80)
+        finally:
+            logger.info("=" * 80)
+            logger.info("--- [METACOGNITIVE CYCLE FINISHED] ---")
+            logger.info("=" * 80)

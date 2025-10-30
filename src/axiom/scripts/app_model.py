@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import logging
+import sys
 import zipfile
 from typing import TYPE_CHECKING
 
@@ -59,7 +61,7 @@ def find_latest_model(directory: Path = RENDERED_DIR) -> Path | None:
         logger.info("Found latest model: '%s'", latest_file.name)
         return latest_file
     except Exception as e:
-        logger.critical("Error while searching for latest model: %s", e)
+        logger.critical("Error while searching for latest model: %s", e, exc_info=True)
         return None
 
 
@@ -87,8 +89,10 @@ def load_axiom_model(axm_filepath: Path) -> tuple[dict, dict] | None:
     try:
         with zipfile.ZipFile(axm_filepath, "r") as zf:
             for member in zf.namelist():
-                if ".." in member:
-                    raise ValueError(f"Invalid path in zip file: {member}")
+                if ".." in member or member.startswith("/"):
+                    raise ValueError(
+                        f"Security risk: Invalid path in zip file: {member}"
+                    )
 
             version_data = json.loads(zf.read("version.json"))
             brain_bytes = zf.read("brain.json")
@@ -117,8 +121,32 @@ def load_axiom_model(axm_filepath: Path) -> tuple[dict, dict] | None:
                 version_data.get("render_date_utc"),
             )
             return brain_data, cache_data
+    except (zipfile.BadZipFile, KeyError) as e:
+        logger.critical(
+            "Failed to read .axm archive '%s'. It may be corrupt or missing required files (brain.json, cache.json, version.json). Error: %s",
+            axm_filepath.name,
+            e,
+        )
+        return None
+    except json.JSONDecodeError as e:
+        logger.critical(
+            "Failed to parse JSON within '%s'. The model data is corrupt. Error: %s",
+            axm_filepath.name,
+            e,
+        )
+        return None
+    except ValueError as e:
+        logger.critical(
+            "Model verification failed for '%s'. Error: %s", axm_filepath.name, e
+        )
+        return None
     except Exception as e:
-        logger.critical("Failed to load or parse .axm model: %s", e)
+        logger.critical(
+            "An unexpected error occurred while loading .axm model '%s': %s",
+            axm_filepath.name,
+            e,
+            exc_info=True,
+        )
         return None
 
 
@@ -168,6 +196,21 @@ def status() -> Response:
 
 def main() -> int:
     """Load the latest model, initialize the agent, and run the webserver."""
+    parser = argparse.ArgumentParser(description="Run the Axiom Agent web UI server.")
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="The host IP address to bind the server to. Default is 0.0.0.0 (accessible on the network).",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=7501,
+        help="The port to run the server on. Default is 7501.",
+    )
+    args = parser.parse_args()
+
     global axiom_agent
 
     latest_model_path = find_latest_model()
@@ -190,10 +233,12 @@ def main() -> int:
         cache_data=cache,
         inference_mode=True,
     )
-    logger.info("Agent is ready. Starting web server...")
-    app.run(host="0.0.0.0", port=7501, debug=False)
+    logger.info(
+        "Agent is ready. Starting web server on http://%s:%d", args.host, args.port
+    )
+    app.run(host=args.host, port=args.port, debug=False)
     return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

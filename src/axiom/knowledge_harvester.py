@@ -60,7 +60,7 @@ class KnowledgeHarvester:
         self.cache_path = RESEARCH_CACHE_PATH
         self.researched_terms: set[str] = set()
         self._load_research_cache()
-        print("[Knowledge Harvester]: Initialized.")
+        logger.info("[Knowledge Harvester]: Initialized.")
 
     def _load_research_cache(self) -> None:
         """Load the set of researched terms from a JSON file."""
@@ -111,7 +111,7 @@ class KnowledgeHarvester:
         "INVESTIGATE" goal and adds it to the agent's learning queue.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"\n--- [Discovery Cycle Started at {timestamp}] ---")
+        logger.info("\n--- [Discovery Cycle Started at %s] ---", timestamp)
 
         new_topic = self._find_new_topic()
 
@@ -120,15 +120,16 @@ class KnowledgeHarvester:
             with self.lock:
                 if goal not in self.agent.learning_goals:
                     self.agent.learning_goals.append(goal)
-                    print(
-                        f"  [Discovery]: Found new topic '{new_topic}'. Added to learning goals.",
+                    logger.info(
+                        "  [Discovery]: Found new topic '%s'. Added to learning goals.",
+                        new_topic,
                     )
         else:
-            print(
-                f"[Discovery Cycle]: {LogColors.YELLOW}Could not find any new topics to learn about this cycle.{LogColors.RESET}",
+            logger.warning(
+                "[Discovery Cycle]: Could not find any new topics to learn about this cycle.",
             )
 
-        print("--- [Discovery Cycle Finished] ---\n")
+        logger.info("--- [Discovery Cycle Finished] ---\n")
         self.agent.log_autonomous_cycle_completion()
 
     def _resolve_investigation_goal(self, goal: str) -> bool:
@@ -275,20 +276,26 @@ class KnowledgeHarvester:
                 None,
             )
 
-            if task_to_resolve:
-                logger.info("  - Attempting planned task: '%s'", task_to_resolve)
-                resolved = self._resolve_investigation_goal(task_to_resolve)
+            if task_to_resolve is not None:
+                # Normalize the task into a string
+                if isinstance(task_to_resolve, dict):
+                    task_str = str(task_to_resolve.get("description", ""))
+                else:
+                    task_str = str(task_to_resolve)
+
+                logger.info("  - Attempting planned task: '%s'", task_str)
+                resolved = self._resolve_investigation_goal(task_str)
 
                 if not resolved:
                     logger.warning(
                         "Failed to resolve planned task '%s'. Deprioritizing and removing from current plan. (in %s)",
-                        task_to_resolve,
+                        task_str,
                         caller_name,
                     )
                     with self.lock:
-                        if task_to_resolve in self.agent.learning_goals:
-                            self.agent.learning_goals.remove(task_to_resolve)
-                            self.agent.learning_goals.append(task_to_resolve)
+                        if task_str in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(task_str)
+                            self.agent.learning_goals.append(task_str)
 
                         if task_to_resolve in active_goal["sub_goals"]:
                             active_goal["sub_goals"].remove(task_to_resolve)
@@ -304,16 +311,24 @@ class KnowledgeHarvester:
             logger.info("No active plan. Checking for opportunistic learning tasks.")
             if self.agent.learning_goals:
                 opportunistic_task = self.agent.learning_goals[0]
-                if not self._resolve_investigation_goal(opportunistic_task):
+
+                # Normalize the task into a string
+                if isinstance(opportunistic_task, dict):
+                    task_str = str(opportunistic_task.get("description", ""))
+                else:
+                    task_str = str(opportunistic_task)
+
+                resolved = self._resolve_investigation_goal(task_str)
+                if not resolved:
                     logger.warning(
                         "Failed to resolve opportunistic task '%s'. Deprioritizing. (in %s)",
-                        opportunistic_task,
+                        task_str,
                         caller_name,
                     )
                     with self.lock:
-                        if opportunistic_task in self.agent.learning_goals:
-                            self.agent.learning_goals.remove(opportunistic_task)
-                            self.agent.learning_goals.append(opportunistic_task)
+                        if task_str in self.agent.learning_goals:
+                            self.agent.learning_goals.remove(task_str)
+                            self.agent.learning_goals.append(task_str)
             else:
                 logger.info(
                     "Learning queue is empty. Attempting to deepen existing knowledge."
@@ -432,21 +447,31 @@ class KnowledgeHarvester:
             of a suitable fact, or None if none is found.
         """
         potential_facts = []
-
         all_edges = self.agent.graph.get_all_edges()
 
         for edge in all_edges:
-            if edge.type == "is_a" and edge.weight > 0.8:
+            if edge.type in {"is_a", "defines", "describes"} and edge.weight >= 0.8:
                 target_node = self.agent.graph.get_node_by_id(edge.target)
-                if target_node and len(target_node.name.split()) >= 5:
-                    source_node = self.agent.graph.get_node_by_id(edge.source)
-                    if source_node:
-                        potential_facts.append((source_node, target_node, edge))
+                if target_node:
+                    word_count = len(target_node.name.split())
+                    if 3 <= word_count <= 25:
+                        source_node = self.agent.graph.get_node_by_id(edge.source)
+                        if source_node:
+                            potential_facts.append((source_node, target_node, edge))
 
-        if potential_facts:
-            return random.choice(potential_facts)
+        if not potential_facts:
+            logger.info(
+                "[Refinement]: No chunky facts found with strict criteria, retrying with relaxed threshold..."
+            )
+            for edge in all_edges:
+                if edge.weight >= 0.3:
+                    target_node = self.agent.graph.get_node_by_id(edge.target)
+                    if target_node and len(target_node.name.split()) >= 3:
+                        source_node = self.agent.graph.get_node_by_id(edge.source)
+                        if source_node:
+                            potential_facts.append((source_node, target_node, edge))
 
-        return None
+        return random.choice(potential_facts) if potential_facts else None
 
     def _deepen_knowledge_of_random_concept(self) -> None:
         """Pick a random known concept and try to learn a new related fact.
@@ -488,7 +513,7 @@ class KnowledgeHarvester:
         with self.lock:
             all_nodes = list(self.agent.graph.graph.nodes(data=True))
             if len(all_nodes) < 2:
-                print(
+                logger.info(
                     "[Deepen Knowledge]: Not enough concepts in the brain to study yet.",
                 )
                 return
@@ -498,12 +523,15 @@ class KnowledgeHarvester:
 
         if not random_node_name or random_node_name in stop_words:
             if random_node_name:
-                print(
-                    f"[Deepen Knowledge]: Skipping study of common concept: '{random_node_name}'",
+                logger.info(
+                    "[Deepen Knowledge]: Skipping study of common concept: '%s'",
+                    random_node_name,
                 )
             return
 
-        print(f"[Deepen Knowledge]: Chosen to study the concept: '{random_node_name}'")
+        logger.info(
+            "[Deepen Knowledge]: Chosen to study the concept: '%s'", random_node_name
+        )
 
         result = self.get_fact_from_wikipedia(
             random_node_name,
@@ -513,13 +541,17 @@ class KnowledgeHarvester:
             _title, fact_sentence = result
 
             with self.lock:
-                print(
-                    f"  [Deepen Knowledge]: {LogColors.GREEN}Attempting to learn new fact: '{fact_sentence}'{LogColors.RESET}",
+                logger.info(
+                    "  [Deepen Knowledge]: %sAttempting to learn new fact: '%s'%s",
+                    LogColors.GREEN,
+                    fact_sentence,
+                    LogColors.RESET,
                 )
                 self.agent.chat(fact_sentence)
         else:
-            print(
-                f"[Deepen Knowledge]: Could not find any new facts about '{random_node_name}'.",
+            logger.warning(
+                "[Deepen Knowledge]: Could not find any new facts about '%s'.",
+                random_node_name,
             )
 
     def _find_new_topic(self, max_attempts: int = 5) -> str | None:
@@ -562,12 +594,14 @@ class KnowledgeHarvester:
         ]
 
         for i in range(max_attempts):
-            print(
-                f"[Discovery]: Searching for a new topic (Attempt {i + 1}/{max_attempts})...",
+            logger.info(
+                "[Discovery]: Searching for a new topic (Attempt %d/%d)...",
+                i + 1,
+                max_attempts,
             )
             try:
                 subject = random.choice(core_subjects)
-                print(f"  [Discovery]: Exploring the core subject: '{subject}'")
+                logger.info("  [Discovery]: Exploring the core subject: '%s'", subject)
 
                 related_topics = wikipedia.search(subject, results=10)
                 if not related_topics:
@@ -577,8 +611,9 @@ class KnowledgeHarvester:
 
                 reject_keywords = ["list of", "timeline of", "index of", "outline of"]
                 if any(keyword in topic.lower() for keyword in reject_keywords):
-                    print(
-                        f"  [Discovery Heuristic]: Rejecting meta-page topic: '{topic}'",
+                    logger.info(
+                        "  [Discovery Heuristic]: Rejecting meta-page topic: '%s'",
+                        topic,
                     )
                     continue
 
@@ -589,8 +624,10 @@ class KnowledgeHarvester:
                     search_popularity is not None
                     and search_popularity < minimum_popularity
                 ):
-                    print(
-                        f"  [Discovery Heuristic]: Rejecting obscure topic '{topic}' (popularity: {search_popularity})",
+                    logger.info(
+                        "  [Discovery Heuristic]: Rejecting obscure topic '%s' (popularity: %d)",
+                        topic,
+                        search_popularity,
                     )
                     continue
 
@@ -599,17 +636,21 @@ class KnowledgeHarvester:
                     not self.agent.lexicon.is_known_word(clean_topic)
                     and clean_topic not in self.rejected_topics
                 ):
-                    print(f"  [Discovery Success]: Found new, popular topic: '{topic}'")
+                    logger.info(
+                        "  [Discovery Success]: Found new, popular topic: '%s'", topic
+                    )
                     return clean_topic
 
             except Exception as e:
-                print(
-                    f"  [Discovery Error]: An error occurred during topic finding. Error: {e}",
+                logger.warning(
+                    "  [Discovery Error]: An error occurred during topic finding. Error: %s",
+                    e,
                 )
                 time.sleep(1)
 
-        print(
-            f"[Discovery Warning]: Could not find a new, suitable topic after {max_attempts} attempts.",
+        logger.warning(
+            "[Discovery Warning]: Could not find a new, suitable topic after %d attempts.",
+            max_attempts,
         )
         return None
 
@@ -698,7 +739,7 @@ class KnowledgeHarvester:
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
         """Retrieve and verify a simple fact from a Wikipedia article."""
-        print(f"[Knowledge Source]: Searching Wikipedia for '{topic}'...")
+        logger.info("[Knowledge Source]: Searching Wikipedia for '%s'...", topic)
         try:
             search_results = wikipedia.search(topic, results=1)
             if not search_results:
@@ -708,10 +749,9 @@ class KnowledgeHarvester:
             if not (page and page.summary):
                 return None
 
-            if page and page.summary:
-                first_sentence = page.summary.split(". ")[0].strip()
-                if not first_sentence.endswith("."):
-                    first_sentence += "."
+            first_sentence = page.summary.split(". ")[0].strip()
+            if not first_sentence.endswith("."):
+                first_sentence += "."
 
             reframed_fact = self.agent.interpreter.verify_and_reframe_fact(
                 original_topic=topic,
@@ -719,18 +759,24 @@ class KnowledgeHarvester:
             )
 
             if reframed_fact:
-                print(
-                    f"  [Knowledge Source]: Extracted and verified fact: '{reframed_fact}'",
+                logger.info(
+                    "  [Knowledge Source]: Extracted and verified fact: '%s'",
+                    reframed_fact,
                 )
                 return page.title, reframed_fact
 
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                "  [Knowledge Source]: Wikipedia search failed for '%s'. Error: %s",
+                topic,
+                e,
+            )
             pass
         return None
 
     def get_fact_from_duckduckgo(self, topic: str) -> tuple[str, str] | None:
         """Retrieve, verify, and reframe a definition from DuckDuckGo's API."""
-        print(f"[Knowledge Source]: Searching DuckDuckGo for '{topic}'...")
+        logger.info("[Knowledge Source]: Searching DuckDuckGo for '%s'...", topic)
         try:
             url = f"https://api.duckduckgo.com/?q={topic}&format=json&no_html=1"
             response = requests.get(url, timeout=5)
@@ -749,11 +795,17 @@ class KnowledgeHarvester:
                 )
 
                 if reframed_fact:
-                    print(
-                        f"  [Knowledge Source]: Extracted and verified fact from DuckDuckGo: '{reframed_fact}'",
+                    logger.info(
+                        "  [Knowledge Source]: Extracted and verified fact from DuckDuckGo: '%s'",
+                        reframed_fact,
                     )
                     return topic, reframed_fact
 
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                "  [Knowledge Source]: DuckDuckGo search failed for '%s'. Error: %s",
+                topic,
+                e,
+            )
             pass
         return None

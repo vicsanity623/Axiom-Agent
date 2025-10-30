@@ -1,0 +1,18 @@
+# .dockerignore
+
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.pytest_cache
+.mypy_cache
+.ruff_cache
+build/
+dist/
+*.egg-info
+data/
+visualizations/
+axiom.log
+code_suggestion.json

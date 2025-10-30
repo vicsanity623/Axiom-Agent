@@ -1,228 +1,240 @@
-"""
-Axiom Brain Visualizer (Advanced & High-Performance)
-----------------------------------------------------
-
-Visualizes the Axiom agent's knowledge graph with advanced features and
-optimizations for large brains. This script is designed to be run from the
-project root.
-
-Features:
-- Correctly locates the brain file using the central config.
-- Renders a directed graph to show relationship flow.
-- Scales node size based on connectivity.
-- Scales edge width based on confidence score.
-- Styles negated relationships differently (dashed, red).
-- Provides detailed tooltips for both nodes and edges with all properties.
-- **Performance:** Culls the graph to the most connected nodes for fast loading.
-- **Performance:** Disables physics on load and provides an interactive toggle button.
-"""
-
 import json
+import logging
 from pathlib import Path
-
 import networkx as nx
-from pyvis.network import Network
+
+logger = logging.getLogger(__name__)
+CORE_NODE_THRESHOLD = 100000
 
 brain_file_path: Path
 try:
     from axiom.config import DEFAULT_BRAIN_FILE
-
     brain_file_path = DEFAULT_BRAIN_FILE
 except ImportError:
     PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
     brain_file_path = PROJECT_ROOT / "src" / "axiom" / "brain" / "my_agent_brain.json"
 
 
-def visualize_brain():
-    """
-    Loads the agent's brain and generates an interactive HTML visualization.
-    """
-    core_node_threshold = 750
-
-    # Use the locally resolved brain_file_path variable
-    print(f"🔍 Searching for brain file at:\n   {brain_file_path}")
-
+def visualize_brain_galaxy():
     if not brain_file_path.exists():
-        raise FileNotFoundError(
-            f"❌ Could not find brain file at:\n   {brain_file_path}\n"
-            f"Please run the agent first to generate a brain file.",
-        )
+        raise FileNotFoundError(f"Brain file not found at {brain_file_path}")
 
     with open(brain_file_path, encoding="utf-8") as f:
         brain_data = json.load(f)
+
     nodes = brain_data.get("nodes", [])
     edges = brain_data.get("links", [])
-
-    print(f"🧠 Loaded brain file successfully ({len(nodes)} nodes, {len(edges)} edges)")
-
-    if not nodes:
-        raise ValueError("⚠️ No nodes found in brain JSON — nothing to visualize!")
+    logger.info("Loaded %d nodes, %d edges", len(nodes), len(edges))
 
     g = nx.MultiDiGraph()
     for node in nodes:
-        g.add_node(
-            node["id"],
-            label=node.get("name", node["id"]),
-            node_type=node.get("type", "unknown"),
-            properties=node.get("properties", {}),
-        )
+        g.add_node(node["id"], **node)
     for edge in edges:
-        g.add_edge(
-            edge["source"],
-            edge["target"],
-            label=edge.get("type", "related_to"),
-            weight=edge.get("weight", 0.5),
-            properties=edge.get("properties", {}),
-        )
+        g.add_edge(edge["source"], edge["target"], **edge)
 
-    if len(g.nodes) > core_node_threshold:
-        print(
-            f"⚠️ Graph is large ({len(g.nodes)} nodes). Culling to the {core_node_threshold} most connected nodes for performance."
-        )
+    if len(g.nodes) > CORE_NODE_THRESHOLD:
         degrees = dict(g.degree())
-        sorted_nodes = sorted(degrees.items(), key=lambda item: item[1], reverse=True)
-        core_node_ids = {node_id for node_id, _ in sorted_nodes[:core_node_threshold]}
+        top_nodes = sorted(degrees, key=degrees.get, reverse=True)[:CORE_NODE_THRESHOLD]
+        g = g.subgraph(top_nodes).copy()
+        logger.info("Culled to %d nodes for performance", len(g.nodes))
 
-        core_g = nx.MultiDiGraph()
-        for node_id in core_node_ids:
-            core_g.add_node(node_id, **g.nodes[node_id])
-
-        for u, v, data in g.edges(data=True):
-            if u in core_node_ids and v in core_node_ids:
-                core_g.add_edge(u, v, **data)
-
-        g = core_g
-        print(f"✨ Culled graph now has {len(g.nodes)} nodes and {len(g.edges)} edges.")
-
-    vis = Network(
-        height="100vh",
-        width="100%",
-        bgcolor="#0d1117",
-        font_color="#ffffff",
-        notebook=False,
-        directed=True,
-    )
-
-    options = {
-        "physics": {
-            "enabled": False,
-            "barnesHut": {
-                "gravity": -40000,
-                "centralGravity": 0.4,
-                "springLength": 200,
-                "springConstant": 0.02,
-            },
-            "maxVelocity": 50,
-            "minVelocity": 0.75,
-            "stabilization": {"enabled": True, "iterations": 1000, "fit": True},
-        },
-        "interaction": {"tooltipDelay": 200, "hideEdgesOnDrag": True},
-        "configure": {"enabled": False},
-    }
-    vis.set_options(json.dumps(options))
-
-    color_map = {
-        "noun": "#ffcc00",
-        "noun_phrase": "#ffaa00",
-        "verb": "#00d8ff",
-        "proper_noun": "#90ee90",
-        "concept": "#ff66cc",
-        "unknown": "#888888",
-    }
-    degrees = dict(g.degree())
-    min_size, max_size = 15, 40
-    min_degree = min(degrees.values()) if degrees else 0
-    max_degree = max(degrees.values()) if degrees else 0
-
-    def scale_node_size(degree):
-        if max_degree == min_degree:
-            return (min_size + max_size) / 2
-        return min_size + (degree - min_degree) / (max_degree - min_degree) * (
-            max_size - min_size
-        )
-
+    elements = []
     for node_id, data in g.nodes(data=True):
-        node_type = data.get("node_type", "unknown")
-        degree = degrees.get(node_id, 1)
-        props_str = json.dumps(data.get("properties", {}), indent=2)
-        title_html = (
-            f"<b>ID:</b> {node_id}<br><b>Name:</b> {data['label']}<br><b>Type:</b> {node_type}<br>"
-            f"<b>Connections:</b> {degree}<br><hr><b>Properties:</b><br><pre>{props_str}</pre>"
-        )
-        vis.add_node(
-            node_id,
-            label=data["label"],
-            color=color_map.get(node_type, "#888"),
-            title=title_html,
-            size=scale_node_size(degree),
-            group=node_type,
-        )
-
+        elements.append({
+            "data": {
+                "id": node_id,
+                "label": data.get("name", node_id),
+                "type": data.get("type", "unknown"),
+            }
+        })
     for u, v, data in g.edges(data=True):
         props = data.get("properties", {})
         confidence = float(props.get("confidence", data.get("weight", 0.5)))
-        is_negated = props.get("negated", False)
-        edge_width = 1 + (confidence * 4)
-        edge_color = "#e06c75" if is_negated else "#555555"
-        dashes = True if is_negated else False
-        props_str = json.dumps(props, indent=2)
-        title_html = (
-            f"<b>Type:</b> {data['label']}<br><b>Confidence:</b> {confidence:.2f}<br>"
-            f"<hr><b>Properties:</b><br><pre>{props_str}</pre>"
-        )
-        vis.add_edge(
-            u,
-            v,
-            title=title_html,
-            label=data["label"],
-            width=edge_width,
-            color=edge_color,
-            dashes=dashes,
-        )
+        neg = props.get("negated", False)
+        elements.append({
+            "data": {
+                "source": u,
+                "target": v,
+                "label": data.get("type", "related_to"),
+                "confidence": confidence,
+                "negated": neg,
+            }
+        })
 
     output_dir = Path("visualizations")
     output_dir.mkdir(exist_ok=True)
-    output_path = output_dir / "axiom_brain_network.html"
-    vis.write_html(str(output_path))
+    output_path = output_dir / "axiom_brain_galaxy.html"
 
-    html = output_path.read_text(encoding="utf-8")
-    injection = """
-    <style>
-    #physicsToggle {
-        position: absolute; top: 15px; left: 15px; z-index: 1000;
-        background: #161b22; color: #c9d1d9; padding: 8px 12px;
-        border: 1px solid #30363d; border-radius: 6px; cursor: pointer;
-        font-size: 14px; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    }
-    #physicsToggle:hover { background: #21262d; }
-    </style>
-    <button id="physicsToggle">Enable Physics</button>
-    <script type="text/javascript">
-        document.addEventListener("DOMContentLoaded", function() {
-            const btn = document.getElementById('physicsToggle');
-            let physicsEnabled = false;
-            btn.onclick = function() {
-                physicsEnabled = !physicsEnabled;
-                network.setOptions({ physics: { enabled: physicsEnabled } });
-                this.innerText = physicsEnabled ? 'Disable Physics' : 'Enable Physics';
-            };
-        });
-    </script>
-    """
-    html = html.replace("</body>", injection + "\n</body>")
+    html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Axiom Brain Galaxy</title>
+  <script src="https://unpkg.com/cytoscape@3.27.0/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-cose-bilkent@4.1.0/cytoscape-cose-bilkent.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <style>
+    html, body {{
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 50%, #12002b 0%, #0a0020 30%, #000010 60%, #000000 100%),
+                  radial-gradient(circle at 70% 30%, rgba(255,100,200,0.15), transparent 60%),
+                  radial-gradient(circle at 30% 70%, rgba(0,150,255,0.15), transparent 60%);
+      background-blend-mode: screen;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }}
+    #cy {{
+      width: 100vw; height: 100vh; display: block;
+      touch-action: none;
+    }}
+    .tooltip {{
+      position: absolute; background: rgba(22,27,34,0.9); padding: 6px 8px;
+      border-radius: 8px; border: 1px solid #30363d;
+      color: #c9d1d9; font-size: 12px;
+      display: none; z-index: 1000;
+    }}
+    #physicsToggle {{
+      position: fixed; top: 15px; left: 15px; z-index: 2000;
+      background: rgba(22,27,34,0.9);
+      color: #c9d1d9; padding: 8px 14px;
+      border: 1px solid #30363d; border-radius: 8px;
+      cursor: pointer; font-size: 14px;
+      -webkit-tap-highlight-color: transparent;
+    }}
+    #physicsToggle:active {{ background: #21262d; }}
+  </style>
+</head>
+<body>
+  <button id="physicsToggle">Enable Galactic Physics</button>
+  <div id="cy"></div>
+  <div class="tooltip" id="tooltip"></div>
+
+  <script>
+    const IS_MOBILE = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const rawElements = {json.dumps(elements)};
+    const batchSize = IS_MOBILE ? 500 : 2000;
+    const galaxyScale = IS_MOBILE ? 25000 : 50000;
+    let batchIndex = 0;
+
+    // Assign star colors
+    const hues = ['#66ccff', '#ff99cc', '#b388ff', '#88ffcc', '#ffd966'];
+    rawElements.forEach(el => {{
+      if (el.data && !el.data.color) {{
+        el.data.color = hues[Math.floor(Math.random() * hues.length)];
+      }}
+    }});
+
+    const cy = cytoscape({{
+      container: document.getElementById('cy'),
+      wheelSensitivity: 0.15,
+      minZoom: 0.02,
+      maxZoom: 4,
+      style: [
+        {{ selector: 'node', style: {{
+          'background-color': 'data(color)',
+          'label': 'data(label)',
+          'font-size': IS_MOBILE ? 5 : 7,
+          'color': '#fff',
+          'opacity': 0,
+          'width': IS_MOBILE ? 12 : 10,
+          'height': IS_MOBILE ? 12 : 10,
+          'shadow-blur': 30,
+          'shadow-color': 'data(color)',
+          'shadow-opacity': 0.9,
+          'text-outline-color': '#000',
+          'text-outline-width': 1
+        }} }},
+        {{ selector: 'edge', style: {{
+          'width': IS_MOBILE ? 1.2 : 0.6,
+          'opacity': 0.25,
+          'line-color': '#b088ff',
+          'curve-style': 'bezier'
+        }} }},
+        {{ selector: 'edge[negated=true]', style: {{
+          'line-color': '#ff6666',
+          'line-style': 'dashed',
+          'opacity': 0.35
+        }} }}
+      ],
+      layout: {{ name: 'preset' }}
+    }});
+
+    // Tooltip
+    const tooltip = document.getElementById('tooltip');
+    cy.on('tap', 'node', e => {{
+      const n = e.target;
+      tooltip.style.display = 'block';
+      tooltip.innerHTML = `<b>${{n.data('label')}}</b><br><small>${{n.data('type')}}</small>`;
+      tooltip.style.left = (e.originalEvent.touches?.[0]?.clientX || e.originalEvent.clientX) + 'px';
+      tooltip.style.top = (e.originalEvent.touches?.[0]?.clientY || e.originalEvent.clientY) + 'px';
+    }});
+    cy.on('tap', e => {{
+      if (e.target === cy) tooltip.style.display = 'none';
+    }});
+
+    // Progressive loading
+    function loadBatch() {{
+      if (batchIndex * batchSize >= rawElements.length) return;
+      const batch = rawElements.slice(batchIndex * batchSize, (batchIndex + 1) * batchSize);
+      cy.add(batch);
+      batchIndex++;
+
+      cy.nodes().positions(n => {{
+        return {{
+          x: (Math.random() - 0.5) * galaxyScale,
+          y: (Math.random() - 0.5) * galaxyScale
+        }};
+      }});
+
+      cy.nodes().forEach(n => {{
+        n.animate({{
+          style: {{ opacity: 1 }},
+          duration: 700 + Math.random() * 400,
+          easing: 'ease-out'
+        }});
+      }});
+
+      setTimeout(loadBatch, IS_MOBILE ? 1500 : 800);
+    }}
+    loadBatch();
+
+    // Physics toggle
+    let physicsEnabled = false;
+    const layoutOpts = {{
+      name: 'cose-bilkent',
+      animate: true,
+      randomize: true,
+      fit: false,
+      nodeRepulsion: IS_MOBILE ? 100000 : 200000,
+      idealEdgeLength: IS_MOBILE ? 250 : 500,
+      gravity: IS_MOBILE ? 0.2 : 0.05,
+      numIter: 100
+    }};
+
+    document.getElementById('physicsToggle').onclick = () => {{
+      physicsEnabled = !physicsEnabled;
+      if (physicsEnabled) {{
+        cy.layout(layoutOpts).run();
+      }} else {{
+        cy.layout({{ name: 'preset' }}).run();
+      }}
+      document.getElementById('physicsToggle').innerText =
+        physicsEnabled ? 'Disable Physics' : 'Enable Galactic Physics';
+    }};
+  </script>
+</body>
+</html>
+"""
     output_path.write_text(html, encoding="utf-8")
-
-    print("✅ High-performance visualization generated successfully!")
-    print(f"📁 File saved at:\n   {output_path.resolve()}")
-    print("🌐 Open it in your browser to explore interactively.")
+    logger.info("🌌 Galaxy visualization saved at %s", output_path.resolve())
 
 
 def main():
-    """Entry point for the axiom-visualize command."""
-    try:
-        visualize_brain()
-    except (FileNotFoundError, ValueError) as e:
-        print(str(e))
+    logging.basicConfig(level=logging.INFO)
+    visualize_brain_galaxy()
 
 
 if __name__ == "__main__":

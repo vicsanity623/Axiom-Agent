@@ -9,7 +9,7 @@ package = true
 
 [project]
 name = "axiom"
-version = "0.5.7"
+version = "0.5.8"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
@@ -28,10 +28,13 @@ dependencies = [
     "python-Levenshtein>=0.25.1",
     "requests",
     "rich",
+    "pyvis",
+    "spacy>=3.7.2,<3.8.0",
     "thefuzz>=0.22.1",
     "tqdm",
     "typer",
     "wikipedia",
+    "scipy",
 ]
 
 [project.optional-dependencies]
@@ -53,8 +56,9 @@ axiom-llm = "axiom.scripts.download_model:main"
 axiom-train = "axiom.scripts.autonomous_trainer:main"
 axiom-render = "axiom.scripts.render_model:main"
 axiom-teach = "axiom.scripts.cnt:main"
-axiom-webui_app = "axiom.scripts.app:main"
+axiom-visualize = "axiom.scripts.visualize_brain:main" # Added for HTML visualization
 axiom-webui = "axiom.scripts.app_model:main"
+axiom-webui_app = "axiom.scripts.app:main"
 
 
 # --- Tool Configurations ---
@@ -115,6 +119,7 @@ testpaths = [
 ]
 filterwarnings = [
         "ignore::FutureWarning:networkx",
+        "ignore::DeprecationWarning",
 ]
 markers = [
     "introspection: tests that require a live LLM model and are skipped in standard CI",
@@ -125,13 +130,18 @@ axiom = ["static/*", "templates/*"]
 
 [tool.coverage.run]
 branch = true
-source_pkgs = ["axiom"]
-omit = []
 parallel = true
 relative_files = true
 source = ["."]
+concurrency = ["multiprocessing", "thread"]
+source_pkgs = ["axiom"]
+omit = ["*/tests/*"]
+data_file = ".coverage"
 
 [tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_empty = true
 precision = 1
 skip_covered = true
 exclude_also = [
