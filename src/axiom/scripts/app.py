@@ -25,7 +25,7 @@ from ..config import (
     STATIC_DIR,
     TEMPLATE_DIR,
 )
-from ..logging_config import setup_logging
+from ..logging_config import console, setup_logging
 from ..metacognitive_engine import MetacognitiveEngine
 from .cycle_manager import CycleManager
 
@@ -68,7 +68,12 @@ def load_agent() -> None:
                     agent=axiom_agent,
                     gemini_api_key=GEMINI_API_KEY,
                 )
-                manager = CycleManager(scheduler, harvester, metacognitive_engine)
+                manager = CycleManager(
+                    scheduler=scheduler,
+                    harvester=harvester,
+                    metacognitive_engine=metacognitive_engine,
+                    console=console,
+                )
 
                 manager.start()
                 scheduler.start()

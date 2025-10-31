@@ -15,18 +15,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-try:
-    import spacy
-
-    nlp: Language | None = spacy.load("en-core-web-lg")
-    logger.info("spaCy loaded successfully for POS tagging fallback.")
-except ImportError:
-    nlp = None
-    logger.warning(
-        "spaCy not found. POS tagging will rely solely on the agent's lexicon."
-    )
-
-
 class SymbolicParser:
     """A deterministic, rule-based parser for understanding simple language.
 
@@ -52,10 +40,28 @@ class SymbolicParser:
         "AMBIGUOUS_PROPERTY_VERBS",
         "PROPERTY_OF_QUESTION_PATTERN",
         "PASSIVE_VOICE_PATTERN",
+        "nlp",
     )
 
     def __init__(self, agent: CognitiveAgent) -> None:
         """Initialize the SymbolicParser."""
+
+        self.agent = agent
+        self.nlp: Language | None
+        try:
+            import spacy
+
+            self.nlp = spacy.load("en_core_web_lg")
+            logger.info(
+                "[success]spaCy loaded successfully for POS tagging fallback.[/success]"
+            )
+        except ImportError:
+            self.nlp = None
+            logger.warning(
+                "[yellow]spaCy not found. POS tagging will rely solely on the agent's lexicon.[/yellow]"
+            )
+        logger.info("[success]Symbolic Parser initialized.[/success]")
+
         self.CAPITAL_PATTERN = re.compile(
             r"(?i)^(?P<city>.+?)\s+is\s+(?:the\s+)?capital\s+of\s+(?P<country>.+?)\.*$",
         )
@@ -126,9 +132,6 @@ class SymbolicParser:
         self.PROPERTY_OF_QUESTION_PATTERN = re.compile(
             r"(?i)^what\s+(is|are)\s+(?:the\s+)?(?P<property>.+?)\s+of\s+(?P<subject>.+)\?*$",
         )
-
-        self.agent = agent
-        logger.info("   - Symbolic Parser initialized.")
 
     def _split_into_clauses(self, text: str) -> list[str]:
         """Splits a complex text block into simpler, independent clauses."""
@@ -538,26 +541,22 @@ class SymbolicParser:
     def _is_part_of_speech(self, word: str, pos: str) -> bool:
         """
         Check if a word is categorized as a specific part of speech.
-        This is a read-only check against the agent's current knowledge.
+        This method first checks the agent's trusted lexicon. If the word is
+        not found, it uses spaCy as a robust fallback for external POS tagging.
         """
-        clean_word = word.lower().strip()
-        word_node = self.agent.graph.get_node_by_name(clean_word)
-        if not word_node:
-            if nlp:
-                doc = nlp(clean_word)
-                if doc and doc[0].pos_.lower() == pos:
-                    return True
+        clean_word = self.agent._clean_phrase(word)
+        if not clean_word:
             return False
 
-        is_a_edges = [
-            edge
-            for edge in self.agent.graph.get_edges_from_node(word_node.id)
-            if edge.type == "is_a"
-        ]
-        for edge in is_a_edges:
-            target_node = self.agent.graph.get_node_by_id(edge.target)
-            if target_node and target_node.name == pos:
+        promoted_parts = self.agent.lexicon.get_promoted_pos(clean_word)
+        if pos.lower() in promoted_parts:
+            return True
+
+        if self.nlp:
+            doc = self.nlp(clean_word)
+            if doc and doc[0].pos_.upper() == pos.upper():
                 return True
+
         return False
 
     def _refine_object_phrase(

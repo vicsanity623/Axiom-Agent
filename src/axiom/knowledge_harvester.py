@@ -60,7 +60,7 @@ class KnowledgeHarvester:
         self.cache_path = RESEARCH_CACHE_PATH
         self.researched_terms: set[str] = set()
         self._load_research_cache()
-        logger.info("[Knowledge Harvester]: Initialized.")
+        logger.info("[success][Knowledge Harvester]: Initialized.[/success]")
 
     def _load_research_cache(self) -> None:
         """Load the set of researched terms from a JSON file."""
@@ -73,7 +73,7 @@ class KnowledgeHarvester:
                 if isinstance(data, list):
                     self.researched_terms = set(data)
                     logger.info(
-                        "[Harvester Cache]: Loaded %d previously researched terms.",
+                        "[border][Harvester Cache]: Loaded %d previously researched terms.[/border]",
                         len(self.researched_terms),
                     )
                 else:
@@ -144,7 +144,7 @@ class KnowledgeHarvester:
             or term_to_learn in self.researched_terms
         ):
             logger.info(
-                "[Study Cycle]: Skipping '%s' — already known or researched in previous cycles.",
+                "[purple][Study Cycle]: Skipping '%s' — already known or researched in previous cycles.[/purple]",
                 term_to_learn,
             )
             with self.lock:
@@ -153,7 +153,7 @@ class KnowledgeHarvester:
             return True
 
         logger.info(
-            "[Study Cycle]: Prioritizing learning goal: To define '%s'.",
+            "[purple][Study Cycle]: Prioritizing learning goal: To define '%s'.[/purple]",
             term_to_learn,
         )
 
@@ -161,7 +161,7 @@ class KnowledgeHarvester:
 
         if is_single_word:
             logger.info(
-                "  [Study Cycle]: Term is a single word. Prioritizing Dictionary API.",
+                "[yellow]   - Term is a single word. Prioritizing Dictionary API.[/yellow]",
             )
             api_result = self.get_definition_from_api(term_to_learn)
             if api_result:
@@ -186,7 +186,7 @@ class KnowledgeHarvester:
                         pos_learned = True
 
                     logger.info(
-                        "  [Study Cycle]: Processing definition as a new learning opportunity: '%s'",
+                        "[purple]   - Processing definition as a new learning opportunity: '%s'[/purple]",
                         definition,
                     )
                     definition_learned = self.agent.learn_new_fact_autonomously(
@@ -196,7 +196,7 @@ class KnowledgeHarvester:
 
                 if pos_learned or definition_learned:
                     logger.info(
-                        "  [Study Cycle]: Successfully learned from Dictionary API."
+                        "[success]  [Study Cycle]: Successfully learned from Dictionary API. [/success]"
                     )
                     with self.lock:
                         if goal in self.agent.learning_goals:
@@ -207,12 +207,12 @@ class KnowledgeHarvester:
 
         if is_single_word:
             logger.info(
-                "  [Study Cycle]: Dictionary API failed for '%s'. Falling back to web search.",
+                "[yellow]   - Dictionary API failed for '%s'. Falling back to web search.[/yellow]",
                 term_to_learn,
             )
         else:
             logger.info(
-                "  [Study Cycle]: Term is a multi-word concept. Using web search directly.",
+                "[yellow]   - Term is a multi-word concept. Using web search directly.[/yellow]",
             )
 
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}", term_to_learn]
@@ -234,7 +234,9 @@ class KnowledgeHarvester:
             )
             return False
 
-        logger.info("  [Study Cycle]: Found potential fact from web: '%s'", web_fact)
+        logger.info(
+            "[purple]   - Found potential fact from web: '%s'[/purple]", web_fact
+        )
         with self.lock:
             was_learned = self.agent.learn_new_fact_autonomously(
                 fact_sentence=web_fact,
@@ -243,14 +245,14 @@ class KnowledgeHarvester:
 
         if was_learned:
             logger.info(
-                "  [Study Cycle]: Agent successfully learned the new fact from web.",
+                "[success]   - Agent successfully learned the new fact from web.[/success]",
             )
             with self.lock:
                 if goal in self.agent.learning_goals:
                     self.agent.learning_goals.remove(goal)
             return True
 
-        logger.warning("  [Study Cycle]: Agent failed to learn from the web fact.")
+        logger.warning("[yellow]   - Agent failed to learn from the web fact.[/yellow]")
         return False
 
     def study_cycle(self) -> None:
@@ -260,13 +262,16 @@ class KnowledgeHarvester:
         from the current plan to prevent infinite loops.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logger.info("\n--- [Study Cycle Started at %s] ---", timestamp)
+        logger.info("\n[cyan]--- [Study Cycle Started at %s] ---[/cyan]", timestamp)
 
         active_goal = self.agent.goal_manager.get_active_goal()
         caller_name = f"{self.__class__.__name__}.study_cycle"
 
         if active_goal:
-            logger.info(">> Working on active plan: '%s'", active_goal["description"])
+            logger.info(
+                ">> Working on active plan: '%s'",
+                active_goal["description"],
+            )
             task_to_resolve = next(
                 (
                     sg
@@ -282,12 +287,14 @@ class KnowledgeHarvester:
                 else:
                     task_str = str(task_to_resolve)
 
-                logger.info("  - Attempting planned task: '%s'", task_str)
+                logger.info(
+                    "[yellow]   - Attempting planned task: '%s'[/yellow]", task_str
+                )
                 resolved = self._resolve_investigation_goal(task_str)
 
                 if not resolved:
                     logger.warning(
-                        "Failed to resolve planned task '%s'. Deprioritizing and removing from current plan. (in %s)",
+                        "[yellow]    - Failed to resolve planned task '%s'. Deprioritizing and removing from current plan. (in %s)[yellow]",
                         task_str,
                         caller_name,
                     )
@@ -333,7 +340,7 @@ class KnowledgeHarvester:
                 )
                 self._deepen_knowledge_of_random_concept()
 
-        logger.info("--- [Study Cycle Finished] ---")
+        logger.info("[border]--- [Study Cycle Finished] ---[/border]")
         self.agent.log_autonomous_cycle_completion()
 
     def refinement_cycle(self) -> None:
@@ -715,13 +722,12 @@ class KnowledgeHarvester:
         Returns the part of speech and the full definition, which can then be
         used to construct multiple facts.
         """
-        logger.info("[Knowledge Source]: Querying Dictionary API for '%s'...", word)
+        logger.info("[yellow]   - Querying Dictionary API for[/yellow] '%s'...", word)
         try:
             url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
             response = requests.get(url, timeout=5)
 
             if response.status_code != 200:
-                logger.info("  [Dictionary API]: Word '%s' not found.", word)
                 return None
 
             data = response.json()
@@ -739,18 +745,18 @@ class KnowledgeHarvester:
 
                     if part_of_speech and first_definition:
                         logger.info(
-                            "  [Dictionary API]: Found definition: '%s'",
+                            "[success]   - Found definition: '%s'[/success]",
                             first_definition,
                         )
                         logger.info(
-                            "  [Dictionary API]: Found part of speech: '%s'",
+                            "[success]   - Found part of speech: '%s'[/success]",
                             part_of_speech,
                         )
 
                         return (part_of_speech, first_definition)
 
         except requests.RequestException as e:
-            logger.warning("  [Dictionary API]: An error occurred: %s", e)
+            logger.warning("[error][Dictionary API]: An error occurred: %s[/error]", e)
         except (json.JSONDecodeError, KeyError) as e:
             logger.warning(
                 "  [Dictionary API]: Failed to parse response for '%s': %s",
@@ -762,7 +768,7 @@ class KnowledgeHarvester:
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
         """Retrieve and verify a simple fact from a Wikipedia article."""
-        logger.info("[Knowledge Source]: Searching Wikipedia for '%s'...", topic)
+        logger.info("[purple]   - Searching Wikipedia for '%s'...[/purple]", topic)
         try:
             search_results = wikipedia.search(topic, results=1)
             if not search_results:
@@ -783,7 +789,7 @@ class KnowledgeHarvester:
 
             if reframed_fact:
                 logger.info(
-                    "  [Knowledge Source]: Extracted and verified fact: '%s'",
+                    "[success]   - Extracted and verified fact: '%s'[/success]",
                     reframed_fact,
                 )
                 return page.title, reframed_fact

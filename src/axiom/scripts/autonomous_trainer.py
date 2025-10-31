@@ -12,7 +12,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from ..cognitive_agent import CognitiveAgent
 from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, GEMINI_API_KEY
-from ..logging_config import setup_logging
+from ..logging_config import console, setup_logging
 from ..metacognitive_engine import MetacognitiveEngine
 from .cycle_manager import CycleManager
 
@@ -27,7 +27,7 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 **RULES:**
 1.  The output MUST be a single, continuous string.
 2.  The string MUST start with a high-level mission statement.
-3.  The string MUST contain exactly 15 stages, each formatted as `[Stage X: Title]: Description...`.
+3.  The string MUST contain exactly 7 stages, each formatted as `[Stage X: Title]: Description...`.
 4.  The stages MUST follow a logical progression from concrete fundamentals to abstract reasoning, starting at a "toddler" level.
 5.  **Crucially, you MUST introduce variation and avoid redundancy.** The AI has already learned the concepts listed in the "Known Concepts" section. Your generated curriculum should focus on related, but distinct, topics to broaden the AI's knowledge.
 
@@ -35,7 +35,7 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 {known_concepts}
 
 **EXAMPLE OUTPUT (Do NOT copy this example; use it only for structure):**
-"Embark on a journey to master language, evolving from a novice listener to a sophisticated communicator.[Stage 1: Phonemic Awareness]: Learn to distinguish the fundamental sound units (phonemes) of a language, the building blocks of all spoken words. [Stage 2: Syllabic Construction]: Begin combining sounds into simple syllables and understanding basic rhythmic patterns. [Stage 3: Lexical Association]: Build a core vocabulary by linking simple words directly to objects, actions, and concepts. [Stage 4: Morphological Inflection]: Understand how words change form to express quantity, tense, or possession (e.g., 'dog' vs 'dogs', 'walk' vs 'walked'). [Stage 5: Core Sentence Patterns]: Grasp the foundational Subject-Verb-Object structure to form simple, coherent sentences. [Stage 6: Syntactic Expansion]: Learn to use adjectives, adverbs, and prepositions to add detail and complexity to core sentences. [Stage 7: Clause Combination]: Master the use of conjunctions ('and', 'but', 'because') to connect multiple ideas into compound sentences. [Stage 8: Derivational Word Formation]: Discover how new words are created by adding prefixes and suffixes to root words (e.g., 'happy' becomes 'unhappiness'). [Stage 9: Dependency Grammar Analysis]: Deconstruct complex sentences to identify the grammatical relationships and dependencies between all words. [Stage 10: Compositional Semantics]: Learn to derive the literal meaning of a sentence by combining the meanings of its individual words and grammatical structure. [Stage 11: Lexical-Semantic Relationships]: Map the intricate network of word meanings, including synonyms, antonyms, and hierarchical relationships (e.g., a 'poodle' is a type of 'dog'). [Stage 12: Identifying Speech Acts]: Recognize the underlying purpose of an utterance—whether it's a question, a command, a promise, or a statement. [Stage 13: Discourse Coherence]: Analyze how sentences connect to form a cohesive paragraph or conversation, tracking topics and references. [Stage 14: Inferential Pragmatics]: Develop the ability to understand implied meaning, or what is meant versus what is explicitly said (e.g., recognizing that "It's cold in here" can be a request). [Stage 15: Sociocultural Context Modeling]: Achieve mastery by interpreting complex social cues, sarcasm, humor, and cultural nuances that shape the true meaning of communication."
+"Embark on a journey to master language, evolving from a novice listener to a sophisticated communicator.[Stage 1: Phonemic Awareness]: Learn to distinguish the fundamental sound units (phonemes) of a language, the building blocks of all spoken words. [Stage 2: Syllabic Construction]: Begin combining sounds into simple syllables and understanding basic rhythmic patterns. [Stage 3: Lexical Association]: Build a core vocabulary by linking simple words directly to objects, actions, and concepts. [Stage 4: Morphological Inflection]: Understand how words change form to express quantity, tense, or possession (e.g., 'dog' vs 'dogs', 'walk' vs 'walked'). [Stage 5: Core Sentence Patterns]: Grasp the foundational Subject-Verb-Object structure to form simple, coherent sentences. [Stage 6: Dependency Grammar Analysis]: Deconstruct complex sentences to identify the grammatical relationships and dependencies between all words. [Stage 7: Compositional Semantics]: Learn to derive the literal meaning of a sentence by combining the meanings of its individual words and grammatical structure."
 """
 
 
@@ -60,7 +60,7 @@ def _generate_or_set_initial_goal(
         return
 
     logger.info(
-        "--- [AUTONOMOUS TRAINER]: No active goals found. Generating a new, state-aware curriculum. ---"
+        "[yellow]--- [AUTONOMOUS TRAINER]: No active goals found. Generating a new, state-aware curriculum. ---[/yellow]"
     )
 
     creative_seeds = [
@@ -73,7 +73,10 @@ def _generate_or_set_initial_goal(
         "Emphasize the social aspect of language, including pragmatics, discourse, and cultural context.",
     ]
     selected_seed = random.choice(creative_seeds)
-    logger.info("  [Curriculum Generation]: Using creative seed: '%s'", selected_seed)
+    logger.info(
+        "[purple][Curriculum Generation]: Using creative seed: '%s'[/purple]",
+        selected_seed,
+    )
 
     known_concepts = [
         data["name"]
@@ -103,7 +106,10 @@ def start_autonomous_training(
     brain_file: Path, state_file: Path, initial_goal: str | None = None
 ) -> None:
     """Initialize the agent and run its autonomous learning cycles indefinitely."""
-    logger.info("--- [AUTONOMOUS TRAINER]: Starting Axiom Agent Initialization... ---")
+
+    console.rule(
+        "[bold cyan]Starting Axiom Agent Initialization[/bold cyan]", style="border"
+    )
 
     try:
         axiom_agent = CognitiveAgent(
@@ -125,22 +131,29 @@ def start_autonomous_training(
         )
 
         scheduler = BackgroundScheduler(daemon=True)
-        manager = CycleManager(scheduler, harvester, metacognitive_engine)
+        manager = CycleManager(
+            scheduler=scheduler,
+            harvester=harvester,
+            metacognitive_engine=metacognitive_engine,
+            console=console,
+        )
 
         _generate_or_set_initial_goal(axiom_agent, initial_goal)
 
         manager.start()
         scheduler.start()
 
-        logger.info("--- [AUTONOMOUS TRAINER]: Agent is running in headless mode. ---")
-        logger.info("--- All learning cycles are active. Press CTRL+C to stop. ---")
+        console.print("[bold green]Agent is running in headless mode.[/bold green]")
+        console.print(
+            "[bold green]All learning cycles are active. Press CTRL+C to stop.[/bold green]"
+        )
 
         while True:
             time.sleep(1)
 
     except (KeyboardInterrupt, SystemExit):
         logger.info(
-            "\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---",
+            "[border]\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---[/border]",
         )
     except Exception as exc:
         logger.critical(

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from apscheduler.schedulers.base import BaseScheduler
+    from rich.console import Console
 
     from ..knowledge_harvester import KnowledgeHarvester
     from ..metacognitive_engine import MetacognitiveEngine
@@ -26,10 +27,12 @@ class CycleManager:
         scheduler: BaseScheduler,
         harvester: KnowledgeHarvester,
         metacognitive_engine: MetacognitiveEngine,
+        console: Console,
     ) -> None:
         self.scheduler = scheduler
         self.harvester = harvester
         self.metacognitive_engine = metacognitive_engine
+        self.console = console
 
         self.phase_lock = threading.Lock()
 
@@ -135,10 +138,11 @@ class CycleManager:
 
     def _start_learning_phase(self) -> None:
         """Start the Learning Phase by scheduling the first study cycle."""
-        logger.info(
-            "--- [CYCLE MANAGER]: Starting %.1f-hour LEARNING phase (delay: %ds). ---",
-            self.LEARNING_PHASE_DURATION.total_seconds() / 3600,
-            self.CYCLE_DELAY_SECONDS,
+
+        hours = self.LEARNING_PHASE_DURATION.total_seconds() / 3600
+        self.console.rule(
+            f"[bold cyan]Starting {hours:.1f}-hour LEARNING phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold cyan]",
+            style="border",
         )
         self._clear_all_jobs()
         self.current_phase = "learning"
@@ -153,10 +157,10 @@ class CycleManager:
 
     def _start_discovery_phase(self) -> None:
         """Start the Discovery Phase by scheduling the first discover cycle."""
-        logger.info(
-            "--- [CYCLE MANAGER]: Starting %.1f-minute DISCOVERY phase (delay: %ds). ---",
-            self.DISCOVERY_PHASE_DURATION.total_seconds() / 60,
-            self.CYCLE_DELAY_SECONDS,
+        minutes = self.DISCOVERY_PHASE_DURATION.total_seconds() / 60
+        self.console.rule(
+            f"[bold cyan]Starting {minutes:.1f}-minute DISCOVERY phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold cyan]",
+            style="border",
         )
         self._clear_all_jobs()
         self.current_phase = "discovery"
@@ -171,10 +175,10 @@ class CycleManager:
 
     def _start_refinement_phase(self) -> None:
         """Start the Refinement Phase by scheduling the first refinement cycle."""
-        logger.info(
-            "--- [CYCLE MANAGER]: Starting %.1f-minute REFINEMENT phase (delay: %ds). ---",
-            self.REFINEMENT_PHASE_DURATION.total_seconds() / 60,
-            self.CYCLE_DELAY_SECONDS,
+        minutes = self.REFINEMENT_PHASE_DURATION.total_seconds() / 60
+        self.console.rule(
+            f"[bold blue]Starting {minutes:.1f}-minute REFINEMENT phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold blue]",
+            style="border",
         )
         self._clear_all_jobs()
         self.current_phase = "refinement"
@@ -189,10 +193,10 @@ class CycleManager:
 
     def _start_metacognitive_phase(self) -> None:
         """Start the Metacognitive Phase by scheduling the first metacognitive cycle."""
-        logger.info(
-            "--- [CYCLE MANAGER]: Starting %.1f-minute METACOGNITIVE phase (delay: %ds). ---",
-            self.METACOGNITIVE_PHASE_DURATION.total_seconds() / 60,
-            self.CYCLE_DELAY_SECONDS,
+        minutes = self.METACOGNITIVE_PHASE_DURATION.total_seconds() / 60
+        self.console.rule(
+            f"[bold blue]Starting {minutes:.1f}-minute METACOGNITIVE phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold blue]",
+            style="border",
         )
         self._clear_all_jobs()
         self.current_phase = "metacognitive"

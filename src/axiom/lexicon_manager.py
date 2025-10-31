@@ -29,7 +29,7 @@ class LexiconManager:
             agent: The instance of the CognitiveAgent this manager will serve.
         """
         self.agent = agent
-        logger.info("   - Lexicon Manager initialized.")
+        logger.info("[success]Lexicon Manager initialized.[success]")
 
     def is_known_word(self, word: str) -> bool:
         """Check if a word exists as a concept in the knowledge graph.

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from ..config import DEFAULT_BRAIN_FILE
+from axiom.config import DEFAULT_BRAIN_FILE
 
 logger = logging.getLogger(__name__)
 CORE_NODE_THRESHOLD = 100000
@@ -167,7 +167,6 @@ def main():
     try:
         visualize_brain_galaxy_fibonacci()
     except (FileNotFoundError, ValueError) as e:
-        # Use logger for errors for consistency
         logger.error(str(e))
 
 

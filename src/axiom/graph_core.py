@@ -420,7 +420,6 @@ class ConceptGraph:
         graph_data = json_graph.node_link_data(self.graph, edges="links")
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(graph_data, f, indent=4)
-        logger.info("Agent brain saved to %s", filename)
 
     @classmethod
     def load_from_dict(cls, data: dict[str, Any]) -> Self:

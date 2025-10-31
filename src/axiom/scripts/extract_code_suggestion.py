@@ -41,8 +41,6 @@ def main():
             sys.exit(1)
 
         # 4. Write to the output file
-        # The json parser automatically converts '\n' characters into real newlines,
-        # so we just need to write the string directly to the file.
         OUTPUT_FILE.write_text(code_string, encoding="utf-8")
 
         print(f"✅ Success! Extracted code to '{OUTPUT_FILE}'.")

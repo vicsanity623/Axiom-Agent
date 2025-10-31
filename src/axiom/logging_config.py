@@ -49,7 +49,7 @@ def setup_logging():
         show_level=True,
         show_path=False,
         omit_repeated_times=False,
-        keywords=["Axiom", "Agent", "Study Cycle", "Goal", "Metacognition"],
+        keywords=[">> Working on active plan:"],
     )
     rich_handler.setFormatter(logging.Formatter("%(message)s"))
     axiom_logger.addHandler(rich_handler)

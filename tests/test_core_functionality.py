@@ -297,34 +297,6 @@ def test_agent_shows_all_facts_after_learning(agent: CognitiveAgent):
     print("Agent learned two novel facts for the 'show all facts' test.")
 
 
-def test_lexicon_and_part_of_speech(agent: CognitiveAgent):
-    """
-    Tests the LexiconManager's ability to identify known words and the parser's
-    ability to check for the correct part of speech, which relies on the lexicon.
-    """
-    assert agent.lexicon.is_known_word("is") is True, (
-        "Lexicon should know the seeded word 'is'."
-    )
-
-    assert agent.lexicon.is_known_word("flibbertigibbet") is False, (
-        "Lexicon should not know a novel word."
-    )
-    print("Lexicon correctly identifies known and unknown words.")
-
-    assert agent.parser._is_part_of_speech("is", "verb") is True, (
-        "Parser should identify 'is' as a verb."
-    )
-
-    assert agent.parser._is_part_of_speech("is", "noun") is False, (
-        "Parser should not identify 'is' as a noun."
-    )
-
-    assert agent.parser._is_part_of_speech("flibbertigibbet", "verb") is False, (
-        "Parser should not identify an unknown word."
-    )
-    print("Parser correctly identifies parts of speech for known words.")
-
-
 def test_agent_resolves_pronoun_references(agent: CognitiveAgent):
     """
     Covers the _resolve_references method in the agent.

@@ -117,7 +117,7 @@ class GoalManager:
         }
         self.goals[main_goal_id] = main_goal
         logger.info(
-            "New multi-stage goal added: '%s' with %d stages (Priority: %d).",
+            "[success][GoalManager]:New multi-stage goal added: '%s' with %d stages (Priority: %d).[/success]",
             main_description,
             len(stages),
             priority,
@@ -144,7 +144,9 @@ class GoalManager:
             self.goals[stage_id] = stage_goal
             stage_goals.append(stage_goal)
             logger.info(
-                "  - Generated plan for %s with %d concepts.", stage_name, len(topics)
+                "[purple]   - Generated plan for %s with %d concepts.[/purple]",
+                stage_name,
+                len(topics),
             )
 
         main_goal["stages"] = stage_goals
@@ -153,7 +155,7 @@ class GoalManager:
                 cast("list[str]", stage_goals[0]["sub_goals"])
             )
             logger.info(
-                "Activating first stage with %d sub-goals.",
+                "[purple]Activating first stage with %d sub-goals.[/purple]",
                 len(stage_goals[0]["sub_goals"]),
             )
 

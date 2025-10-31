@@ -118,7 +118,9 @@ class CognitiveAgent:
         ],
     )
 
-    def __init__(
+
+    # metacognitive_engine.py analyzed axiom.log and suggested this entire `def __init__`, the agent succesfully created the first real introspect on its own source code!!!
+    def __init__( # <--- This entire def __init__ was generated using the metacognitiveEngine as proof of proper and actual enhancements after human review of course.
         self,
         brain_file: Path = DEFAULT_BRAIN_FILE,
         state_file: Path = DEFAULT_STATE_FILE,
@@ -153,13 +155,14 @@ class CognitiveAgent:
             ValueError: If the agent is not initialized with either files or data.
             TypeError: If `brain_data` or `cache_data` have malformed contents.
         """
-        logger.info("Initializing Cognitive Agent...")
+        logger.info("[yellow]Initializing Cognitive Agent...[/yellow]")
         self.brain_file = brain_file
         self.state_file = state_file
         self.inference_mode = inference_mode
         if self.inference_mode:
             logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
+        # LLM FAILED HERE by adding the following 3 comments below (initialize, load, ensure), but still a success!
         # Initialize core components
         self.brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_lock = threading.Lock()
@@ -206,7 +209,6 @@ class CognitiveAgent:
             logger.info("   - Initializing brain from loaded .axm model data.")
             self.graph = ConceptGraph.load_from_dict(brain_data)
 
-            # Type-safe loading of cache data
             interpretations_raw = cache_data.get("interpretations", [])
             synthesis_raw = cache_data.get("synthesis", [])
             if not isinstance(interpretations_raw, list) or not isinstance(
@@ -218,7 +220,6 @@ class CognitiveAgent:
             self.interpreter.interpretation_cache = dict(interpretations_raw)
             self.interpreter.synthesis_cache = dict(synthesis_raw)
 
-            # Type-safe loading of other brain data
             learning_iterations_raw = brain_data.get("learning_iterations", 0)
             if not isinstance(learning_iterations_raw, int):
                 raise TypeError("'learning_iterations' must be an integer.")
@@ -481,7 +482,9 @@ class CognitiveAgent:
             self.graph.add_node(correct_node)
 
         self._gather_facts_multihop.cache_clear()
-        logger.info("  [Cache]: Cleared reasoning cache due to knowledge correction.")
+        logger.info(
+            "[border][CleanCache]: Cleared reasoning cache due to knowledge correction.[/border]"
+        )
 
         updated_any = False
         for u, v, key, data in list(
@@ -962,7 +965,7 @@ class CognitiveAgent:
                     state_data = json.load(f)
                     self.learning_iterations = state_data.get("learning_iterations", 0)
                 logger.info(
-                    "   - Successfully loaded agent state from '%s'.",
+                    "[success]   - Successfully loaded agent state from '%s'. [/success]",
                     self.state_file,
                 )
             except (json.JSONDecodeError, TypeError) as e:
@@ -1252,7 +1255,7 @@ class CognitiveAgent:
         verb_cleaned = verb_raw.lower().strip()
 
         logger.info(
-            "  [LEARNING]: Processing: %s -> %s -> %s",
+            "[cyan]   - Processing: %s -> %s -> %s[/cyan]",
             subject_name,
             verb_cleaned,
             object_name,
@@ -1296,7 +1299,9 @@ class CognitiveAgent:
                 "  [Cache]: could not clear reasoning cache (missing cache_clear).",
             )
 
-        logger.info("  [Cache]: Cleared reasoning cache due to new knowledge.")
+        logger.info(
+            "[border]   - Cleared reasoning cache due to new knowledge.[/border]"
+        )
         self.save_brain()
         self.save_state()
 
@@ -1406,7 +1411,7 @@ class CognitiveAgent:
 
         if status == "deferred":
             logger.warning(
-                "    Deferred learning for %s --[%s]--> %s. (in %s)",
+                "[yellow]   - Deferred learning for %s --[%s]--> %s. (in %s)[/yellow]",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
@@ -1443,7 +1448,7 @@ class CognitiveAgent:
         """Learns from a sentence by decomposing it into atomic facts and processing them."""
         caller_name = f"{self.__class__.__name__}.learn_new_fact_autonomously"
         logger.info(
-            "[Autonomous Learning]: Attempting to learn fact: '%s'",
+            "[yellow]   - Attempting to learn fact: '%s'[/yellow]",
             fact_sentence,
         )
 
@@ -1465,7 +1470,8 @@ class CognitiveAgent:
             props.setdefault("provenance", "llm_decomposition")
 
             logger.info(
-                "  [Autonomous Learning]: Interpreted Relation: %s", relation_data
+                "[green]   - Interpreted Relation: %s[/green]",
+                relation_data,
             )
 
             success, _ = self._process_statement_for_learning(relation_data)
@@ -1474,12 +1480,13 @@ class CognitiveAgent:
 
         if facts_learned_count > 0:
             logger.info(
-                "[Autonomous Learning]: Successfully learned and saved %d new fact(s).",
+                "[green]  [Autonomous Learning]: Successfully learned and saved %d new fact(s).[/green]",
                 facts_learned_count,
             )
             return True
+
         logger.warning(
-            "[Autonomous Learning]: Failed to learn any new facts from the decomposed relations. (in %s)",
+            "[yellow]  - Failed to learn any new facts from the decomposed relations (e.g., trivial, invalid, not worthy). (in %s)[/yellow]",
             caller_name,
         )
         return False
@@ -1510,7 +1517,7 @@ class CognitiveAgent:
                 ConceptNode(clean_name, node_type=determined_type),
             )
             logger.info(
-                "    Added new concept to graph: %s (%s)",
+                "[cyan]   - Added new concept to graph: %s (%s)[/cyan]",
                 clean_name,
                 node.type,
             )
@@ -1568,7 +1575,7 @@ class CognitiveAgent:
         try:
             lock_file.touch()
             self.graph.save_to_file(self.brain_file)
-            logger.info("Agent brain saved to %s", self.brain_file)
+            logger.info("[cyan]   - Agent brain saved to %s[/cyan]", self.brain_file)
         finally:
             if lock_file.exists():
                 lock_file.unlink()

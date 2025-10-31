@@ -146,15 +146,17 @@ class UniversalInterpreter:
                 caches.
         """
         logger.info(
-            "Initializing Universal Interpreter (loading Mini LLM if enabled)..."
+            "[yellow]Initializing Universal Interpreter (loading Mini LLM if enabled)...[/yellow]"
         )
         self.llm: Llama | None = None
 
         if load_llm:
-            logger.info("Initializing Universal Interpreter (loading Mini LLM)...")
+            logger.info(
+                "[yellow]Initializing Universal Interpreter (loading Mini LLM)...[/yellow]"
+            )
             if not Path(model_path).exists():
                 raise FileNotFoundError(
-                    f"Interpreter model not found at {model_path}. Please download it.",
+                    f"[error]Interpreter model not found at {model_path}.[/error] [yellow]Please download using axiom-llm .[/yelow]",
                 )
 
             with open(os.devnull, "w") as f, redirect_stderr(f):
@@ -174,7 +176,7 @@ class UniversalInterpreter:
         self.cache_file = Path(cache_file)
         self._load_cache()
 
-        logger.info("Universal Interpreter loaded successfully.")
+        logger.info("[success]Universal Interpreter loaded successfully.[/success]")
 
     def _is_pronoun_present(self, text: str) -> bool:
         """Check if any pronoun exists as a whole word in the text."""
@@ -197,7 +199,7 @@ class UniversalInterpreter:
                 )
                 self.synthesis_cache = dict(cache_data.get("synthesis", []))
             logger.info(
-                "[Cache]: Loaded %d interpretation(s) and %d synthesis caches from %s.",
+                "[border][Cache]: Loaded %d interpretation(s) and %d synthesis caches from %s.[/border]",
                 len(self.interpretation_cache),
                 len(self.synthesis_cache),
                 self.cache_file,
@@ -487,7 +489,9 @@ class UniversalInterpreter:
             logger.warning("[Interpreter]: LLM is disabled. Cannot decompose text.")
             return []
 
-        logger.info("  [Interpreter]: Decomposing sentence into atomic facts...")
+        logger.info(
+            "[purple]   - [Interpreter]: Decomposing sentence into atomic facts...[/purple]"
+        )
 
         topic_context = (
             f"The primary topic of this sentence is '{main_topic}'. "
@@ -559,7 +563,7 @@ class UniversalInterpreter:
 
             if isinstance(relations, list):
                 logger.info(
-                    "    - Decomposed sentence into %d atomic relations.",
+                    "[green]   - Decomposed sentence into %d atomic relations.[/green]",
                     len(relations),
                 )
                 return cast("list[RelationData]", relations)
@@ -709,7 +713,7 @@ class UniversalInterpreter:
             return None
 
         logger.info(
-            "  [Fact Verifier]: Asking LLM to verify and reframe fact for '%s'...",
+            "[purple]   Asking LLM to verify and reframe fact for '%s'...[/purple]",
             original_topic,
         )
         system_prompt = (
@@ -747,7 +751,10 @@ class UniversalInterpreter:
                 logger.info("    - LLM rejected the fact as irrelevant.")
                 return None
 
-            logger.info("    - LLM verified and reframed: '%s'", rephrased_fact)
+            logger.info(
+                "[success]   - LLM verified and reframed: '%s'[/success]",
+                rephrased_fact,
+            )
             return rephrased_fact
 
         except Exception as e:
@@ -782,7 +789,7 @@ class UniversalInterpreter:
             return facts_str
 
         logger.info(
-            "  [Synthesizer Cache]: Miss. Running LLM for synthesis in '%s' mode.",
+            "[yellow][Synthesizer Cache]: Miss. Running LLM for synthesis in '%s' mode.[/yellow]",
             mode,
         )
 
@@ -846,7 +853,7 @@ class UniversalInterpreter:
             return []
 
         logger.info(
-            "  [Interpreter]: Generating curriculum for goal '%s'...",
+            "[success][Interpreter]: Generating curriculum for goal '%s'...[/success]",
             high_level_goal,
         )
 
@@ -886,7 +893,10 @@ class UniversalInterpreter:
             topics = [
                 topic.strip() for topic in response_text.split(",") if topic.strip()
             ]
-            logger.info("    - Generated curriculum with %d topics.", len(topics))
+            logger.info(
+                "[purple]   - Generated curriculum with %d topics.[/purple]",
+                len(topics),
+            )
             return topics
         except Exception as e:
             logger.error(

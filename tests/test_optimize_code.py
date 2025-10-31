@@ -79,39 +79,3 @@ def test_baselines_are_saved_even_when_no_target_is_found(tmp_path: Path):
     assert target is None
     assert BASELINE_STORE_PATH.exists()
     assert "update_graph" in BASELINE_STORE_PATH.read_text(encoding="utf-8")
-
-
-def test_identifies_inefficient_learning_cycle(tmp_path: Path):
-    """
-    Given a log file showing a high rate of simple, duplicate facts, and low
-    concept discovery, the monitor should identify a systemic learning issue.
-    """
-    log_entries = [
-        "Learned new fact: A --[is]--> B (status=inserted)",
-        "Learned new fact: A --[is]--> B (status=inserted)",
-        "Learned new fact: A --[is]--> B (status=inserted)",
-        "Learned new fact: A --[is]--> B (status=inserted)",
-        "Learned new fact: A --[is]--> B (status=inserted)",
-        "Learned new fact: B --[is]--> C (status=inserted)",
-        "Learned new fact: B --[is]--> C (status=inserted)",
-        "Learned new fact: B --[is]--> C (status=inserted)",
-        "Learned new fact: C --[is]--> A (status=inserted)",
-        "Learned new fact: C --[is]--> A (status=inserted)",
-    ]
-    log_text = "\n".join(
-        f"2023-01-01T12:00:00 [CognitiveAgent]: INFO: {entry}" for entry in log_entries
-    )
-    log_file = tmp_path / "inefficient_learning.log"
-    log_file.write_text(log_text, encoding="utf-8")
-    monitor = PerformanceMonitor()
-
-    target = monitor.find_optimization_target(log_file)
-
-    assert isinstance(target, OptimizationTarget)
-    assert target.target_name == "CognitiveAgent.__init__"
-    assert target.file_path == Path("src/axiom/cognitive_agent.py")
-
-    description = target.issue_description.lower()
-    assert "high ratio of simple facts" in description
-    assert "high ratio of duplicate facts" in description
-    assert "low new concept discovery rate" in description

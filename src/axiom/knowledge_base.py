@@ -862,7 +862,7 @@ def validate_and_add_relation(
             final_caller_name = f"{caller_frame.function}"
 
         logger.warning(
-            "Validation failed: Found unknown words in concepts: %s (in %s)",
+            "[yellow][KnowledgeBase] Validation failed: Found unknown words in concepts: %s (in %s)[/yellow]",
             unknown_words,
             final_caller_name,
         )

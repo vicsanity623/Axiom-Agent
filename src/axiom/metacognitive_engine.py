@@ -121,11 +121,11 @@ class PerformanceMonitor:
         r"^(?P<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})",
     )
     _DEFERRED_FACT_RE: ClassVar[re.Pattern] = re.compile(
-        r"Deferred learning for\s+(?P<fact>[\w\-\._]+)",
+        r"[yellow] Deferred learning for\s+(?P<fact>[\w\-\._]+)[/yellow]",
         re.IGNORECASE,
     )
     _LEARNING_LOG_RE: ClassVar[re.Pattern] = re.compile(
-        r"Learned new fact: (?P<sub>.+) --\[(?P<verb>.+)\]--> (?P<obj>.+) \(status=(?P<status>\w+)\)",
+        r"[success] Learned new fact: (?P<sub>.+) --\[(?P<verb>.+)\]--> (?P<obj>.+) \(status=(?P<status>\w+)\)[/success]",
     )
     _SCORING_WEIGHTS: ClassVar[dict[str, float]] = {
         "error_recurrence": 1.5,
@@ -637,13 +637,15 @@ class ExternalAnalysisBridge:
         self.model_name = self._detect_best_model()
         self.model = genai.GenerativeModel(self.model_name)
         logger.info(
-            "[ExternalAnalysisBridge] Initialized with model: %s", self.model_name
+            "[success]   - Initialized with model: %s[/success]", self.model_name
         )
 
     def _detect_best_model(self) -> str:
         """Detects the best available Gemini model that supports content generation."""
         try:
-            logger.info("[ExternalAnalysisBridge] Detecting best available model...")
+            logger.info(
+                "[yellow]   - [ExternalAnalysisBridge] Detecting best available model...[/yellow]"
+            )
             available_models = genai.list_models()
             supported_models = [
                 m.name
@@ -655,11 +657,11 @@ class ExternalAnalysisBridge:
             if "models/gemini-2.5-flash" in supported_models:
                 return "gemini-2.5-flash"
             logger.warning(
-                "[ExternalAnalysisBridge] Preferred models not found. Falling back to default."
+                "[yellow][ExternalAnalysisBridge] Preferred models not found. Falling back to default.[/yellow]"
             )
         except Exception as e:
             logger.warning(
-                "[ExternalAnalysisBridge] Model detection failed (%s). Using fallback.",
+                "[error][ExternalAnalysisBridge] Model detection failed (%s). Using fallback.[/error]",
                 e,
             )
         return "gemini-1.5-pro-latest"

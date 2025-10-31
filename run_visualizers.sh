@@ -6,8 +6,8 @@
 set -e
 
 # Define variables for easier maintenance
-PROJECT_DIR="/Volumes/SSD 1/REPO/Axiom-Agent"
-PYTHON_EXEC="$PROJECT_DIR/axiom/bin/python3"
+PROJECT_DIR="/PATH/TO/YOUR/Axiom-Agent"
+PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3" # PATH TO YOUR .VENV
 
 # Echo the current timestamp to the log for better debugging
 echo "---"

@@ -5,8 +5,6 @@ from pathlib import Path
 import networkx as nx
 from pyvis.network import Network
 
-# FIX: Use a direct, robust import from the centralized config.
-# This will work correctly when the script is run as an installed command.
 from axiom.config import DEFAULT_BRAIN_FILE
 
 logger = logging.getLogger(__name__)
@@ -198,13 +196,11 @@ def visualize_brain():
     print("🌐 Open it in your browser to explore interactively.")
 
 
-# --- NEW: The main() function that serves as the command-line entry point ---
 def main():
     """Entry point for the axiom-visualize command."""
     try:
         visualize_brain()
     except (FileNotFoundError, ValueError) as e:
-        # Use logger for errors for consistency
         logger.error(str(e))
 
 

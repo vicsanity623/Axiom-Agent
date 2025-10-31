@@ -1,4 +1,4 @@
-"""Test the metacognitive Engine to ensure API keys are active"""
+"""Test the metacognitive Engine to ensure API keys are active."""
 
 from __future__ import annotations
 
