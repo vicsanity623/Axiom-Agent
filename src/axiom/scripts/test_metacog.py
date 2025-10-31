@@ -1,4 +1,4 @@
-""" Test the metacognitive Engine to ensure API keys are active"""
+"""Test the metacognitive Engine to ensure API keys are active"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 import os
 
 from ..cognitive_agent import CognitiveAgent
-from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, GEMINI_API_KEY
+from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE
 from ..logging_config import setup_logging
 from ..metacognitive_engine import MetacognitiveEngine
 
@@ -37,7 +37,9 @@ def run_single_metacognitive_cycle():
             inference_mode=True,  # Run in inference mode to prevent brain saves, etc.
         )
 
-        logger.info("--- [METACOG TEST HARNESS]: Initializing Metacognitive Engine... ---")
+        logger.info(
+            "--- [METACOG TEST HARNESS]: Initializing Metacognitive Engine... ---"
+        )
         metacognitive_engine = MetacognitiveEngine(
             agent=axiom_agent,
             gemini_api_key=gemini_api_key,

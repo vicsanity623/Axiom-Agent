@@ -40,7 +40,9 @@ def main():
         logger.info("[cyan]Issue:[/cyan] %s", result.issue_description)
         logger.info("\n[bold cyan]Relevant Logs:[/bold cyan]\n%s", result.relevant_logs)
     else:
-        logger.info("\n[bold green]No significant optimization targets found.[/bold green]")
+        logger.info(
+            "\n[bold green]No significant optimization targets found.[/bold green]"
+        )
 
 
 if __name__ == "__main__":

@@ -343,7 +343,6 @@ class KnowledgeHarvester:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
 
-        chunky_fact = None
         with self.lock:
             chunky_fact = self._find_chunky_fact()
 
@@ -355,42 +354,52 @@ class KnowledgeHarvester:
                 edge.type,
                 target_node.name,
             )
-            
+
             full_sentence = f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name}."
-            
+
             atomic_sentences = self.agent.interpreter.break_down_definition(
                 subject=source_node.name,
                 chunky_definition=full_sentence,
             )
-            
+
             if atomic_sentences:
                 logger.info(
                     "  [Refinement]: Decomposed into %d new atomic facts.",
                     len(atomic_sentences),
                 )
-                
+
                 facts_learned_count = 0
                 for sentence in atomic_sentences:
                     with self.lock:
                         if self.agent.learn_new_fact_autonomously(sentence):
                             facts_learned_count += 1
-                
+
                 if facts_learned_count > 0:
                     with self.lock:
-                        graph_edge_data = self.agent.graph.graph.get_edge_data(edge.source, edge.target)
+                        graph_edge_data = self.agent.graph.graph.get_edge_data(
+                            edge.source, edge.target
+                        )
                         if graph_edge_data:
                             key_to_modify = next(
-                                (key for key, data in graph_edge_data.items() if data.get("id") == edge.id),
+                                (
+                                    key
+                                    for key, data in graph_edge_data.items()
+                                    if data.get("id") == edge.id
+                                ),
                                 None,
                             )
                             if key_to_modify is not None:
-                                self.agent.graph.graph[edge.source][edge.target][key_to_modify]["weight"] = 0.2
+                                self.agent.graph.graph[edge.source][edge.target][
+                                    key_to_modify
+                                ]["weight"] = 0.2
                                 self.agent.save_brain()
                                 logger.info(
                                     "  [Refinement]: Marked original fact as refined by lowering its weight."
                                 )
                 else:
-                    logger.warning("  [Refinement]: Failed to learn any new atomic facts from the decomposition.")
+                    logger.warning(
+                        "  [Refinement]: Failed to learn any new atomic facts from the decomposition."
+                    )
         else:
             caller_name = f"{self.__class__.__name__}._find_chunky_fact"
             logger.warning(
@@ -416,7 +425,6 @@ class KnowledgeHarvester:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
 
-        chunky_fact = None
         with self.lock:
             if not self.researched_terms:
                 return
@@ -458,7 +466,8 @@ class KnowledgeHarvester:
             words = node_name.split()
             has_verb_indicator = any(
                 word.endswith("s") or word.endswith("ed") or word.endswith("ing")
-                for word in words if len(word) > 3
+                for word in words
+                if len(word) > 3
             )
             is_long_phrase = len(words) >= 5
             return is_long_phrase or (len(words) >= 3 and has_verb_indicator)

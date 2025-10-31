@@ -58,7 +58,7 @@ def setup_logging():
         "%(asctime)s [%(levelname)-5.5s] [%(name)s]: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    
+
     log_file_path = os.getenv("AXIOM_LOG_FILE", "axiom.log")
     file_handler = RotatingFileHandler(
         log_file_path,

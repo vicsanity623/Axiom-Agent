@@ -5,7 +5,6 @@ import logging
 import os
 import re
 import threading
-from thefuzz import fuzz
 from datetime import date, datetime
 from functools import lru_cache
 from typing import (
@@ -17,6 +16,8 @@ from typing import (
     TypedDict,
     cast,
 )
+
+from thefuzz import fuzz
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -121,39 +122,60 @@ class CognitiveAgent:
         self,
         brain_file: Path = DEFAULT_BRAIN_FILE,
         state_file: Path = DEFAULT_STATE_FILE,
+        *,
         load_from_file: bool = True,
-        brain_data: dict | None = None,
-        cache_data: dict | None = None,
+        brain_data: dict[str, object] | None = None,
+        cache_data: dict[str, object] | None = None,
         inference_mode: bool = False,
         enable_llm: bool = True,
     ) -> None:
-        """Initialize a new instance of the CognitiveAgent."""
+        """Initialize a new instance of the CognitiveAgent.
+
+        This constructor sets up the agent's core components and loads its cognitive
+        state (the "brain") from either a file or provided data dictionaries. It
+        also performs an integrity check on the loaded brain, re-seeding it with
+        foundational knowledge if core identity information is missing.
+
+        Args:
+            brain_file: Path to the file for storing the concept graph.
+            state_file: Path to the file for storing the agent's operational state.
+            load_from_file: If True, loads the brain and state from the specified
+                files. If False, `brain_data` and `cache_data` must be provided.
+            brain_data: A dictionary containing the serialized concept graph and
+                metadata. Used when `load_from_file` is False.
+            cache_data: A dictionary containing serialized interpretation and
+                synthesis caches. Used when `load_from_file` is False.
+            inference_mode: If True, disables learning and knowledge harvesting.
+            enable_llm: If True, enables the Large Language Model backend for the
+                UniversalInterpreter.
+
+        Raises:
+            ValueError: If the agent is not initialized with either files or data.
+            TypeError: If `brain_data` or `cache_data` have malformed contents.
+        """
         logger.info("Initializing Cognitive Agent...")
-        brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.brain_file = brain_file
         self.state_file = state_file
         self.inference_mode = inference_mode
-
         if self.inference_mode:
             logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
+        # Initialize core components
+        self.brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_lock = threading.Lock()
-
         self.interpreter = UniversalInterpreter(load_llm=enable_llm)
         self.lexicon: LexiconManager = LexiconManager(self)
         self.parser: SymbolicParser = SymbolicParser(self)
         self.lemmatizer = WordNetLemmatizer()
-
         self.goal_manager: GoalManager = GoalManager(self)
-
         self.learning_goals: list[str | dict[str, object]] = []
-        self.pending_relations: list[tuple[RelationData, dict, float]] = []
+        self.pending_relations: list[tuple[RelationData, dict[str, object], float]] = []
         self.recently_researched: dict[str, float] = {}
-
         self.harvester: KnowledgeHarvester | None = None
         if not self.inference_mode:
             self.harvester = KnowledgeHarvester(agent=self, lock=self.interaction_lock)
 
+        # Load and verify brain based on initialization mode
         if load_from_file:
             logger.info(
                 "[green]   - Loading brain from file: %s[/green]", self.brain_file
@@ -161,23 +183,18 @@ class CognitiveAgent:
             self.graph = ConceptGraph.load_from_file(self.brain_file)
             self._load_agent_state()
 
+            # Ensure brain integrity by checking for core agent identity
             agent_node = self.graph.get_node_by_name("agent")
-            name_edge_exists = False
+            has_name_edge = False
             if agent_node:
-                name_edge = next(
-                    (
-                        edge
-                        for edge in self.graph.get_edges_from_node(agent_node.id)
-                        if edge.type == "has_name"
-                    ),
-                    None,
+                has_name_edge = any(
+                    edge.type == "has_name"
+                    for edge in self.graph.get_edges_from_node(agent_node.id)
                 )
-                if name_edge:
-                    name_edge_exists = True
 
-            if not name_edge_exists:
+            if not has_name_edge:
                 logger.critical(
-                    "   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity.",
+                    "   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity."
                 )
                 self.graph = ConceptGraph()
                 seed_domain_knowledge(self)
@@ -188,14 +205,28 @@ class CognitiveAgent:
         elif brain_data is not None and cache_data is not None:
             logger.info("   - Initializing brain from loaded .axm model data.")
             self.graph = ConceptGraph.load_from_dict(brain_data)
-            self.interpreter.interpretation_cache = dict(
-                cache_data.get("interpretations", []),
-            )
-            self.interpreter.synthesis_cache = dict(cache_data.get("synthesis", []))
-            self.learning_iterations = brain_data.get("learning_iterations", 0)
+
+            # Type-safe loading of cache data
+            interpretations_raw = cache_data.get("interpretations", [])
+            synthesis_raw = cache_data.get("synthesis", [])
+            if not isinstance(interpretations_raw, list) or not isinstance(
+                synthesis_raw, list
+            ):
+                raise TypeError(
+                    "Cache data for 'interpretations' and 'synthesis' must be lists."
+                )
+            self.interpreter.interpretation_cache = dict(interpretations_raw)
+            self.interpreter.synthesis_cache = dict(synthesis_raw)
+
+            # Type-safe loading of other brain data
+            learning_iterations_raw = brain_data.get("learning_iterations", 0)
+            if not isinstance(learning_iterations_raw, int):
+                raise TypeError("'learning_iterations' must be an integer.")
+            self.learning_iterations = learning_iterations_raw
         else:
             raise ValueError("Agent must be initialized with either files or data.")
 
+        # Initialize operational state
         self.is_awaiting_clarification = False
         self.clarification_context: ClarificationContext = ClarificationContext({})
         self.structured_history: list[tuple[str, list[InterpretData]]] = []
@@ -600,7 +631,7 @@ class CognitiveAgent:
         if intent == "question_by_relation" and relation:
             subject_raw = relation.get("subject")
             subject_name = self._extract_name_from_relation(subject_raw)
-            
+
             verb = relation.get("verb")
 
             if subject_name and verb:
@@ -619,9 +650,21 @@ class CognitiveAgent:
                                 return f"The {property_name} of {subject_name.capitalize()} is {target_node.name.capitalize()}."
 
             return f"I don't have information about the {relation.get('verb', 'property').replace('has_', '')} of {subject_name or 'that'}."
-        
-        return "I'm not sure how to process that. Could you rephrase?"
 
+        if intent in ("question_about_entity", "question_about_concept"):
+            if entities:
+                entity_name = entities[0]["name"]
+                corrected_entity_name = self._get_corrected_entity(entity_name)
+                response = self._answer_question_about(
+                    corrected_entity_name, user_input
+                )
+                return (
+                    response
+                    if response is not None
+                    else f"I don't have any specific information about '{corrected_entity_name}' right now."
+                )
+
+        return "I'm not sure how to process that. Could you rephrase?"
 
     def _find_specific_fact(self, subject_name: str, relation_type: str) -> str | None:
         """Finds all facts of a specific type related to a subject and formats them."""
@@ -1149,7 +1192,7 @@ class CognitiveAgent:
         """
         if value is None:
             return None
-        
+
         if isinstance(value, list):
             value = " ".join(str(v) for v in value)
 
@@ -1163,7 +1206,6 @@ class CognitiveAgent:
 
         name_clean = value.strip()
         return self._clean_phrase(name_clean) or None
-
 
     def _process_statement_for_learning(
         self,

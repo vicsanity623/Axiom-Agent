@@ -282,7 +282,6 @@ class PerformanceMonitor:
             message = (match.group("message") or "").strip()
             func = (match.group("function") or "unknown_function").strip()
 
-
             ts_match = PerformanceMonitor._TS_PATTERN.search(line)
             ts = int(time.time())
             if ts_match:
@@ -443,12 +442,13 @@ class PerformanceMonitor:
         scored_candidates: dict[str, tuple[float, list[str]]],
     ) -> OptimizationTarget | None:
         """Selects the best target from scored candidates or high-priority alerts."""
-        
+
         for func, entries in analysis_data.entries_by_func.items():
             first_error_entry = next((e for e in entries if e.traceback), None)
             if first_error_entry and first_error_entry.traceback:
                 logger.warning(
-                    "[Metacognition]: Prioritizing critical error (traceback) in '%s'.", func
+                    "[Metacognition]: Prioritizing critical error (traceback) in '%s'.",
+                    func,
                 )
                 return OptimizationTarget(
                     file_path=self._guess_source_file(func),

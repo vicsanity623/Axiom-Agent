@@ -2,17 +2,13 @@ import json
 import logging
 import math
 from pathlib import Path
+
 import networkx as nx
+
+from ..config import DEFAULT_BRAIN_FILE
 
 logger = logging.getLogger(__name__)
 CORE_NODE_THRESHOLD = 100000
-
-try:
-    from axiom.config import DEFAULT_BRAIN_FILE
-    brain_file_path = Path(DEFAULT_BRAIN_FILE)
-except ImportError:
-    PROJECT_ROOT = Path(__file__).resolve().parents[3]
-    brain_file_path = PROJECT_ROOT / "brain" / "my_agent_brain.json"
 
 
 def seed_of_life_positions(total_nodes: int, radius_step: float = 50):
@@ -39,6 +35,8 @@ def seed_of_life_positions(total_nodes: int, radius_step: float = 50):
 
 
 def visualize_seed_of_life():
+    brain_file_path = DEFAULT_BRAIN_FILE
+
     if not brain_file_path.exists():
         raise FileNotFoundError(f"Brain file not found at {brain_file_path}")
 
@@ -70,15 +68,17 @@ def visualize_seed_of_life():
     elements = []
     for i, (node_id, data) in enumerate(g.nodes(data=True)):
         pos = positions.get(i, {"x": 0, "y": 0})
-        elements.append({
-            "data": {"id": node_id, "label": data.get("name", node_id)},
-            "position": pos
-        })
+        elements.append(
+            {
+                "data": {"id": node_id, "label": data.get("name", node_id)},
+                "position": pos,
+            }
+        )
 
     for u, v, data in g.edges(data=True):
-        elements.append({
-            "data": {"source": u, "target": v, "label": data.get("type", "")}
-        })
+        elements.append(
+            {"data": {"source": u, "target": v, "label": data.get("type", "")}}
+        )
 
     output_dir = Path("visualizations")
     output_dir.mkdir(exist_ok=True)
@@ -187,8 +187,19 @@ cy.on('mouseout', 'edge', () => floatLabel.style.display = 'none');
 
 
 def main():
-    logging.basicConfig(level=logging.INFO)
-    visualize_seed_of_life()
+    """Entry point for the script, handling setup and errors."""
+
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+
+    try:
+        visualize_seed_of_life()
+    except (FileNotFoundError, ValueError) as e:
+        logger.error(f"Failed to generate visualization: {e}")
+        import sys
+
+        sys.exit(1)
 
 
 if __name__ == "__main__":

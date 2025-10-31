@@ -1,11 +1,15 @@
 import json
 import logging
-from pathlib import Path
 import math
+from pathlib import Path
+
 import networkx as nx
+
+from ..config import DEFAULT_BRAIN_FILE
 
 logger = logging.getLogger(__name__)
 CORE_NODE_THRESHOLD = 100000
+
 
 def fibonacci_spiral_layout(nodes):
     """Generate (x, y) coordinates following a denser Fibonacci spiral."""
@@ -22,8 +26,7 @@ def fibonacci_spiral_layout(nodes):
 
 
 def visualize_brain_galaxy_fibonacci():
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-    brain_file_path = PROJECT_ROOT / "brain" / "my_agent_brain.json"
+    brain_file_path = DEFAULT_BRAIN_FILE
 
     with open(brain_file_path, encoding="utf-8") as f:
         brain_data = json.load(f)
@@ -46,18 +49,21 @@ def visualize_brain_galaxy_fibonacci():
     elements = []
     for node_id, data in g.nodes(data=True):
         x, y = positions.get(node_id, (0, 0))
-        elements.append({
-            "data": {"id": node_id, "label": data.get("name", node_id)},
-            "position": {"x": x, "y": y}
-        })
+        elements.append(
+            {
+                "data": {"id": node_id, "label": data.get("name", node_id)},
+                "position": {"x": x, "y": y},
+            }
+        )
     for u, v, data in g.edges(data=True):
-        elements.append({
-            "data": {"source": u, "target": v, "label": data.get("type", "")}
-        })
+        elements.append(
+            {"data": {"source": u, "target": v, "label": data.get("type", "")}}
+        )
 
     output_dir = Path("visualizations")
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / "axiom_brain_galaxy_fibonacci.html"
+    print(f"✅ Visualization saved: {output_path.resolve()}")
 
     html = f"""
 <!DOCTYPE html>
@@ -156,5 +162,14 @@ cy.on('mouseout', 'edge', () => floatLabel.style.display = 'none');
     logger.info("🌀 Dense Fibonacci spiral galaxy saved at %s", output_path.resolve())
 
 
+def main():
+    """Entry point for the axiom-visualize command."""
+    try:
+        visualize_brain_galaxy_fibonacci()
+    except (FileNotFoundError, ValueError) as e:
+        # Use logger for errors for consistency
+        logger.error(str(e))
+
+
 if __name__ == "__main__":
-    visualize_brain_galaxy_fibonacci()
+    main()
