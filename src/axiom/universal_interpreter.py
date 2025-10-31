@@ -852,11 +852,6 @@ class UniversalInterpreter:
         if self.llm is None:
             return []
 
-        logger.info(
-            "[success][Interpreter]: Generating curriculum for goal '%s'...[/success]",
-            high_level_goal,
-        )
-
         style_instruction = (
             f"Generate the topics from the perspective of: {style}."
             if style

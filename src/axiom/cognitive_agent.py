@@ -118,9 +118,8 @@ class CognitiveAgent:
         ],
     )
 
-
     # metacognitive_engine.py analyzed axiom.log and suggested this entire `def __init__`, the agent succesfully created the first real introspect on its own source code!!!
-    def __init__( # <--- This entire def __init__ was generated using the metacognitiveEngine as proof of proper and actual enhancements after human review of course.
+    def __init__(  # <--- This entire def __init__ was generated using the metacognitiveEngine as proof of proper and actual enhancements after human review of course.
         self,
         brain_file: Path = DEFAULT_BRAIN_FILE,
         state_file: Path = DEFAULT_STATE_FILE,
@@ -965,7 +964,7 @@ class CognitiveAgent:
                     state_data = json.load(f)
                     self.learning_iterations = state_data.get("learning_iterations", 0)
                 logger.info(
-                    "[success]   - Successfully loaded agent state from '%s'. [/success]",
+                    "[success]   - Agent state loaded from '%s'. [/success]",
                     self.state_file,
                 )
             except (json.JSONDecodeError, TypeError) as e:
@@ -1411,7 +1410,7 @@ class CognitiveAgent:
 
         if status == "deferred":
             logger.warning(
-                "[yellow]   - Deferred learning for %s --[%s]--> %s. (in %s)[/yellow]",
+                "[warning]Deferred learning for[/warning] %s --[%s]--> %s. (in %s)",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
@@ -1419,7 +1418,7 @@ class CognitiveAgent:
             )
         elif status == "contradiction_stored":
             logger.warning(
-                "    Contradiction detected and stored for %s --[%s]--> %s.",
+                "[warning]   - Contradiction detected and stored for[/warning] %s --[%s]--> %s.",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
@@ -1458,7 +1457,7 @@ class CognitiveAgent:
 
         if not atomic_relations:
             logger.warning(
-                "  [Autonomous Learning]: Interpreter could not extract any atomic facts from the sentence. (in %s)",
+                "[warning]Interpreter could not extract any atomic facts from the sentence.[/warning] (in %s)",
                 caller_name,
             )
             return False
@@ -1486,7 +1485,7 @@ class CognitiveAgent:
             return True
 
         logger.warning(
-            "[yellow]  - Failed to learn any new facts from the decomposed relations (e.g., trivial, invalid, not worthy). (in %s)[/yellow]",
+            "[yellow]Failed to learn any new facts from the decomposed relations (e.g., trivial, invalid, not worthy).[/yellow] (in %s)",
             caller_name,
         )
         return False

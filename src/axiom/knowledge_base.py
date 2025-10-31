@@ -6,6 +6,7 @@ import time
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, cast
 
+import nltk
 from tqdm import tqdm
 
 from axiom.dictionary_utils import get_word_info_from_wordnet
@@ -392,6 +393,21 @@ ALL_KNOWLEDGE = [
     ("ecosystem", "system", "has_member", "species", 1.0),
     ("solar system", "system", "has_member", "planet", 1.0),
 ]
+
+
+def initialize_linguistic_resources():
+    """
+    Check for and download required NLTK data packages.
+    This function should be called once at application startup, after logging is configured.
+    """
+    try:
+        nltk.data.find("taggers/averaged_perceptron_tagger")
+    except LookupError:
+        logger.info(
+            "[SETUP] NLTK 'averaged_perceptron_tagger' not found. Downloading..."
+        )
+        nltk.download("averaged_perceptron_tagger")
+        logger.info("✓ 'averaged_perceptron_tagger' downloaded successfully.")
 
 
 def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
@@ -839,6 +855,7 @@ def validate_and_add_relation(
     relation: dict[str, Any],
     properties: PropertyData | dict[str, Any] | None = None,
     caller_name: str | None = None,
+    allow_unknowns_for_topic: str | None = None,  # NEW PARAMETER
 ) -> str:
     """
     Validate a relation and add it to the graph. If vocabulary is missing,
@@ -851,9 +868,14 @@ def validate_and_add_relation(
     relation_type = agent._clean_phrase(relation["verb"])
 
     all_words = set(subject_name.split()) | set(object_name.split())
-    unknown_words = [
-        word for word in all_words if not agent.lexicon.is_known_word(word)
-    ]
+
+    unknown_words = []
+    for word in all_words:
+        # If we are investigating a topic, we allow that specific topic word to be "unknown".
+        if allow_unknowns_for_topic and word == allow_unknowns_for_topic:
+            continue
+        if not agent.lexicon.is_known_word(word):
+            unknown_words.append(word)
 
     if unknown_words:
         final_caller_name = caller_name
@@ -862,7 +884,7 @@ def validate_and_add_relation(
             final_caller_name = f"{caller_frame.function}"
 
         logger.warning(
-            "[yellow][KnowledgeBase] Validation failed: Found unknown words in concepts: %s (in %s)[/yellow]",
+            "[warning]Validation failed: Found unknown words in concepts:[/warning] %s (in %s)",
             unknown_words,
             final_caller_name,
         )

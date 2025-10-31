@@ -10,6 +10,7 @@ from typing import Final
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from .. import knowledge_base
 from ..cognitive_agent import CognitiveAgent
 from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, GEMINI_API_KEY
 from ..logging_config import console, setup_logging
@@ -43,10 +44,8 @@ def _generate_or_set_initial_goal(
     agent: CognitiveAgent, custom_goal: str | None
 ) -> None:
     """
-    Sets a custom initial goal if provided, otherwise generates a new,
-    foundational learning curriculum if no other active goals exist.
-    This version injects a random "creative seed" to ensure a unique curriculum
-    is generated on each run.
+    Sets a custom initial goal or generates a new, state-aware curriculum,
+    verifying that the generated tasks are not already known.
     """
     if agent.goal_manager.get_active_goal() or agent.learning_goals:
         logger.info(
@@ -59,8 +58,8 @@ def _generate_or_set_initial_goal(
         agent.goal_manager.add_goal(custom_goal)
         return
 
-    logger.info(
-        "[yellow]--- [AUTONOMOUS TRAINER]: No active goals found. Generating a new, state-aware curriculum. ---[/yellow]"
+    console.rule(
+        "[bold purple]No active goals found. Generating a new, state-aware curriculum.[/bold purple]",
     )
 
     creative_seeds = [
@@ -101,6 +100,33 @@ def _generate_or_set_initial_goal(
 
     agent.goal_manager.add_goal(new_curriculum_goal)
 
+    active_goal = agent.goal_manager.get_active_goal()
+    if active_goal and active_goal.get("sub_goals"):
+        original_sub_goals = active_goal["sub_goals"]
+
+        # --- FIX: Add type checking to correctly handle the str | Goal union type ---
+        filtered_sub_goals = []
+        for sg in original_sub_goals:
+            topic = ""
+            if isinstance(sg, str):
+                topic = sg.replace("INVESTIGATE:", "").strip()
+            elif isinstance(sg, dict) and "description" in sg:
+                topic = str(sg["description"]).replace("INVESTIGATE:", "").strip()
+
+            if topic and not agent.lexicon.is_known_word(topic):
+                filtered_sub_goals.append(sg)
+
+        if len(filtered_sub_goals) < len(original_sub_goals):
+            logger.info(
+                "[Curriculum Generation]: Filtered curriculum from %d to %d tasks to avoid known concepts.",
+                len(original_sub_goals),
+                len(filtered_sub_goals),
+            )
+            active_goal["sub_goals"] = filtered_sub_goals
+            agent.learning_goals[:] = [
+                goal for goal in agent.learning_goals if goal in filtered_sub_goals
+            ]
+
 
 def start_autonomous_training(
     brain_file: Path, state_file: Path, initial_goal: str | None = None
@@ -109,6 +135,14 @@ def start_autonomous_training(
 
     console.rule(
         "[bold cyan]Starting Axiom Agent Initialization[/bold cyan]", style="border"
+    )
+    console.rule(
+        "[bold green]Agent is running in headless mode.[/bold green]",
+        style="border",
+    )
+    console.rule(
+        "[bold green]All learning cycles are active. Press CTRL+C to stop.[/bold green]",
+        style="border",
     )
 
     try:
@@ -142,11 +176,6 @@ def start_autonomous_training(
 
         manager.start()
         scheduler.start()
-
-        console.print("[bold green]Agent is running in headless mode.[/bold green]")
-        console.print(
-            "[bold green]All learning cycles are active. Press CTRL+C to stop.[/bold green]"
-        )
 
         while True:
             time.sleep(1)
@@ -198,6 +227,7 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    knowledge_base.initialize_linguistic_resources()
     start_autonomous_training(args.brain_file, args.state_file, initial_goal=args.goal)
 
 

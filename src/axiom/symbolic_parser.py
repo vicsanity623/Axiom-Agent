@@ -432,6 +432,7 @@ class SymbolicParser:
                 full_text_rephrased=lemmatized_clause,
             )
         property_of_match = re.match(
+            # FIX: Make the subject non-greedy to stop it before the ' is '.
             r"(?i)^the\s+(?P<property>\w+)\s+of\s+(?P<subject>.+?)\s+is\s+(?P<value>.+)\.*$",
             lemmatized_clause,
         )

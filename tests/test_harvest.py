@@ -2,140 +2,130 @@ from __future__ import annotations
 
 import json
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
-import axiom.knowledge_harvester as kh_mod
+import pytest
+
 from axiom.knowledge_harvester import KnowledgeHarvester
+from axiom.lexicon_manager import LexiconManager
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    import LogCaptureFixture
+    import MonkeyPatch as PytestMonkeyPatch
+
     from axiom.cognitive_agent import CognitiveAgent
 
 
-def test_mark_and_load_research_cache(
-    tmp_path: Path, agent: CognitiveAgent, monkeypatch: Any
-) -> None:
-    """_mark_as_researched writes cache; _load_research_cache reads it back."""
-    lock: threading.Lock = threading.Lock()
-    h: KnowledgeHarvester = KnowledgeHarvester(agent, lock)
+@pytest.fixture
+def harvester(agent: CognitiveAgent) -> KnowledgeHarvester:
+    """Provides a KnowledgeHarvester instance for tests using the global agent fixture."""
+    lock = threading.Lock()
+    return KnowledgeHarvester(agent, lock)
 
-    cache_file: Path = tmp_path / "research_cache.json"
-    h.cache_path = cache_file  # __slots__ safe
 
-    h._mark_as_researched("pytest-term")
+def test_load_and_save_research_cache(tmp_path: Path, harvester: KnowledgeHarvester):
+    """
+    Given: A harvester and a temporary path for its cache.
+    When: A term is marked as researched.
+    Then: The cache file is created with the correct content and can be reloaded.
+    """
+    # Arrange
+    cache_file = tmp_path / "test_cache.json"
+    harvester.cache_path = cache_file
+    term_to_research = "epistemology"
+
+    # Act
+    harvester._mark_as_researched(term_to_research)
+
+    # Assert: File was saved correctly
     assert cache_file.exists()
-
     with cache_file.open("r", encoding="utf-8") as f:
-        data: list[str] = json.load(f)
-    assert "pytest-term" in data
+        data = json.load(f)
+    assert isinstance(data, list)
+    assert term_to_research in data
 
-    h2: KnowledgeHarvester = KnowledgeHarvester(agent, lock)
-    h2.cache_path = cache_file
-    h2.researched_terms = set()
-    h2._load_research_cache()
-    assert "pytest-term" in h2.researched_terms
+    # Act: Reload the cache
+    harvester.researched_terms = set()  # Reset before loading
+    harvester._load_research_cache()
+
+    # Assert: Cache was loaded correctly
+    assert term_to_research in harvester.researched_terms
 
 
-def test_discover_cycle_appends_goal(agent: CognitiveAgent, monkeypatch: Any) -> None:
-    """When _find_new_topic returns a topic, it adds an INVESTIGATE goal."""
-    lock: threading.Lock = threading.Lock()
-    h: KnowledgeHarvester = KnowledgeHarvester(agent, lock)
+def test_load_research_cache_errors(
+    tmp_path: Path, harvester: KnowledgeHarvester, caplog: LogCaptureFixture
+):
+    """
+    Given: A harvester and a malformed or non-existent cache file.
+    When: The cache is loaded.
+    Then: Errors are handled gracefully and logged appropriately.
+    """
+    # Scenario 1: File not found (should be silent)
+    harvester.cache_path = tmp_path / "non_existent.json"
+    harvester._load_research_cache()
+    assert "Failed to load research cache" not in caplog.text
 
+    # Scenario 2: Invalid JSON content
+    cache_file = tmp_path / "invalid.json"
+    cache_file.write_text("this is not json")
+    harvester.cache_path = cache_file
+    harvester._load_research_cache()
+    assert "Failed to load research cache" in caplog.text
+    assert harvester.researched_terms == set()
+
+    # Scenario 3: Malformed JSON (wrong data type)
+    cache_file.write_text('{"key": "value"}')  # Should be a list
+    harvester.researched_terms = {"initial"}
+    harvester._load_research_cache()
+    assert "Cache file is malformed" in caplog.text
+    assert harvester.researched_terms == {"initial"}  # Should not be cleared
+
+
+def test_prune_research_cache(
+    harvester: KnowledgeHarvester, monkeypatch: PytestMonkeyPatch
+):
+    """
+    Given: A research cache with known and unknown terms.
+    When: _prune_research_cache is called.
+    Then: Only terms that are now known by the lexicon are removed.
+    """
+    # Arrange
+    harvester.researched_terms = {"known_term", "unknown_term", "another_known"}
     monkeypatch.setattr(
-        KnowledgeHarvester, "_find_new_topic", lambda self: "Quantum mechanics"
+        LexiconManager,
+        "is_known_word",
+        lambda self, term: term in ["known_term", "another_known"],
+    )
+    mock_save = MagicMock()
+    monkeypatch.setattr(KnowledgeHarvester, "_save_research_cache", mock_save)
+
+    # Act
+    harvester._prune_research_cache()
+
+    # Assert
+    assert harvester.researched_terms == {"unknown_term"}
+    assert mock_save.call_count == 1
+
+
+def test_discover_cycle(
+    harvester: KnowledgeHarvester, agent: CognitiveAgent, monkeypatch: PytestMonkeyPatch
+):
+    """
+    Given: A harvester with a mocked topic finder.
+    When: The discover cycle is run.
+    Then: An "INVESTIGATE" goal for the new topic is added to the agent.
+    """
+    # Arrange
+    monkeypatch.setattr(
+        KnowledgeHarvester, "_find_new_topic", lambda self, max_attempts=5: "ontology"
     )
     agent.learning_goals.clear()
-    h.discover_cycle()
 
-    assert any("INVESTIGATE" in goal for goal in agent.learning_goals)
+    # Act
+    harvester.discover_cycle()
 
-
-def test_get_definition_from_api_variants(
-    agent: CognitiveAgent, monkeypatch: Any
-) -> None:
-    """Test dictionary API with 404, malformed, and valid responses."""
-    lock: threading.Lock = threading.Lock()
-    h: KnowledgeHarvester = KnowledgeHarvester(agent, lock)
-
-    class FakeResp:
-        status_code: int
-        _payload: Any
-
-        def __init__(self, status: int = 200, payload: Any = None) -> None:
-            self.status_code = status
-            self._payload = payload
-
-        def json(self) -> Any:
-            if isinstance(self._payload, Exception):
-                raise self._payload
-            return self._payload
-
-    # 404 -> None
-    monkeypatch.setattr(
-        kh_mod.requests, "get", lambda url, timeout=5: FakeResp(status=404, payload={})
-    )
-    assert h.get_definition_from_api("nothing") is None
-
-    # malformed -> None
-    monkeypatch.setattr(
-        kh_mod.requests,
-        "get",
-        lambda url, timeout=5: FakeResp(status=200, payload={"bad": "data"}),
-    )
-    assert h.get_definition_from_api("weird") is None
-
-    # valid
-    good_payload: list[dict[str, Any]] = [
-        {
-            "word": "test",
-            "meanings": [
-                {
-                    "partOfSpeech": "noun",
-                    "definitions": [{"definition": "An instance used for testing."}],
-                }
-            ],
-        }
-    ]
-    monkeypatch.setattr(
-        kh_mod.requests,
-        "get",
-        lambda url, timeout=5: FakeResp(status=200, payload=good_payload),
-    )
-    assert h.get_definition_from_api("test") == (
-        "noun",
-        "An instance used for testing.",
-    )
-
-
-def test_get_search_result_count_and_exceptions(
-    agent: CognitiveAgent, monkeypatch: Any
-) -> None:
-    """Parses int from results; returns None on exception."""
-    lock: threading.Lock = threading.Lock()
-    h: KnowledgeHarvester = KnowledgeHarvester(agent, lock)
-
-    class FakeResp:
-        text: str
-
-        def __init__(self, text: str) -> None:
-            self.text = text
-
-        def raise_for_status(self) -> None:
-            return None
-
-    # Successful integer parsing
-    monkeypatch.setattr(
-        kh_mod.requests,
-        "get",
-        lambda url, headers, timeout=5: FakeResp("About 12,345 results"),
-    )
-    assert h._get_search_result_count("query") == 12345
-
-    # Exception -> None
-    monkeypatch.setattr(
-        kh_mod.requests,
-        "get",
-        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
-    assert h._get_search_result_count("query") is None
+    # Assert
+    assert "INVESTIGATE: ontology" in agent.learning_goals

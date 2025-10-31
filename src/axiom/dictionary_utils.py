@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from spacy.language import Language
     from spacy.tokens import Doc
 
+
 try:
     import spacy
 
@@ -61,23 +62,6 @@ pos_map: Final[dict[str, str]] = {
     "PDT": "predeterminer",
     "SYM": "symbol",
 }
-
-
-def _ensure_nltk_data_downloaded() -> None:
-    """Checks for required NLTK corpora and downloads them if missing."""
-    try:
-        wn.synsets("test")
-    except LookupError:
-        logger.info("NLTK 'wordnet' corpus not found. Downloading now...")
-        nltk.download("wordnet")
-    try:
-        nltk.pos_tag(["test"])
-    except LookupError:
-        logger.info("NLTK 'averaged_perceptron_tagger' not found. Downloading now...")
-        nltk.download("averaged_perceptron_tagger")
-
-
-_ensure_nltk_data_downloaded()
 
 
 class WordInfo(TypedDict):

@@ -446,7 +446,7 @@ class ConceptGraph:
                 instance._type_index[node_data["type"]].add(node_id)
 
         logger.info(
-            "[green]   - Brain loaded from dictionary. Nodes: %d, Edges: %d[/green]",
+            "[green]   - Nodes: %d, Edges: %d[/green]",
             len(instance.graph.nodes),
             len(instance.graph.edges),
         )

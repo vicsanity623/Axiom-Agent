@@ -15,6 +15,7 @@ import wikipedia
 from nltk.stem import WordNetLemmatizer
 
 from .knowledge_base import validate_and_add_relation
+from .logging_config import console
 
 if TYPE_CHECKING:
     from threading import Lock
@@ -44,6 +45,7 @@ class KnowledgeHarvester:
         "rejected_topics",
         "cache_path",
         "researched_terms",
+        "console",
     )
 
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
@@ -53,6 +55,7 @@ class KnowledgeHarvester:
             agent: The instance of the CognitiveAgent this harvester will serve.
             lock: A threading lock to ensure thread-safe operations on the agent.
         """
+        self.console = console
         self.agent = agent
         self.lock = lock
         self.lemmatizer = WordNetLemmatizer()
@@ -65,7 +68,9 @@ class KnowledgeHarvester:
     def _load_research_cache(self) -> None:
         """Load the set of researched terms from a JSON file."""
         if not self.cache_path.exists():
-            logger.info("[Harvester Cache]: No research cache found. Starting fresh.")
+            logger.info(
+                "[border][Harvester Cache]: No research cache found. Starting fresh.[/border]"
+            )
             return
         try:
             with self.cache_path.open("r", encoding="utf-8") as f:
@@ -175,24 +180,37 @@ class KnowledgeHarvester:
                         "subject": term_to_learn,
                         "verb": "is_a",
                         "object": part_of_speech,
-                        "properties": {"provenance": "dictionary_api"},
                     }
-                    status_pos = validate_and_add_relation(self.agent, pos_relation)
-                    if status_pos != "deferred":
+                    pos_properties = {
+                        "provenance": "dictionary_api",
+                        "confidence": 0.95,
+                    }
+
+                    # --- FIX: Use the new parameter to allow the unknown word ---
+                    status_pos = validate_and_add_relation(
+                        self.agent,
+                        pos_relation,
+                        pos_properties,
+                        allow_unknowns_for_topic=term_to_learn,  # This is the key
+                    )
+
+                    if status_pos == "inserted":
                         logger.info(
-                            "  [Study Cycle]: Agent successfully learned the part of speech for '%s'.",
+                            "[bold cyan]   - Agent successfully learned the part of speech for '%s'.[bold cyan]",
                             term_to_learn,
                         )
                         pos_learned = True
 
-                    logger.info(
-                        "[purple]   - Processing definition as a new learning opportunity: '%s'[/purple]",
-                        definition,
-                    )
-                    definition_learned = self.agent.learn_new_fact_autonomously(
-                        fact_sentence=definition,
-                        source_topic=term_to_learn,
-                    )
+                        # Only try to learn the definition if we successfully learned the POS.
+                        if definition:
+                            logger.info(
+                                "[purple]   - Processing definition as a new learning opportunity: '%s'[/purple]",
+                                definition,
+                            )
+                            definition_learned = self.agent.learn_new_fact_autonomously(
+                                fact_sentence=definition,
+                                source_topic=term_to_learn,
+                            )
 
                 if pos_learned or definition_learned:
                     logger.info(
@@ -257,90 +275,62 @@ class KnowledgeHarvester:
 
     def study_cycle(self) -> None:
         """
-        Run one full study cycle, driven by the GoalManager's strategic plan.
-        This version is resilient, deprioritizing failed tasks and removing them
-        from the current plan to prevent infinite loops.
+        Run one full study cycle, iteratively processing tasks from the queue
+        until one is successfully completed or the queue is exhausted.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logger.info("\n[cyan]--- [Study Cycle Started at %s] ---[/cyan]", timestamp)
+        self.console.rule(
+            f"[bold cyan]Study Cycle Started at {timestamp}[/bold cyan]",
+            style="cyan",
+        )
 
-        active_goal = self.agent.goal_manager.get_active_goal()
-        caller_name = f"{self.__class__.__name__}.study_cycle"
+        max_tasks_per_cycle = 5
+        tasks_processed = 0
 
-        if active_goal:
+        while self.agent.learning_goals and tasks_processed < max_tasks_per_cycle:
+            tasks_processed += 1
+
+            # --- FIX: Add type checking to correctly handle the str | Goal union type ---
+            task = self.agent.learning_goals[0]
+            task_str = ""
+            if isinstance(task, str):
+                task_str = task
+            elif isinstance(task, dict) and "description" in task:
+                task_str = str(task["description"])
+
+            if not task_str:
+                logger.warning(
+                    "Found malformed task in learning queue: %s. Discarding.", task
+                )
+                with self.lock:
+                    self.agent.learning_goals.pop(0)
+                continue
+
+            logger.info("   - Attempting planned task: '%s'", task_str)
+
+            resolved = self._resolve_investigation_goal(task_str)
+
+            if resolved:
+                logger.info("   - Task '%s' successfully resolved.", task_str)
+                break
+            logger.warning(
+                "   - Failed to resolve task '%s'. Deprioritizing.", task_str
+            )
+            with self.lock:
+                if task in self.agent.learning_goals:
+                    self.agent.learning_goals.remove(task)
+                    self.agent.learning_goals.append(task)
+
+        if tasks_processed == 0:
             logger.info(
-                ">> Working on active plan: '%s'",
-                active_goal["description"],
+                "Learning queue is empty. Attempting to deepen existing knowledge."
             )
-            task_to_resolve = next(
-                (
-                    sg
-                    for sg in active_goal["sub_goals"]
-                    if sg in self.agent.learning_goals
-                ),
-                None,
-            )
+            self._deepen_knowledge_of_random_concept()
 
-            if task_to_resolve is not None:
-                if isinstance(task_to_resolve, dict):
-                    task_str = str(task_to_resolve.get("description", ""))
-                else:
-                    task_str = str(task_to_resolve)
-
-                logger.info(
-                    "[yellow]   - Attempting planned task: '%s'[/yellow]", task_str
-                )
-                resolved = self._resolve_investigation_goal(task_str)
-
-                if not resolved:
-                    logger.warning(
-                        "[yellow]    - Failed to resolve planned task '%s'. Deprioritizing and removing from current plan. (in %s)[yellow]",
-                        task_str,
-                        caller_name,
-                    )
-                    with self.lock:
-                        if task_str in self.agent.learning_goals:
-                            self.agent.learning_goals.remove(task_str)
-                            self.agent.learning_goals.append(task_str)
-
-                        if task_to_resolve in active_goal["sub_goals"]:
-                            active_goal["sub_goals"].remove(task_to_resolve)
-
-                self.agent.goal_manager.check_goal_completion(active_goal["id"])
-            else:
-                logger.info(
-                    "No pending tasks for active goal '%s'. Triggering completion check.",
-                    active_goal["description"],
-                )
-                self.agent.goal_manager.check_goal_completion(active_goal["id"])
-        else:
-            logger.info("No active plan. Checking for opportunistic learning tasks.")
-            if self.agent.learning_goals:
-                opportunistic_task = self.agent.learning_goals[0]
-
-                if isinstance(opportunistic_task, dict):
-                    task_str = str(opportunistic_task.get("description", ""))
-                else:
-                    task_str = str(opportunistic_task)
-
-                resolved = self._resolve_investigation_goal(task_str)
-                if not resolved:
-                    logger.warning(
-                        "Failed to resolve opportunistic task '%s'. Deprioritizing. (in %s)",
-                        task_str,
-                        caller_name,
-                    )
-                    with self.lock:
-                        if task_str in self.agent.learning_goals:
-                            self.agent.learning_goals.remove(task_str)
-                            self.agent.learning_goals.append(task_str)
-            else:
-                logger.info(
-                    "Learning queue is empty. Attempting to deepen existing knowledge."
-                )
-                self._deepen_knowledge_of_random_concept()
-
-        logger.info("[border]--- [Study Cycle Finished] ---[/border]")
+        self.console.rule(
+            "[bold cyan]Study Cycle Complete.[/bold cyan]",
+            style="cyan",
+        )
         self.agent.log_autonomous_cycle_completion()
 
     def refinement_cycle(self) -> None:
