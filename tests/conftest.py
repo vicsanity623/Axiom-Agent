@@ -20,7 +20,7 @@ class MockUniversalInterpreter:
         self.llm = None
         print("--- Initialized MockUniversalInterpreter (No LLM Loaded) ---")
 
-    def generate_curriculum(self, high_level_goal: str) -> list[str]:
+    def generate_curriculum(self, high_level_goal: str, **kwargs) -> list[str]:
         """A mock curriculum generator that returns a predictable list."""
         if "birds" in high_level_goal.lower():
             return ["bird", "feather", "nest"]
@@ -44,6 +44,15 @@ class MockUniversalInterpreter:
         **kwargs,
     ) -> str:
         """A mock synthesizer that correctly handles different modes and data types."""
+
+        if (
+            mode == "creative_writing"
+            and "You are a curriculum design expert" in structured_facts
+        ):
+            return (
+                "Generated Curriculum [Stage 1: Phonemic Awareness]: Learn the basics."
+            )
+
         if mode == "clarification_question":
             return f"Which is correct regarding {structured_facts}?"
         if isinstance(structured_facts, list):

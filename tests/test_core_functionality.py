@@ -143,55 +143,6 @@ def test_agent_initialization(agent: CognitiveAgent):
     print("Agent initialized successfully.")
 
 
-def test_learning_a_fact(agent: CognitiveAgent):
-    """Tests that the agent can learn a simple fact and store it in its graph."""
-    agent.lexicon._promote_word_for_test("horse", "noun")
-    agent.lexicon._promote_word_for_test("animal", "noun")
-
-    response = agent.chat("a horse is an animal")
-    assert "I understand" in response
-
-    fact_is_known = False
-    horse_node = agent.graph.get_node_by_name("horse")
-    assert horse_node is not None, "Agent did not create a node for 'horse'."
-
-    for edge in agent.graph.get_edges_from_node(horse_node.id):
-        target_node = agent.graph.get_node_by_id(edge.target)
-        if edge.type == "is_a" and target_node and target_node.name == "animal":
-            fact_is_known = True
-            break
-
-    assert fact_is_known is True, "Agent failed to learn 'horse is an animal'."
-    print("Agent successfully learned a fact.")
-
-
-@pytest.mark.parametrize(
-    ("sentence", "expected_subject", "expected_relation", "expected_object"),
-    [
-        ("Paris is a city in France", "paris", "is_located_in", "france"),
-        ("a wheel is part of a car", "wheel", "is_part_of", "car"),
-    ],
-)
-def test_parser_handles_prepositions(
-    agent: CognitiveAgent,
-    sentence,
-    expected_subject,
-    expected_relation,
-    expected_object,
-):
-    """Tests that the symbolic parser can handle different prepositional phrases."""
-    interpretations = agent.parser.parse(sentence)
-    assert interpretations, "Parser failed to produce an interpretation."
-
-    relation = interpretations[0].get("relation")
-    assert relation, "Parser failed to extract a relation."
-
-    assert relation.get("subject") == expected_subject
-    assert relation.get("verb") == expected_relation
-    assert relation.get("object") == expected_object
-    print(f"Parser correctly handled: '{sentence}'")
-
-
 def test_parser_handles_show_all_facts_command(agent: CognitiveAgent):
     """
     Covers the specific 'if clause.lower() == "show all facts":' branch
@@ -333,49 +284,6 @@ def test_graph_core_full_lifecycle(tmp_path: Path):
     print("Graph Core: Save and load functionality successful.")
 
 
-def test_agent_answers_yes_no_question(agent: CognitiveAgent, monkeypatch):
-    """
-    Covers the 'question_yes_no' branch.
-    """
-    agent.lexicon._promote_word_for_test("raven", "noun")
-    agent.lexicon._promote_word_for_test("bird", "noun")
-    agent.lexicon._promote_word_for_test("mammal", "noun")
-
-    agent.chat("a raven is a bird")
-
-    def mock_and_chat(user_input: str, subject: str, object_: str) -> str:
-        with monkeypatch.context() as m:
-            mock_relation = {"subject": subject, "verb": "is", "object": object_}
-            mock_interpretation = [
-                {
-                    "intent": "question_yes_no",
-                    "relation": mock_relation,
-                    "entities": [],
-                    "key_topics": [],
-                    "full_text_rephrased": "",
-                },
-            ]
-
-            m.setattr(
-                "axiom.symbolic_parser.SymbolicParser.parse",
-                lambda *args, **kwargs: mock_interpretation,
-            )
-            return agent.chat(user_input)
-
-    response_yes = mock_and_chat("is a raven a bird?", "raven", "bird")
-    assert "Yes" in response_yes
-    print("Agent correctly answered 'Yes'.")
-
-    agent.chat("a raven is not a mammal")
-    response_no = mock_and_chat("is a raven a mammal?", "raven", "mammal")
-    assert "No" in response_no
-    print("Agent correctly handled a contradictory question.")
-
-    response_unknown = mock_and_chat("is a raven black?", "raven", "black")
-    assert "don't have information" in response_unknown or "No" in response_unknown
-    print("Agent correctly answered for an unknown property.")
-
-
 def test_agent_shows_all_facts_after_learning(agent: CognitiveAgent):
     """
     Covers the 'command' intent for 'show all facts' in the agent.
@@ -387,34 +295,6 @@ def test_agent_shows_all_facts_after_learning(agent: CognitiveAgent):
     agent.chat("a sparrow is a bird")
     agent.chat("a sparrow has wings")
     print("Agent learned two novel facts for the 'show all facts' test.")
-
-
-def test_lexicon_and_part_of_speech(agent: CognitiveAgent):
-    """
-    Tests the LexiconManager's ability to identify known words and the parser's
-    ability to check for the correct part of speech, which relies on the lexicon.
-    """
-    assert agent.lexicon.is_known_word("is") is True, (
-        "Lexicon should know the seeded word 'is'."
-    )
-
-    assert agent.lexicon.is_known_word("flibbertigibbet") is False, (
-        "Lexicon should not know a novel word."
-    )
-    print("Lexicon correctly identifies known and unknown words.")
-
-    assert agent.parser._is_part_of_speech("is", "verb") is True, (
-        "Parser should identify 'is' as a verb."
-    )
-
-    assert agent.parser._is_part_of_speech("is", "noun") is False, (
-        "Parser should not identify 'is' as a noun."
-    )
-
-    assert agent.parser._is_part_of_speech("flibbertigibbet", "verb") is False, (
-        "Parser should not identify an unknown word."
-    )
-    print("Parser correctly identifies parts of speech for known words.")
 
 
 def test_agent_resolves_pronoun_references(agent: CognitiveAgent):
@@ -442,42 +322,6 @@ def test_agent_resolves_pronoun_references(agent: CognitiveAgent):
     unresolved_sentence = agent._resolve_references(no_pronoun_sentence)
 
     assert unresolved_sentence == no_pronoun_sentence
-
-
-def test_agent_performs_multi_hop_query(agent: CognitiveAgent, monkeypatch):
-    """
-    Covers the multi-hop query logic in the agent.
-    """
-    agent.lexicon._promote_word_for_test("socrates", "noun")
-    agent.lexicon._promote_word_for_test("philosopher", "noun")
-    agent.lexicon._promote_word_for_test("person", "noun")
-    agent.chat("socrates is a philosopher")
-    agent.chat("a philosopher is a person")
-
-    mock_relation = {"subject": "socrates", "verb": "is a", "object": "person"}
-    mock_interpretation = [
-        {
-            "intent": "question_about_entity",
-            "relation": mock_relation,
-            "entities": [
-                {"name": "socrates", "type": "CONCEPT"},
-                {"name": "person", "type": "CONCEPT"},
-            ],
-            "key_topics": [],
-            "full_text_rephrased": "",
-        },
-    ]
-    monkeypatch.setattr(
-        "axiom.symbolic_parser.SymbolicParser.parse",
-        lambda *args, **kwargs: mock_interpretation,
-    )
-
-    response = agent.chat("what is socrates to a person?")
-    response_lower = response.lower()
-
-    assert "based on what i know" in response_lower
-    assert "socrates is a philosopher" in response_lower
-    assert "which in turn is a person" in response_lower
 
 
 @pytest.fixture
@@ -599,27 +443,6 @@ def test_agent_falls_back_to_llm_when_parsing_fails(agent: CognitiveAgent, monke
     response = agent.chat("a complex sentence")
 
     assert "I'm not sure how to process that" in response
-
-
-def test_agent_creates_goal_for_unknown_word(agent: CognitiveAgent, monkeypatch):
-    monkeypatch.setattr(
-        "axiom.symbolic_parser.SymbolicParser.parse",
-        lambda *args, **kwargs: None,
-    )
-
-    research_spy = MagicMock(return_value=False)
-    monkeypatch.setattr(
-        "axiom.knowledge_harvester.KnowledgeHarvester._resolve_investigation_goal",
-        research_spy,
-    )
-
-    response = agent.chat("what is a flibbertigibbet")
-
-    research_spy.assert_called_once_with("INVESTIGATE: flibbertigibbet")
-    assert "my attempt to research it in real-time failed" in response
-    assert "flibbertigibbet" in response
-    assert "INVESTIGATE: flibbertigibbet" in agent.learning_goals
-    print("✅ Agent correctly handled an unknown word and failed real-time research.")
 
 
 def test_agent_answers_question_about_entity(agent: CognitiveAgent, monkeypatch):

@@ -72,12 +72,13 @@ Following this, the agent has now achieved a new level of intelligence in the **
 **Goal:** Elevate the agent from a simple learner to a strategic, goal-oriented entity capable of introspection, self-correction, and persistent, stateful learning.
 
 ### Key Features
-*   **Hierarchical Goal-Oriented Learning:** The `GoalManager` was upgraded to support complex, multi-stage curricula. The agent can now parse and execute sequential learning plans, ensuring it masters foundational concepts before proceeding to more advanced topics.
-*   **Dynamic & State-Aware Curriculum Generation:** The `axiom-train` process is no longer static. At startup, it queries the agent's existing knowledge and uses an LLM to **procedurally generate a novel, state-aware curriculum**, ensuring the agent is always working on new material and broadening its understanding.
-*   **Proactive Vocabulary Onboarding:** The core learning validation logic (`validate_and_add_relation`) was re-architected. It no longer fails on unknown words; it now **proactively creates provisional concepts** and generates `INVESTIGATE` goals, solving the "chicken-and-egg" problem of knowledge bootstrapping.
-*   **Resilient Learning Cycles:** The `KnowledgeHarvester`'s `study_cycle` was made more resilient. It now **deprioritizes failing tasks** by moving them to the back of the queue and removing them from the current plan, preventing infinite loops and allowing the agent to make forward progress.
-*   **Persistent, Self-Pruning Research Memory:** The `KnowledgeHarvester` now maintains a persistent `research_cache.json`. This prevents the agent from re-investigating the same terms across reboots. A new `_prune_research_cache` task was added to the `refinement_cycle` to keep this cache lean and efficient.
-*   **Precision Metacognitive Engine:** The `MetacognitiveEngine`'s diagnostic pipeline was fully debugged and hardened. Through self-describing logs, it can now **precisely trace performance issues** (like "Deferred learning") back to the exact source function, enabling it to generate highly relevant and actionable code improvement suggestions.
+*   **Hierarchical & Creative Goal Planning:** The `GoalManager` and `UniversalInterpreter` were upgraded to support randomized, creative curriculum generation. On each startup, the agent now generates a unique, multi-stage learning plan by injecting random "creative seeds" and "pedagogical styles" into its LLM prompts, ensuring novel learning paths.
+*   **Event-Driven Cognitive Cycles:** The `CycleManager` was re-architected from a static, interval-based timer to a responsive, event-driven model. A new cognitive cycle now begins a few seconds after the previous one completes, dramatically increasing the agent's operational tempo and eliminating idle time.
+*   **Intelligent Learning Filters:** The core learning pipeline (`_process_statement_for_learning`) was enhanced with a "triviality filter." Acting on the advice of the `MetacognitiveEngine`, the agent now uses fuzzy logic to detect and reject semantically useless facts (e.g., "a step is a step"), improving learning efficiency.
+*   **Hardened Refinement & Metacognition:**
+    *   The `Refinement Cycle` is now transactional, only deprecating "chunky" facts if their decomposition into new, atomic facts is successful. The heuristic for identifying chunky facts was also made more linguistically intelligent.
+    *   The `MetacognitiveEngine`'s prioritization logic was fixed. It no longer gets "stuck" on low-priority events and now correctly prioritizes critical errors (tracebacks) over other anomalies, enabling it to discover a wider range of potential self-improvements.
+*   **Robust Development Environment:** The project's dependency management was hardened by resolving C-extension build failures (`blis`), correcting environment setup (`uv`), and creating a high-coverage End-to-End test to validate the entire `axiom-train` lifecycle.
 
 ---
 
@@ -98,8 +99,9 @@ Following this, the agent has now achieved a new level of intelligence in the **
 **Goal:** Evolve beyond semantic knowledge to incorporate procedural and logical reasoning by introducing "Tools."
 
 ### Key Features
+*   *CAUTION- PROMPT INJECTION AND OTHER HIGH-SECURITY RISKS PROCEED WITH CAUTION:*
 *   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use. Each tool will be a specialized function for tasks the knowledge graph cannot perform.
-*   **Mathematical Capability (First Tool):** A `MathTool` that integrates a symbolic math library like `SymPy`.
+*   **Mathematical Capability (First Tool):A `MathTool` that integrates a symbolic math library like `SymPy`.
 *   **Real-Time Data (Second Tool):** A `WebSearchTool` and a `CurrentDateTool` to fetch live data from the internet.
 *   **Code Execution (Advanced Tool):** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
 

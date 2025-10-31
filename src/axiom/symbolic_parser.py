@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any
 
 from axiom.universal_interpreter import InterpretData, RelationData
 
 if TYPE_CHECKING:
+    from spacy.language import Language
+
     from axiom.cognitive_agent import CognitiveAgent
 
 logger = logging.getLogger(__name__)
@@ -18,7 +21,7 @@ class SymbolicParser:
     This class is the core of the agent's native language understanding.
     It attempts to deconstruct a sentence into a structured `InterpretData`
     object by applying a series of grammatical rules. It relies on the
-    agent's `LexiconManager` to identify parts of speech.
+    agent's `LexiconManager` and a spaCy fallback to identify parts of speech.
 
     This parser is designed to be the first-pass interpreter, allowing the
     agent to bypass the LLM for sentences it can understand on its own.
@@ -36,10 +39,29 @@ class SymbolicParser:
         "PROPERTY_KEYWORDS",
         "AMBIGUOUS_PROPERTY_VERBS",
         "PROPERTY_OF_QUESTION_PATTERN",
+        "PASSIVE_VOICE_PATTERN",
+        "nlp",
     )
 
     def __init__(self, agent: CognitiveAgent) -> None:
         """Initialize the SymbolicParser."""
+
+        self.agent = agent
+        self.nlp: Language | None
+        try:
+            import spacy
+
+            self.nlp = spacy.load("en_core_web_lg")
+            logger.info(
+                "[success]spaCy loaded successfully for POS tagging fallback.[/success]"
+            )
+        except ImportError:
+            self.nlp = None
+            logger.warning(
+                "[yellow]spaCy not found. POS tagging will rely solely on the agent's lexicon.[/yellow]"
+            )
+        logger.info("[success]Symbolic Parser initialized.[/success]")
+
         self.CAPITAL_PATTERN = re.compile(
             r"(?i)^(?P<city>.+?)\s+is\s+(?:the\s+)?capital\s+of\s+(?P<country>.+?)\.*$",
         )
@@ -66,6 +88,9 @@ class SymbolicParser:
             r"(?P<preposition>in|on|at|part\s+of|from|with|inside)\s+"
             r"(?P<prep_object>.+?)\.*$",
             re.IGNORECASE,
+        )
+        self.PASSIVE_VOICE_PATTERN = re.compile(
+            r"(?i)^(?P<object>.+?)\s+(is|are|was|were)\s+(?P<verb>\w+)\s+by\s+(?P<subject>.+?)\.*$",
         )
         self.PREPOSITION_TO_RELATION_MAP = {
             ("is", "in"): "is_located_in",
@@ -108,18 +133,12 @@ class SymbolicParser:
             r"(?i)^what\s+(is|are)\s+(?:the\s+)?(?P<property>.+?)\s+of\s+(?P<subject>.+)\?*$",
         )
 
-        self.agent = agent
-        logger.info("   - Symbolic Parser initialized.")
-
     def _split_into_clauses(self, text: str) -> list[str]:
         """Splits a complex text block into simpler, independent clauses."""
-
         sentences = [s.strip() for s in text.split(".") if s.strip()]
-
         all_clauses = []
         split_phrases = [" and ", " but ", " which ", " who ", " that "]
         placeholder = "||CLAUSE_BREAK||"
-
         for sentence in sentences:
             clause_text = sentence
             for phrase in split_phrases:
@@ -129,19 +148,16 @@ class SymbolicParser:
                     clause_text,
                     flags=re.IGNORECASE,
                 )
-
             clauses_from_sentence = [
                 c.strip(" ,") for c in clause_text.split(placeholder) if c.strip()
             ]
             all_clauses.extend(clauses_from_sentence)
-
         if len(all_clauses) > 1:
             logger.debug(
                 "  [Chunker]: Split text into %s clauses: %s",
                 len(all_clauses),
                 all_clauses,
             )
-
         return all_clauses
 
     def parse(
@@ -153,72 +169,26 @@ class SymbolicParser:
         Attempts to parse a sentence by running it through a multi-stage pipeline,
         including a refinement step to decompose complex objects.
         """
-
         logger.debug(f"  [Symbolic Parser]: Attempting to parse sentence: '{text}'")
-
+        # --- CHANGED: Removed hardcoded meta-question checks. ---
+        # This logic is now handled by the CognitiveAgent's pre-processing
+        # and standard intent routing, which is more robust.
         clean_text = text.lower().strip().rstrip("?")
-        if clean_text in ("who are you", "what are you"):
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed a 'who are you' meta-question.",
-            )
-            return [
-                {
-                    "intent": "meta_question_self",
-                    "entities": [{"name": "agent", "type": "CONCEPT"}],
-                    "relation": None,
-                    "key_topics": [],
-                    "full_text_rephrased": "",
-                },
-            ]
-
-        if clean_text in ("what is your purpose", "what's your purpose"):
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed a 'purpose' meta-question.",
-            )
-            return [
-                {
-                    "intent": "meta_question_purpose",
-                    "entities": [{"name": "agent", "type": "CONCEPT"}],
-                    "relation": None,
-                    "key_topics": [],
-                    "full_text_rephrased": "",
-                },
-            ]
-
-        if clean_text in ("what can you do", "what are your abilities"):
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed an 'abilities' meta-question.",
-            )
-            return [
-                {
-                    "intent": "meta_question_abilities",
-                    "entities": [{"name": "agent", "type": "CONCEPT"}],
-                    "relation": None,
-                    "key_topics": [],
-                    "full_text_rephrased": "",
-                },
-            ]
-
         if clean_text == "show all facts":
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed 'show all facts' command.",
-            )
             return [
-                {
-                    "intent": "command_show_all_facts",
-                    "entities": [],
-                    "relation": None,
-                    "key_topics": ["show all facts"],
-                    "full_text_rephrased": "User has issued a command to show all facts.",
-                },
+                InterpretData(
+                    intent="command_show_all_facts",
+                    entities=[],
+                    relation=None,
+                    key_topics=["show all facts"],
+                    full_text_rephrased="User has issued a command to show all facts.",
+                )
             ]
-
         initial_interpretations = []
         clauses = self._split_into_clauses(text)
         for clause in clauses:
             if interp := self._parse_single_clause(clause, context_subject):
                 initial_interpretations.append(interp)
-
         if not initial_interpretations:
             logger.debug(
                 "  [Symbolic Parser]: Failed. No initial clauses could be parsed.",
@@ -226,29 +196,37 @@ class SymbolicParser:
             return None
 
         final_interpretations: list[InterpretData] = []
+
+        def to_str(value: str | list[Any] | dict[str, Any] | None) -> str:
+            if isinstance(value, str):
+                return value
+            if isinstance(value, dict):
+                name = value.get("name", "")
+                return str(name) if name is not None else ""
+            if isinstance(value, list):
+                return " ".join(map(str, value))
+            return ""
+
         for interp in initial_interpretations:
             final_interpretations.append(interp)
             relation = interp.get("relation")
-
             if relation:
-                object_phrase = relation.get("object", "")
-                subject = relation.get("subject", "")
+                subject_str = to_str(relation.get("subject"))
+                object_str = to_str(relation.get("object"))
 
-                if subject and len(object_phrase.split()) > 2:
+                if subject_str and len(object_str.split()) > 2:
                     logger.debug(
                         "  [Parser Refinement]: Decomposing chunky object: '%s'",
-                        object_phrase,
+                        object_str,
                     )
                     refined_relations = self._refine_object_phrase(
-                        subject,
-                        object_phrase,
+                        subject_str,
+                        object_str,
                     )
-
                     for ref_rel in refined_relations:
-                        ref_subject = ref_rel.get("subject", "")
-                        ref_object = ref_rel.get("object", "")
-                        ref_verb = ref_rel.get("verb", "")
-
+                        ref_subject = to_str(ref_rel.get("subject"))
+                        ref_object = to_str(ref_rel.get("object"))
+                        ref_verb = to_str(ref_rel.get("verb"))
                         logger.info(
                             "  [Parser Refinement]: Extracted: %s -> %s -> %s",
                             ref_subject,
@@ -266,7 +244,6 @@ class SymbolicParser:
                             full_text_rephrased=f"{ref_subject} {ref_verb} {ref_object}",
                         )
                         final_interpretations.append(new_interp)
-
         return final_interpretations
 
     def _parse_single_clause(
@@ -275,61 +252,26 @@ class SymbolicParser:
         context_subject: str | None = None,
     ) -> InterpretData | None:
         """Applies a prioritized sequence of rules to deconstruct a single clause."""
-
         if clause.lower() == "show all facts":
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed 'show all facts' command.",
-            )
             return InterpretData(
-                intent="command",
+                intent="command_show_all_facts",
                 entities=[],
                 relation=None,
                 key_topics=["show all facts"],
                 full_text_rephrased="User issued a command to show all facts.",
             )
-
         if context_subject:
-            clause_before = clause
-            clause = re.sub(
-                r"\b(it|they|them)\b",
-                context_subject,
-                clause,
-                flags=re.IGNORECASE,
-            )
-            clause = re.sub(
-                r"\b(its|their)\b",
-                f"{context_subject}'s",
-                clause,
-                flags=re.IGNORECASE,
-            )
-            if clause != clause_before:
-                logger.debug(
-                    f"  [Symbolic Parser]: Resolved pronouns using context '{context_subject}': "
-                    f"'{clause_before}' → '{clause}'",
-                )
-
+            clause = self._resolve_clause_pronouns(clause, context_subject)
         raw_clause = clause.lower()
         raw_words = raw_clause.split()
-
         if not raw_words:
             return None
-
-        prop_of_match = re.match(
-            r"(?i)^what\s+is\s+(?:the\s+)?(?P<property>.+?)\s+of\s+(?P<subject>.+)\?*$",
-            raw_clause,
-        )
+        prop_of_match = self.PROPERTY_OF_QUESTION_PATTERN.match(raw_clause)
         if prop_of_match:
             groups = prop_of_match.groupdict()
             subject = self.agent._clean_phrase(groups["subject"])
             property_name = self.agent._clean_phrase(groups["property"])
-
             relation_verb = f"has_{property_name.replace(' ', '_')}"
-
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed a 'Property Of' question for subject '%s' about relation '%s'.",
-                subject,
-                relation_verb,
-            )
             relation = RelationData(subject=subject, verb=relation_verb, object="?")
             return InterpretData(
                 intent="question_by_relation",
@@ -338,11 +280,7 @@ class SymbolicParser:
                 key_topics=[subject, property_name],
                 full_text_rephrased=raw_clause,
             )
-
         if raw_words[0] in self.QUESTION_WORDS:
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed a generic wh-question.",
-            )
             entity_name = (
                 " ".join(raw_words[2:])
                 if len(raw_words) > 2
@@ -357,15 +295,11 @@ class SymbolicParser:
                 key_topics=[entity_name],
                 full_text_rephrased=raw_clause,
             )
-
         capital_match = self.CAPITAL_PATTERN.match(raw_clause)
         if capital_match:
             groups = capital_match.groupdict()
             city = self.agent._clean_phrase(groups["city"])
             country = self.agent._clean_phrase(groups["country"])
-            logger.info(
-                f"  [Symbolic Parser]: Successfully parsed Capital structure: '{country}' -> 'has_capital' -> '{city}'.",
-            )
             relation = RelationData(subject=country, verb="has_capital", object=city)
             return InterpretData(
                 intent="statement_of_fact",
@@ -377,7 +311,6 @@ class SymbolicParser:
                 key_topics=[city, country],
                 full_text_rephrased=raw_clause,
             )
-
         preposition_match = self.PREPOSITION_PATTERN.match(raw_clause)
         if preposition_match:
             groups = preposition_match.groupdict()
@@ -387,9 +320,6 @@ class SymbolicParser:
             prep_object = self.agent._clean_phrase(groups["prep_object"])
             relation_type = self.PREPOSITION_TO_RELATION_MAP.get((verb, preposition))
             if relation_type:
-                logger.info(
-                    f"  [Symbolic Parser]: Successfully parsed Prepositional structure: '{subject}' -> '{relation_type}' -> '{prep_object}'.",
-                )
                 relation = RelationData(
                     subject=subject,
                     verb=relation_type,
@@ -405,7 +335,23 @@ class SymbolicParser:
                     key_topics=[subject, prep_object],
                     full_text_rephrased=raw_clause,
                 )
-
+        passive_match = self.PASSIVE_VOICE_PATTERN.match(raw_clause)
+        if passive_match:
+            groups = passive_match.groupdict()
+            subject = self.agent._clean_phrase(groups["subject"])
+            verb = self.agent._clean_phrase(groups["verb"])
+            object_ = self.agent._clean_phrase(groups["object"])
+            relation = RelationData(subject=subject, verb=verb, object=object_)
+            return InterpretData(
+                intent="statement_of_fact",
+                entities=[
+                    {"name": subject, "type": "CONCEPT"},
+                    {"name": object_, "type": "CONCEPT"},
+                ],
+                relation=relation,
+                key_topics=[subject, object_],
+                full_text_rephrased=raw_clause,
+            )
         svo_match = self.SVO_PATTERN.match(raw_clause)
         if svo_match:
             groups = svo_match.groupdict()
@@ -413,14 +359,9 @@ class SymbolicParser:
             verb_raw = groups["verb"]
             object_ = self.agent._clean_phrase(groups["object"])
             verb = self.agent.get_relation_type(verb_raw, subject, object_)
-
             if verb_raw.lower() in self.AMBIGUOUS_PROPERTY_VERBS:
                 if any(kw in object_.lower() for kw in self.PROPERTY_KEYWORDS):
                     verb = "has_property"
-                    logger.info(
-                        f"  [Symbolic Parser]: Detected property relation, converting '{verb_raw}' -> '{verb}'.",
-                    )
-
             relation = RelationData(subject=subject, verb=verb, object=object_)
             return InterpretData(
                 intent="statement_of_fact",
@@ -435,16 +376,8 @@ class SymbolicParser:
                 key_topics=[subject, object_],
                 full_text_rephrased=raw_clause,
             )
-
-        words = []
-        for w in raw_words:
-            if self._is_part_of_speech(w, "verb"):
-                words.append(self.agent.lemmatizer.lemmatize(w, pos="v"))
-            else:
-                words.append(self.agent.lemmatizer.lemmatize(w))
-
+        words = [self.agent.lemmatizer.lemmatize(w) for w in raw_words]
         lemmatized_clause = " ".join(words)
-
         relational_match = self.RELATIONAL_QUESTION_PATTERN.match(lemmatized_clause)
         if relational_match:
             groups = relational_match.groupdict()
@@ -452,11 +385,6 @@ class SymbolicParser:
             verb = groups["verb"].lower()
             object_ = self.agent._clean_phrase(groups["object"])
             action_object = f"{verb} {object_}"
-            logger.info(
-                "  [Symbolic Parser]: Successfully parsed Yes/No Question: '%s' --[has_property]--> '%s'?",
-                subject,
-                action_object,
-            )
             relation = RelationData(
                 subject=subject,
                 verb="has_property",
@@ -472,9 +400,7 @@ class SymbolicParser:
                 key_topics=[subject, action_object],
                 full_text_rephrased=lemmatized_clause,
             )
-
         if words[0] in self.QUESTION_WORDS:
-            logger.info("  [Symbolic Parser]: Successfully parsed a wh-question.")
             entity_name = " ".join(words[2:]) if len(words) > 2 else " ".join(words[1:])
             entity_name = entity_name.replace("?", "").strip()
             entity_name = re.sub(r"^(is|are|was|were)\s+", "", entity_name)
@@ -485,15 +411,11 @@ class SymbolicParser:
                 key_topics=[entity_name],
                 full_text_rephrased=lemmatized_clause,
             )
-
         yes_no_match = self.YES_NO_ADJECTIVE_PATTERN.match(lemmatized_clause)
         if yes_no_match:
             groups = yes_no_match.groupdict()
             subject = self.agent._clean_phrase(groups["subject"])
             adjective = self.agent._clean_phrase(groups["adjective"])
-            logger.info(
-                f"  [Symbolic Parser]: Successfully parsed Yes/No Adjective Question: '{subject}' --[has_property]--> '{adjective}'?",
-            )
             relation = RelationData(
                 subject=subject,
                 verb="has_property",
@@ -509,8 +431,8 @@ class SymbolicParser:
                 key_topics=[subject, adjective],
                 full_text_rephrased=lemmatized_clause,
             )
-
         property_of_match = re.match(
+            # FIX: Make the subject non-greedy to stop it before the ' is '.
             r"(?i)^the\s+(?P<property>\w+)\s+of\s+(?P<subject>.+?)\s+is\s+(?P<value>.+)\.*$",
             lemmatized_clause,
         )
@@ -519,9 +441,6 @@ class SymbolicParser:
             subject = self.agent._clean_phrase(groups["subject"])
             property_name = self.agent._clean_phrase(groups["property"])
             value = self.agent._clean_phrase(groups["value"])
-            logger.info(
-                f"  [Symbolic Parser]: Successfully parsed 'Property of Subject' structure: '{subject}' has property '{value}'.",
-            )
             relation = RelationData(subject=subject, verb="has_property", object=value)
             return InterpretData(
                 intent="statement_of_fact",
@@ -533,22 +452,15 @@ class SymbolicParser:
                 key_topics=[subject, property_name, value],
                 full_text_rephrased=lemmatized_clause,
             )
-
         verb_info = self._find_verb(words)
         if not verb_info:
             return None
         verb, verb_index = verb_info
-
         if len(words) > verb_index + 1:
             potential_adjective = words[verb_index + 1]
             if self._is_part_of_speech(potential_adjective, "adjective"):
                 subject = " ".join(words[:verb_index])
                 subject = self.agent._clean_phrase(subject)
-                logger.info(
-                    "  [Symbolic Parser]: Successfully parsed S-V-Adjective structure: '%s' has property '%s'.",
-                    subject,
-                    potential_adjective,
-                )
                 relation = RelationData(
                     subject=subject,
                     verb="has_property",
@@ -564,7 +476,6 @@ class SymbolicParser:
                     key_topics=[subject, potential_adjective],
                     full_text_rephrased=lemmatized_clause,
                 )
-
         if verb_index > 0 and verb_index < len(words) - 1:
             subject = " ".join(words[:verb_index])
             verb_phrase = words[verb_index]
@@ -579,9 +490,6 @@ class SymbolicParser:
             object_ = " ".join(words[object_start_index:])
             subject = self.agent._clean_phrase(subject)
             object_ = self.agent._clean_phrase(object_)
-            logger.info(
-                f"  [Symbolic Parser]: Successfully parsed S-V-O structure: '{subject}' -> '{verb}' -> '{object_}'.",
-            )
             relation = RelationData(subject=subject, verb=verb, object=object_)
             return InterpretData(
                 intent="statement_of_fact",
@@ -593,7 +501,6 @@ class SymbolicParser:
                 key_topics=[subject, object_],
                 full_text_rephrased=lemmatized_clause,
             )
-
         return None
 
     def _resolve_clause_pronouns(self, clause: str, subject: str) -> str:
@@ -617,58 +524,38 @@ class SymbolicParser:
         return modified_clause
 
     def _find_verb(self, words: list[str]) -> tuple[str, int] | None:
-        """Scan a list of words to find the most likely single verb.
-
-        This helper function iterates through the words of a sentence and
-        uses the `LexiconManager` to check if any of them are categorized
-        as a 'verb'.
-
-        If multiple verbs are found (e.g., in a phrasal verb like "give
-        birth"), it applies a simple heuristic and prioritizes the first
-        one it finds.
-
-        Args:
-            words: A list of tokenized words from the input sentence.
-
-        Returns:
-            A tuple containing the verb string and its index, or None if
-            no known verbs are found.
-        """
+        """Scan a list of words to find the most likely single verb."""
         found_verbs = []
         for i, word in enumerate(words):
             if self._is_part_of_speech(word, "verb"):
                 found_verbs.append((word, i))
-
         if not found_verbs:
             return None
-
         if len(found_verbs) == 1:
             return found_verbs[0]
-
         logger.debug(
             f"  [Parser]: Multiple verbs found: {found_verbs}. Prioritizing the first.",
         )
         return found_verbs[0]
 
+    @lru_cache(maxsize=1024)
     def _is_part_of_speech(self, word: str, pos: str) -> bool:
         """
         Check if a word is categorized as a specific part of speech.
-        This is a read-only check against the agent's current knowledge.
+        This method first checks the agent's trusted lexicon. If the word is
+        not found, it uses spaCy as a robust fallback for external POS tagging.
         """
-        clean_word = word.lower().strip()
-        word_node = self.agent.graph.get_node_by_name(clean_word)
-        if not word_node:
+        clean_word = self.agent._clean_phrase(word)
+        if not clean_word:
             return False
 
-        is_a_edges = [
-            edge
-            for edge in self.agent.graph.get_edges_from_node(word_node.id)
-            if edge.type == "is_a"
-        ]
+        promoted_parts = self.agent.lexicon.get_promoted_pos(clean_word)
+        if pos.lower() in promoted_parts:
+            return True
 
-        for edge in is_a_edges:
-            target_node = self.agent.graph.get_node_by_id(edge.target)
-            if target_node and target_node.name == pos:
+        if self.nlp:
+            doc = self.nlp(clean_word)
+            if doc and doc[0].pos_.upper() == pos.upper():
                 return True
 
         return False
@@ -684,7 +571,6 @@ class SymbolicParser:
         """
         refined_facts = []
         words = object_phrase.split()
-
         for i, word in enumerate(words):
             if self._is_part_of_speech(word, "adjective"):
                 if i + 1 < len(words):
@@ -692,13 +578,11 @@ class SymbolicParser:
                     refined_facts.append(
                         RelationData(subject=noun, verb="has_property", object=word),
                     )
-
         prep_match = re.search(r"(.+?)\s+(from|of|in|with)\s+(.+)", object_phrase)
         if prep_match:
             obj_subject = self.agent._clean_phrase(prep_match.group(1))
             preposition = prep_match.group(2)
             prep_object = self.agent._clean_phrase(prep_match.group(3))
-
             if preposition == "from":
                 refined_facts.append(
                     RelationData(
@@ -723,5 +607,4 @@ class SymbolicParser:
                         object=prep_object,
                     ),
                 )
-
         return refined_facts

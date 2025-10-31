@@ -121,7 +121,7 @@ This architecture enables the agent to learn, reason, and evolve in a verifiable
 
 ### Cognitive & Reasoning Abilities
 *   **Recursive Sub-Goal Learning:** When the agent encounters a concept it can't process due to an unknown word (e.g., learning "spoken language" without knowing "spoken"), it **pauses, creates a new high-priority goal to learn the unknown word**, and then resumes the original task. This is the foundation of true, bottom-up understanding.
-*   **Metacognitive Self-Analysis:** The agent analyzes its own performance logs to detect inefficiencies or errors. It can then use an external LLM (like Gemini) to suggest a code fix, verify that fix in a secure sandbox by running its own test suite, and present a verified patch for human review.
+*   **Metacognitive Self-Analysis:** The agent analyzes its own performance logs to detect inefficiencies or errors. It can then use an external LLM (like Gemini) to suggest a code fix, verify that fix in a secure sandbox by running its own test suite, and present a verified patch for human review *(SAFETY-PRECAUTION)*
 *   **Advanced Autonomous Learning Cycles:**
     *   **Discovery Cycle:** Finds and explores new, relevant topics.
     *   **Study Cycle:** Researches concepts using an **LLM-powered quality gate** that verifies relevance and **decomposes complex sentences into clean, atomic facts** for learning.

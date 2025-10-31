@@ -4,10 +4,12 @@ import json
 import logging
 import os
 import re
+import time
 from contextlib import redirect_stderr
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
+    Any,
     Final,
     Literal,
     NotRequired,
@@ -90,9 +92,9 @@ class PropertyData(TypedDict, total=False):
 class RelationData(TypedDict, total=False):
     """Defines a structured relationship extracted from a sentence."""
 
-    subject: str
+    subject: str | list[Any] | dict[str, Any]
     verb: NotRequired[str]
-    object: str
+    object: str | list[Any] | dict[str, Any]
     predicate: NotRequired[str]
     relation: NotRequired[str]
     properties: NotRequired[PropertyData]
@@ -134,7 +136,6 @@ class UniversalInterpreter:
         self,
         model_path: str | Path = DEFAULT_LLM_PATH,
         cache_file: str | Path = DEFAULT_CACHE_FILE,
-        enable_llm: bool = True,
         load_llm: bool = True,
     ) -> None:
         """Initialize the UniversalInterpreter and load the LLM into memory.
@@ -144,14 +145,18 @@ class UniversalInterpreter:
             cache_file: The file path for the interpretation and synthesis
                 caches.
         """
-        print("Initializing Universal Interpreter (loading Mini LLM if enabled)...")
+        logger.info(
+            "[yellow]Initializing Universal Interpreter (loading Mini LLM if enabled)...[/yellow]"
+        )
         self.llm: Llama | None = None
 
         if load_llm:
-            print("Initializing Universal Interpreter (loading Mini LLM)...")
+            logger.info(
+                "[yellow]Initializing Universal Interpreter (loading Mini LLM)...[/yellow]"
+            )
             if not Path(model_path).exists():
                 raise FileNotFoundError(
-                    f"Interpreter model not found at {model_path}. Please download it.",
+                    f"[error]Interpreter model not found at {model_path}.[/error] [yellow]Please download using axiom-llm .[/yelow]",
                 )
 
             with open(os.devnull, "w") as f, redirect_stderr(f):
@@ -164,14 +169,14 @@ class UniversalInterpreter:
                     verbose=False,
                 )
         else:
-            print("Initializing Universal Interpreter in SYMBOLIC-ONLY mode.")
+            logger.info("Initializing Universal Interpreter in SYMBOLIC-ONLY mode.")
 
         self.interpretation_cache: dict[str, InterpretData] = {}
         self.synthesis_cache: dict[str, str] = {}
         self.cache_file = Path(cache_file)
         self._load_cache()
 
-        print("Universal Interpreter loaded successfully.")
+        logger.info("[success]Universal Interpreter loaded successfully.[/success]")
 
     def _is_pronoun_present(self, text: str) -> bool:
         """Check if any pronoun exists as a whole word in the text."""
@@ -183,7 +188,7 @@ class UniversalInterpreter:
     def _load_cache(self) -> None:
         """Load the interpretation and synthesis caches from a JSON file."""
         if not self.cache_file.exists():
-            print("[Cache]: No cache file found. Starting fresh.")
+            logger.info("[Cache]: No cache file found. Starting fresh.")
             return
 
         try:
@@ -193,12 +198,16 @@ class UniversalInterpreter:
                     cache_data.get("interpretations", []),
                 )
                 self.synthesis_cache = dict(cache_data.get("synthesis", []))
-            print(
-                f"[Cache]: Loaded {len(self.interpretation_cache)} interpretation(s) and {len(self.synthesis_cache)} synthesis caches from {self.cache_file}.",
+            logger.info(
+                "[border][Cache]: Loaded %d interpretation(s) and %d synthesis caches from %s.[/border]",
+                len(self.interpretation_cache),
+                len(self.synthesis_cache),
+                self.cache_file,
             )
         except Exception as exc:
-            print(
-                f"[Cache Error]: Could not load cache file. Starting fresh. Error: {exc}",
+            logger.warning(
+                "[Cache Error]: Could not load cache file. Starting fresh. Error: %s",
+                exc,
             )
 
     def _save_cache(self) -> None:
@@ -211,8 +220,10 @@ class UniversalInterpreter:
                 }
                 json.dump(cache_data, f, indent=4)
         except Exception as exc:
-            print(
-                f"[Cache Error]: Could not save cache to {self.cache_file}. Error: {exc}",
+            logger.error(
+                "[Cache Error]: Could not save cache to %s. Error: %s",
+                self.cache_file,
+                exc,
             )
 
     def _clean_llm_json_output(self, raw_text: str) -> str:
@@ -235,27 +246,59 @@ class UniversalInterpreter:
             return ""
         json_str = raw_text[start_brace : end_brace + 1]
         json_str = re.sub(r",\s*(\}|\])", r"\1", json_str)
-        return re.sub(r'"\s*\n\s*"', '", "', json_str)
+        return json_str.replace("\n", ", ")
+
+    def _run_llm_completion_with_retries(
+        self, prompt: str, max_tokens: int, temperature: float = 0.0
+    ) -> str:
+        """Runs the LLM completion with retry and backoff logic."""
+        retries = 3
+        backoff_factor = 2
+
+        for attempt in range(retries):
+            try:
+                if not self.llm:
+                    raise ConnectionError("LLM is not loaded.")
+
+                output = cast(
+                    "dict[str, list[dict[str, str]]]",
+                    self.llm(
+                        prompt,
+                        max_tokens=max_tokens,
+                        stop=["</s>", "\n\n"],
+                        echo=False,
+                        temperature=temperature,
+                    ),
+                )
+
+                if output and "choices" in output and output["choices"]:
+                    return output["choices"][0]["text"].strip()
+
+                raise ValueError("Invalid LLM response format.")
+
+            except (ConnectionError, ValueError, IndexError) as e:
+                logger.warning(
+                    "  [LLM Error]: Attempt %d/%d failed: %s", attempt + 1, retries, e
+                )
+                if attempt < retries - 1:
+                    sleep_time = backoff_factor * (2**attempt)
+                    logger.info("  [LLM Retry]: Retrying in %d seconds...", sleep_time)
+                    time.sleep(sleep_time)
+                else:
+                    logger.error("  [LLM Error]: All retry attempts failed.")
+                    return ""
+        return ""
 
     def interpret(self, user_input: str) -> InterpretData:
-        """Analyze user input with the LLM and return a structured interpretation.
+        """Analyze user input with the LLM and return a structured interpretation."""
+        cache_key = user_input
+        if cache_key in self.interpretation_cache:
+            logger.info("  [Interpreter Cache]: Hit!")
+            return self.interpretation_cache[cache_key]
 
-        This is the core, context-free interpretation method. It constructs
-        a detailed prompt with examples and instructions, sends it to the
-        LLM, and parses the resulting JSON output into a `InterpretData`
-        TypedDict. Results are cached for performance.
-
-        Args:
-            user_input: The raw user message to be interpreted.
-
-        Returns:
-            A `InterpretData` object representing the structured
-            understanding of the input. Returns a default 'unknown'
-            intent on failure.
-        """
         if self.llm is None:
-            print(
-                "  [Interpreter Error]: LLM is disabled. Cannot interpret complex input.",
+            logger.warning(
+                "  [Interpreter Error]: LLM is disabled. Cannot interpret complex input."
             )
             return cast(
                 "InterpretData",
@@ -270,11 +313,7 @@ class UniversalInterpreter:
                 },
             )
 
-        cache_key = user_input
-        if cache_key in self.interpretation_cache:
-            print("  [Interpreter Cache]: Hit!")
-            return self.interpretation_cache[cache_key]
-        print("  [Interpreter Cache]: Miss. Running LLM for interpretation.")
+        logger.info("  [Interpreter Cache]: Miss. Running LLM for interpretation.")
 
         system_prompt = (
             "You are a strict, precise factual analysis engine. Your PRIMARY task is to identify the user's intent. "
@@ -299,18 +338,9 @@ class UniversalInterpreter:
             f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
         )
         try:
-            output = cast(
-                "dict[str, list[dict[str, str]]]",
-                self.llm(
-                    full_prompt,
-                    max_tokens=512,
-                    stop=["</s>"],
-                    echo=False,
-                    temperature=0.0,
-                ),
+            response_text = self._run_llm_completion_with_retries(
+                full_prompt, max_tokens=512
             )
-            assert isinstance(output, dict)
-            response_text = output["choices"][0]["text"].strip()
             cleaned_json_str = self._clean_llm_json_output(response_text)
             if not cleaned_json_str:
                 raise json.JSONDecodeError("No JSON object found", response_text, 0)
@@ -331,7 +361,7 @@ class UniversalInterpreter:
                     props.setdefault("provenance", "llm")
 
                     raw_verb = rel.get("verb", "").lower()
-                    raw_object_text = rel.get("object", "")
+                    raw_object_text = str(rel.get("object", ""))
 
                     if re.search(
                         r"\b(not|never|no|without)\b",
@@ -363,7 +393,9 @@ class UniversalInterpreter:
             self._save_cache()
             return interpretation
         except Exception as e:
-            print(f"  [Interpreter Error]: Could not parse LLM output. Error: {e}")
+            logger.error(
+                "  [Interpreter Error]: Could not parse LLM output. Error: %s", e
+            )
             return cast(
                 "InterpretData",
                 {
@@ -378,29 +410,14 @@ class UniversalInterpreter:
             )
 
     def resolve_context(self, history: list[str], new_input: str) -> str:
-        """Use the LLM to perform coreference resolution on the user's input.
-
-        This method attempts to replace pronouns in the user's latest
-        message (e.g., "it", "they") with the specific nouns they refer
-        to from the preceding conversation history. This creates a
-        context-aware input for the main `interpret` method.
-
-        Args:
-            history: A list of the previous turns in the conversation.
-            new_input: The user's latest message, potentially containing
-                pronouns.
-
-        Returns:
-            The rephrased input string with pronouns resolved, or the
-            original input if no changes were needed.
-        """
+        """Use the LLM to perform coreference resolution on the user's input."""
         if self.llm is None:
-            print(
-                "  [Context Resolver Error]: LLM is disabled. Cannot resolve context.",
+            logger.warning(
+                "  [Context Resolver Error]: LLM is disabled. Cannot resolve context."
             )
             return new_input
 
-        print("  [Context Resolver]: Attempting to resolve pronouns...")
+        logger.info("  [Context Resolver]: Attempting to resolve pronouns...")
         formatted_history = "\n".join(history)
         system_prompt = (
             "You are a strict coreference resolution engine. Your one and only task is to rephrase the 'New Input' "
@@ -428,25 +445,24 @@ class UniversalInterpreter:
             f"New Input: {new_input}\nOutput:[/INST]"
         )
         try:
-            output = cast(
-                "dict[str, list[dict[str, str]]]",
-                self.llm(
-                    full_prompt,
-                    max_tokens=128,
-                    stop=["</s>", "\n"],
-                    echo=False,
-                    temperature=0.0,
-                ),
+            rephrased_input = self._run_llm_completion_with_retries(
+                full_prompt, max_tokens=128
             )
-            assert isinstance(output, dict)
-            rephrased_input = output["choices"][0]["text"].strip()
-            if rephrased_input and rephrased_input.lower() != new_input.lower():
-                print(f"    - Context resolved: '{new_input}' -> '{rephrased_input}'")
-                return cast("str", rephrased_input)
-            print("    - No context to resolve, using original input.")
+            if not rephrased_input:
+                raise ValueError(
+                    "LLM returned an empty response for context resolution."
+                )
+            if rephrased_input.lower() != new_input.lower():
+                logger.info(
+                    "    - Context resolved: '%s' -> '%s'", new_input, rephrased_input
+                )
+                return rephrased_input
+            logger.info("    - No context to resolve, using original input.")
             return new_input
         except Exception as e:
-            print(f"  [Context Resolver Error]: Could not resolve context. Error: {e}")
+            logger.error(
+                "  [Context Resolver Error]: Could not resolve context. Error: %s", e
+            )
             return new_input
 
     def interpret_with_context(
@@ -454,21 +470,7 @@ class UniversalInterpreter:
         user_input: str,
         history: list[str],
     ) -> InterpretData:
-        """Interpret user input after first attempting to resolve context.
-
-        This is a wrapper method that orchestrates contextual interpretation.
-        It first checks if the input contains pronouns and, if so, calls
-        the `resolve_context` method before passing the potentially
-        rephrased input to the main `interpret` method.
-
-        Args:
-            user_input: The raw message from the user.
-            history: The preceding conversation history.
-
-        Returns:
-            A `InterpretData` object representing the structured
-            understanding of the contextualized input.
-        """
+        """Interpret user input after first attempting to resolve context."""
         contextual_input = user_input
 
         if history and self._is_pronoun_present(user_input):
@@ -487,7 +489,9 @@ class UniversalInterpreter:
             logger.warning("[Interpreter]: LLM is disabled. Cannot decompose text.")
             return []
 
-        logger.info("  [Interpreter]: Decomposing sentence into atomic facts...")
+        logger.info(
+            "[purple]   - [Interpreter]: Decomposing sentence into atomic facts...[/purple]"
+        )
 
         topic_context = (
             f"The primary topic of this sentence is '{main_topic}'. "
@@ -527,61 +531,67 @@ class UniversalInterpreter:
         3.  If the sentence contains no extractable facts, return an empty list `[]`.
         """
         try:
-            output = cast(
-                "dict",
-                self.llm(
-                    f"[INST]{prompt}[/INST]",
-                    max_tokens=1024,
-                    stop=["</s>"],
-                    echo=False,
-                    temperature=0.1,
-                ),
+            response_text = self._run_llm_completion_with_retries(
+                f"[INST]{prompt}[/INST]", max_tokens=1024, temperature=0.1
             )
-            response_text = output["choices"][0]["text"].strip()
+            if not response_text:
+                logger.warning(
+                    "  [Interpreter Warning]: LLM returned an empty response for decomposition."
+                )
+                return []
 
             start_bracket = response_text.find("[")
             end_bracket = response_text.rfind("]")
             if start_bracket == -1 or end_bracket == -1:
+                logger.warning(
+                    "  [Interpreter Warning]: LLM response did not contain a JSON list. Output: %s",
+                    response_text,
+                )
                 return []
 
             json_str = response_text[start_bracket : end_bracket + 1]
-            relations = json.loads(json_str)
+            try:
+                relations = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error(
+                    "  [Interpreter Error]: Failed to decompose sentence. Error: %s", e
+                )
+                logger.debug(
+                    "  [Interpreter Debug]: Malformed JSON from LLM:\n%s", json_str
+                )
+                return []
 
             if isinstance(relations, list):
                 logger.info(
-                    "    - Decomposed sentence into %d atomic relations.",
+                    "[green]   - Decomposed sentence into %d atomic relations.[/green]",
                     len(relations),
                 )
                 return cast("list[RelationData]", relations)
+
+            logger.warning(
+                "  [Interpreter Warning]: LLM returned valid JSON, but it was not a list. Output: %s",
+                json_str,
+            )
             return []
+
         except Exception as e:
             logger.error(
-                "  [Interpreter Error]: Failed to decompose sentence. Error: %s", e
+                "  [Interpreter Error]: An unexpected error occurred during decomposition. Error: %s",
+                e,
             )
             return []
 
     def break_down_definition(self, subject: str, chunky_definition: str) -> list[str]:
-        """Use the LLM to break a complex definition into simple, atomic facts.
-
-        This method is the core of the introspective refinement cycle. It takes
-        a subject and a long, complex definitional phrase ("chunky fact") and
-        prompts the LLM to deconstruct it into a list of simple, standalone
-        sentences that can be learned individually by the agent.
-
-        Args:
-            subject: The subject of the definition (e.g., "Bacteria").
-            chunky_definition: The complex phrase to break down.
-
-        Returns:
-            A list of simple, atomic fact sentences, or an empty list on failure.
-        """
+        """Use the LLM to break a complex definition into simple, atomic facts."""
         if self.llm is None:
-            print(
-                "  [Interpreter Error]: LLM is disabled. Cannot break down definition.",
+            logger.warning(
+                "  [Interpreter Error]: LLM is disabled. Cannot break down definition."
             )
             return []
 
-        print(f"  [Interpreter]: Breaking down chunky definition for '{subject}'...")
+        logger.info(
+            "  [Interpreter]: Breaking down chunky definition for '%s'...", subject
+        )
         system_prompt = (
             "You are a logical decomposition engine. Your task is to break down a "
             "complex 'Definition' about a 'Subject' into a list of simple, atomic, "
@@ -613,18 +623,9 @@ class UniversalInterpreter:
             f"Output:[/INST]"
         )
         try:
-            output = cast(
-                "dict[str, list[dict[str, str]]]",
-                self.llm(
-                    full_prompt,
-                    max_tokens=256,
-                    stop=["</s>"],
-                    echo=False,
-                    temperature=0.2,
-                ),
+            response_text = self._run_llm_completion_with_retries(
+                full_prompt, max_tokens=256, temperature=0.2
             )
-            assert isinstance(output, dict)
-            response_text = output["choices"][0]["text"].strip()
             atomic_sentences = [
                 s.strip()
                 for s in response_text.replace("-", "").split("\n")
@@ -632,31 +633,22 @@ class UniversalInterpreter:
             ]
 
             if atomic_sentences:
-                print(f"    - Decomposed into {len(atomic_sentences)} atomic facts.")
+                logger.info(
+                    "    - Decomposed into %d atomic facts.", len(atomic_sentences)
+                )
                 return atomic_sentences
             return []
         except Exception as e:
-            print(f"  [Interpreter Error]: Could not break down definition. Error: {e}")
+            logger.error(
+                "  [Interpreter Error]: Could not break down definition. Error: %s", e
+            )
             return []
 
     def generate_curious_questions(self, topic: str, known_fact: str) -> list[str]:
-        """Generate simple, fundamental follow-up questions about a topic.
-
-        This method uses the LLM in a more creative mode to simulate
-        curiosity. Given a known fact, it generates two simple questions
-        that a child might ask to learn more, which can then be used by
-        the `KnowledgeHarvester` to guide its study process.
-
-        Args:
-            topic: The high-level topic being studied.
-            known_fact: A single, declarative fact that is already known.
-
-        Returns:
-            A list of two generated question strings, or an empty list on failure.
-        """
+        """Generate simple, fundamental follow-up questions about a topic."""
         if self.llm is None:
-            print(
-                "  [Question Generation Error]: LLM is disabled. Cannot generate questions.",
+            logger.warning(
+                "  [Question Generation Error]: LLM is disabled. Cannot generate questions."
             )
             return []
 
@@ -683,18 +675,9 @@ class UniversalInterpreter:
             f"Output:[/INST]"
         )
         try:
-            output = cast(
-                "dict[str, list[dict[str, str]]]",
-                self.llm(
-                    full_prompt,
-                    max_tokens=128,
-                    stop=["</s>"],
-                    echo=False,
-                    temperature=0.8,
-                ),
+            response_text = self._run_llm_completion_with_retries(
+                full_prompt, max_tokens=128, temperature=0.8
             )
-            assert isinstance(output, dict)
-            response_text = output["choices"][0]["text"].strip()
             questions = [
                 q.strip()
                 for q in response_text.replace("-", "").split("\n")
@@ -702,12 +685,13 @@ class UniversalInterpreter:
             ]
 
             if questions:
-                print(f"    - Generated {len(questions)} curious questions.")
+                logger.info("    - Generated %d curious questions.", len(questions))
                 return questions
             return []
         except Exception as exc:
-            print(
-                f"  [Question Generation Error]: Could not generate questions. Error: {exc}",
+            logger.error(
+                "  [Question Generation Error]: Could not generate questions. Error: %s",
+                exc,
             )
             return []
 
@@ -721,13 +705,16 @@ class UniversalInterpreter:
         if so, reframes it into a simple, atomic S-V-O sentence for learning.
         """
         if self.llm is None:
-            print("  [Fact Verifier Error]: LLM is disabled. Cannot verify/reframe.")
+            logger.warning(
+                "  [Fact Verifier Error]: LLM is disabled. Cannot verify/reframe."
+            )
             if original_topic.lower() in raw_sentence.lower():
                 return raw_sentence
             return None
 
-        print(
-            f"  [Fact Verifier]: Asking LLM to verify and reframe fact for '{original_topic}'...",
+        logger.info(
+            "[purple]   Asking LLM to verify and reframe fact for '%s'...[/purple]",
+            original_topic,
         )
         system_prompt = (
             "You are a precise fact verification and reframing engine. Your task is to analyze a 'Raw Sentence' "
@@ -752,28 +739,28 @@ class UniversalInterpreter:
             f"Output:[/INST]"
         )
         try:
-            output = cast(
-                "dict[str, list[dict[str, str]]]",
-                self.llm(
-                    full_prompt,
-                    max_tokens=64,
-                    stop=["</s>", "\n"],
-                    echo=False,
-                    temperature=0.0,
-                ),
+            rephrased_fact = self._run_llm_completion_with_retries(
+                full_prompt, max_tokens=64
             )
-            rephrased_fact = output["choices"][0]["text"].strip()
 
-            if "none" in rephrased_fact.lower():
-                print("    - LLM rejected the fact as irrelevant.")
+            if not rephrased_fact:
+                logger.error("  [Fact Verifier Error]: LLM returned an empty response.")
                 return None
 
-            print(f"    - LLM verified and reframed: '{rephrased_fact}'")
+            if "none" in rephrased_fact.lower():
+                logger.info("    - LLM rejected the fact as irrelevant.")
+                return None
+
+            logger.info(
+                "[success]   - LLM verified and reframed: '%s'[/success]",
+                rephrased_fact,
+            )
             return rephrased_fact
 
         except Exception as e:
-            print(
-                f"  [Fact Verifier Error]: Could not process fact with LLM. Error: {e}",
+            logger.error(
+                "  [Fact Verifier Error]: Could not process fact with LLM. Error: %s",
+                e,
             )
             return None
 
@@ -783,39 +770,27 @@ class UniversalInterpreter:
         original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
-        """Convert a structured, internal representation into natural language.
-
-        This is the "voice" of the agent. It takes a structured string of
-        facts or an internal state and uses the LLM to generate a fluent,
-        conversational sentence. It can operate in different modes, such
-        as generating a statement or a clarification question. Results
-        are cached for performance.
-
-        Args:
-            structured_facts: The internal data to be verbalized.
-            original_question: The user's question, used for context.
-            mode: The synthesis mode ('statement' or 'clarification_question').
-
-        Returns:
-            A natural language string representing the synthesized response.
-        """
-        if self.llm is None:
-            return str(structured_facts)
-
+        """Convert a structured, internal representation into natural language."""
+        facts_str: str
         if isinstance(structured_facts, list):
             try:
-                structured_facts = json.dumps([str(f) for f in structured_facts])
+                facts_str = json.dumps([str(f) for f in structured_facts])
             except Exception:
-                structured_facts = str(structured_facts)
+                facts_str = str(structured_facts)
+        else:
+            facts_str = structured_facts
 
-        cache_key = f"{mode}|{original_question}|{structured_facts}"
-
+        cache_key = f"{mode}|{original_question}|{facts_str}"
         if cache_key in self.synthesis_cache:
-            print("  [Synthesizer Cache]: Hit!")
+            logger.info("  [Synthesizer Cache]: Hit!")
             return self.synthesis_cache[cache_key]
 
-        print(
-            f"  [Synthesizer Cache]: Miss. Running LLM for synthesis in '{mode}' mode.",
+        if self.llm is None:
+            return facts_str
+
+        logger.info(
+            "[yellow][Synthesizer Cache]: Miss. Running LLM for synthesis in '%s' mode.[/yellow]",
+            mode,
         )
 
         system_prompt = ""
@@ -827,27 +802,22 @@ class UniversalInterpreter:
                 "You have been given two conflicting facts. Formulate a single, polite, and simple question. "
                 "Do not state the facts directly. Your output must be ONLY the question."
             )
-            task_prompt = f"Conflicting Facts: '{structured_facts}'"
+            task_prompt = f"Conflicting Facts: '{facts_str}'"
         else:
             system_prompt = REPHRASING_PROMPT
-            task_prompt = f"Facts to rephrase: '{structured_facts}'"
+            task_prompt = f"Facts to rephrase: '{facts_str}'"
             if original_question:
-                task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{structured_facts}'"
+                task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{facts_str}'"
 
         full_prompt = f"[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
-            output = cast(
-                "dict[str, list[dict[str, str]]]",
-                self.llm(
-                    full_prompt,
-                    max_tokens=256,
-                    stop=["</s>", "\n"],
-                    echo=False,
-                    temperature=0.7 if mode == "clarification_question" else 0.1,
-                ),
+            temperature = 0.7 if mode == "clarification_question" else 0.1
+            synthesized_text = self._run_llm_completion_with_retries(
+                full_prompt, max_tokens=256, temperature=temperature
             )
-            assert isinstance(output, dict)
-            synthesized_text = output["choices"][0]["text"].strip().replace('"', "")
+            if not synthesized_text:
+                raise ValueError("LLM returned an empty string during synthesis.")
+
             phrases_to_remove = [
                 "rephrased sentence:",
                 "based on the provided facts,",
@@ -865,23 +835,29 @@ class UniversalInterpreter:
             self.synthesis_cache[cache_key] = synthesized_text
             self._save_cache()
 
-            return cast("str", synthesized_text)
+            return synthesized_text
         except Exception as e:
-            print(f"  [Synthesizer Error]: Could not generate fluent text. Error: {e}")
-            return structured_facts
+            logger.error(
+                "  [Synthesizer Error]: Could not generate fluent text. Error: %s", e
+            )
+            return facts_str
 
-    def generate_curriculum(self, high_level_goal: str) -> list[str]:
+    def generate_curriculum(
+        self, high_level_goal: str, style: str | None = None
+    ) -> list[str]:
         """
         Uses the LLM to break down a high-level learning goal into a list of
-        essential, prerequisite topics to study.
+        essential, prerequisite topics to study, guided by a pedagogical style.
         """
         if self.llm is None:
             return []
 
-        logger.info(
-            "  [Interpreter]: Generating curriculum for goal '%s'...",
-            high_level_goal,
+        style_instruction = (
+            f"Generate the topics from the perspective of: {style}."
+            if style
+            else "Generate a standard list of topics."
         )
+
         system_prompt = (
             "You are a curriculum design expert. Your task is to break down a 'High-Level Goal' into a "
             "short, prioritized list of the most fundamental, prerequisite concepts needed to understand it. "
@@ -893,28 +869,29 @@ class UniversalInterpreter:
             "2. Prioritize the most foundational concepts first.\n"
             "3. Do not add numbers, bullets, or any other formatting.\n\n"
             "Example 1:\n"
-            "High-Level Goal: Become an expert on ancient Rome\n"
-            "Output: Roman Republic, Roman Empire, Julius Caesar, Augustus, Colosseum, Latin\n\n"
-            "Example 2:\n"
             "High-Level Goal: Understand photosynthesis\n"
             "Output: plant, cell, sunlight, chlorophyll, water, carbon dioxide, oxygen, glucose"
         )
+
         full_prompt = (
-            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"[INST] {system_prompt}\n\n"
+            f"{style_instruction}\n\n"
+            f"{examples_prompt}\n\n"
             f"High-Level Goal: {high_level_goal}\n"
             f"Output:[/INST]"
         )
         try:
-            output = cast(
-                "dict",
-                self.llm(full_prompt, max_tokens=128, stop=["</s>", "\n"], echo=False),
+            response_text = self._run_llm_completion_with_retries(
+                full_prompt, max_tokens=2048, temperature=0.5
             )
-            response_text = output["choices"][0]["text"].strip()
 
             topics = [
                 topic.strip() for topic in response_text.split(",") if topic.strip()
             ]
-            logger.info("    - Generated curriculum with %d topics.", len(topics))
+            logger.info(
+                "[purple]   - Generated curriculum with %d topics.[/purple]",
+                len(topics),
+            )
             return topics
         except Exception as e:
             logger.error(

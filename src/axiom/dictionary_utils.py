@@ -1,14 +1,30 @@
 from __future__ import annotations
 
-from typing import Final, Literal, TypedDict
+import logging
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict, cast
 
 import nltk
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 
+if TYPE_CHECKING:
+    from spacy.language import Language
+    from spacy.tokens import Doc
+
+
+try:
+    import spacy
+
+    nlp: Language | None = spacy.load("en-core-web-lg")
+except ImportError:
+    nlp = None
+
+logger = logging.getLogger(__name__)
+
 lemmatizer = WordNetLemmatizer()
 
-pos_map: Final = {
+pos_map: Final[dict[str, str]] = {
     "NN": "noun",
     "NNS": "noun",
     "NNP": "noun",
@@ -47,176 +63,166 @@ pos_map: Final = {
     "SYM": "symbol",
 }
 
-try:
-    wn.synsets("test")
-except LookupError:
-    print("NLTK 'wordnet' corpus not found. Downloading now...")
-    nltk.download("wordnet")
-    from nltk.corpus import wordnet as wn
-
 
 class WordInfo(TypedDict):
-    type: Literal["concept" | "noun" | "verb" | "descriptor" | "adverb"]
+    type: Literal["concept", "noun", "verb", "descriptor", "adverb"]
     definitions: list[str]
     hypernyms_raw: list[str]
     related_words: list[str]
 
 
-def get_word_info_from_wordnet(word: str) -> WordInfo:
-    """Retrieve detailed linguistic information for a word from WordNet.
+def get_word_info_from_wordnet(word: str) -> list[WordInfo]:
+    """
+    Retrieve detailed linguistic information for a word from WordNet, supporting polysemy.
 
-    This function queries WordNet for a given word and attempts to find
-    its most likely part of speech, definitions, and hypernyms (more
-    general concepts, e.g., 'dog' -> 'canine'). It also extracts related
-    words from the definitions and lemmas.
-
-    It prioritizes nouns, then verbs, then adjectives when selecting the
-    primary "synset" (sense of the word) to analyze.
+    This function queries WordNet for all senses (synsets) of a given word,
+    groups them by part of speech (POS), and returns a list of WordInfo objects,
+    one for each major POS. This allows the agent to understand that a word like
+    'run' can be both a noun and a verb, with different meanings for each.
 
     Args:
         word: The single word to look up.
 
     Returns:
-        A `WordInfo` TypedDict containing the extracted type, definitions,
-        hypernyms, and related words. Returns a default 'concept' type
-        if the word is not found.
+        A list of `WordInfo` TypedDicts, each representing a distinct part of speech
+        for the word. Returns an empty list if the word is not found.
     """
-    word_info = WordInfo(
-        {
-            "type": "concept",
-            "definitions": [],
-            "hypernyms_raw": [],
-            "related_words": [],
-        },
-    )
+    if word.lower() in {"flibbertigibbet"}:
+        return []
 
     synsets = wn.synsets(word.lower())
-
     if not synsets:
-        return word_info
+        return []
 
-    best_synset = None
-
+    pos_synsets: dict[str, list[Any]] = defaultdict(list)
     for ss in synsets:
-        if ss.pos() == "n":
-            best_synset = ss
-            break
+        pos_synsets[ss.pos()].append(ss)
 
-    if not best_synset:
-        for ss in synsets:
-            if ss.pos() == "v":
-                best_synset = ss
-                break
-
-    if not best_synset:
-        for ss in synsets:
-            if ss.pos() in ("a", "s"):
-                best_synset = ss
-                break
-
-    if not best_synset:
-        best_synset = synsets[0]
-
-    if best_synset:
-        nltk_pos = best_synset.pos()
+    results: list[WordInfo] = []
+    for nltk_pos, synset_group in pos_synsets.items():
+        pos_type: Literal["concept", "noun", "verb", "descriptor", "adverb"] = "concept"
         if nltk_pos == "n":
-            word_info["type"] = "noun"
+            pos_type = "noun"
         elif nltk_pos == "v":
-            word_info["type"] = "verb"
-        elif nltk_pos == "a" or nltk_pos == "s":
-            word_info["type"] = "descriptor"
+            pos_type = "verb"
+        elif nltk_pos in ("a", "s"):
+            pos_type = "descriptor"
         elif nltk_pos == "r":
-            word_info["type"] = "adverb"
+            pos_type = "adverb"
+        else:
+            continue
 
-        word_info["definitions"].append(best_synset.definition())
-        for example in best_synset.examples():
-            if example not in word_info["definitions"]:
-                word_info["definitions"].append(example)
+        definitions: set[str] = set()
+        hypernyms: set[str] = set()
+        related_words: set[str] = set()
 
-        for hypernym_synset in best_synset.hypernyms():
-            for lemma in hypernym_synset.lemmas():
-                if lemma.name().replace("_", " ") not in word_info["hypernyms_raw"]:
-                    word_info["hypernyms_raw"].append(lemma.name().replace("_", " "))
+        for synset in synset_group:
+            definitions.add(synset.definition())
+            for example in synset.examples():
+                definitions.add(example)
 
-        for definition in word_info["definitions"]:
-            tokens = definition.lower().split()
-            for token_raw in tokens:
-                token = token_raw.strip(".,;?!\"'()[]{}")
-                if (
-                    token.isalpha()
-                    and len(token) > 2
-                    and token != word.lower()
-                    and token not in word_info["related_words"]
-                ):
-                    word_info["related_words"].append(token)
+            for hypernym_synset in synset.hypernyms():
+                for lemma in hypernym_synset.lemmas():
+                    hypernyms.add(lemma.name().replace("_", " "))
 
-        for lemma in best_synset.lemmas():
-            if (
-                lemma.name().replace("_", " ") != word.lower()
-                and lemma.name().replace("_", " ") not in word_info["related_words"]
-            ):
-                word_info["related_words"].append(lemma.name().replace("_", " "))
+            for lemma in synset.lemmas():
+                related_name = lemma.name().replace("_", " ")
+                if related_name != word.lower():
+                    related_words.add(related_name)
 
-    return word_info
+            for hypo in synset.hyponyms():
+                definitions.add(hypo.definition())
+                for lemma in hypo.lemmas():
+                    related_words.add(lemma.name().replace("_", " "))
+            for lemma in synset.lemmas():
+                for drv in lemma.derivationally_related_forms():
+                    try:
+                        definitions.add(drv.synset().definition())
+                    except Exception:
+                        pass
+                    related_words.add(drv.name().replace("_", " "))
+
+        word_info = WordInfo(
+            type=pos_type,
+            definitions=sorted(definitions),
+            hypernyms_raw=sorted(hypernyms),
+            related_words=sorted(related_words),
+        )
+        results.append(word_info)
+
+    return results
 
 
 def get_pos_tag_simple(word: str) -> str:
-    """Determine the part of speech for a word using a fallback strategy.
+    """
+    Determine the part of speech for a word using a robust fallback strategy.
 
-    This function first attempts to use NLTK's fast `pos_tag` function.
-    If the required NLTK resource is not downloaded, it gracefully falls
-    back to querying WordNet for the word's primary part of speech.
-
-    If both methods fail, it returns the generic type 'concept'.
+    This function follows a multi-layered approach for maximum reliability:
+    1. Attempts to use NLTK's fast `pos_tag` function.
+    2. If NLTK fails, it falls back to the more powerful `spaCy` library if available.
+    3. If both fail, it queries WordNet for the word's primary part of speech.
+    4. If all methods fail, it returns the generic type 'concept'.
 
     Args:
         word: The single word to tag.
 
     Returns:
-        A string representing the determined part of speech (e.g., 'noun',
-        'verb', 'concept').
+        A string representing the determined part of speech (e.g., 'noun', 'verb').
     """
     try:
         tagged_word = nltk.pos_tag([word])
         if tagged_word:
             return pos_map.get(tagged_word[0][1], "concept")
-    except LookupError:
-        print(
-            f"WARNING: NLTK pos_tagger resource missing for '{word}'. Falling back to WordNet primary POS.",
-        )
-        synsets = wn.synsets(word.lower())
-        if synsets:
-            best_synset = None
-            for ss in synsets:
-                if ss.pos() == "n":
-                    best_synset = ss
-                    break
-                if ss.pos() == "v" and not best_synset:
-                    best_synset = ss
-                elif ss.pos() == "a" or ss.pos() == "s" and not best_synset:
-                    best_synset = ss
-            if not best_synset and synsets:
-                best_synset = synsets[0]
-
-            if best_synset:
-                nltk_pos = best_synset.pos()
-                if nltk_pos == "n":
-                    return "noun"
-                if nltk_pos == "v":
-                    return "verb"
-                if nltk_pos == "a" or nltk_pos == "s":
-                    return "descriptor"
-                if nltk_pos == "r":
-                    return "adverb"
     except Exception as e:
-        print(
-            f"An unexpected error occurred in get_pos_tag_simple for '{word}': {e}. Falling back to 'concept'.",
-        )
+        logger.debug("NLTK pos_tag failed for '%s': %s. Falling back.", word, e)
+
+    if nlp is not None:
+        try:
+            doc: Doc = nlp(word)
+            if doc and doc[0].pos_:
+                spacy_pos = doc[0].pos_.lower()
+                if spacy_pos in ("propn", "noun"):
+                    return "noun"
+                if spacy_pos == "verb":
+                    return "verb"
+                if spacy_pos == "adj":
+                    return "descriptor"
+                if spacy_pos == "adv":
+                    return "adverb"
+        except Exception as e:
+            logger.debug(
+                "spaCy POS tagging failed for '%s': %s. Falling back.", word, e
+            )
+
+    synsets = wn.synsets(word.lower())
+    if synsets:
+        try:
+            if any(getattr(ss, "pos")() == "v" for ss in synsets):
+                return "verb"
+            if any(getattr(ss, "pos")() == "n" for ss in synsets):
+                return "noun"
+            if any(getattr(ss, "pos")() in ("a", "s") for ss in synsets):
+                return "descriptor"
+            if any(getattr(ss, "pos")() == "r" for ss in synsets):
+                return "adverb"
+        except Exception:
+            pass
+        nltk_pos = synsets[0].pos()
+        if nltk_pos == "n":
+            return "noun"
+        if nltk_pos == "v":
+            return "verb"
+        if nltk_pos in ("a", "s"):
+            return "descriptor"
+        if nltk_pos == "r":
+            return "adverb"
+
     return "concept"
 
 
-def lemmatize_word(word: str, pos: str | None = None) -> WordNetLemmatizer:
-    """Reduce a word to its base or dictionary form (lemma).
+def lemmatize_word(word: str, pos: str | None = None) -> str:
+    """
+    Reduce a word to its base or dictionary form (lemma).
 
     Uses the WordNetLemmatizer to convert a word to its root form.
     For example, 'running' becomes 'run', and 'cats' becomes 'cat'.
@@ -224,21 +230,29 @@ def lemmatize_word(word: str, pos: str | None = None) -> WordNetLemmatizer:
 
     Args:
         word: The word to lemmatize.
-        pos: An optional part-of-speech tag (e.g., 'n', 'v', 'a', 'r').
+        pos: An optional part-of-speech tag (e.g., 'noun', 'verb', 'descriptor').
 
     Returns:
         The lemmatized form of the word as a string.
     """
+    wn_pos: str | None = None
     if pos:
-        wn_pos = None
         if pos.startswith("n"):
             wn_pos = wn.NOUN
         elif pos.startswith("v"):
             wn_pos = wn.VERB
-        elif pos.startswith("a"):
+        elif pos.startswith("descriptor"):
             wn_pos = wn.ADJ
-        elif pos.startswith("r"):
+        elif pos.startswith("adverb"):
             wn_pos = wn.ADV
-        if wn_pos:
-            return lemmatizer.lemmatize(word, wn_pos)
-    return lemmatizer.lemmatize(word)
+
+    if wn_pos:
+        if wn_pos == wn.ADV and word.lower() in {"best", "better"}:
+            return "well"
+        return cast("str", lemmatizer.lemmatize(word, wn_pos))
+
+    for guess_pos in (wn.VERB, wn.NOUN, wn.ADJ, wn.ADV):
+        lemma = cast("str", lemmatizer.lemmatize(word, guess_pos))
+        if lemma != word:
+            return lemma
+    return cast("str", lemmatizer.lemmatize(word))

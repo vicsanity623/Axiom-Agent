@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 import uuid
-from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import networkx as nx
 from networkx.readwrite import json_graph
@@ -15,6 +16,8 @@ if TYPE_CHECKING:
     from typing import Self
 
     from axiom.universal_interpreter import PropertyData, RelationData
+
+logger = logging.getLogger(__name__)
 
 
 class ConceptNodeData(TypedDict):
@@ -192,16 +195,17 @@ class ConceptGraph:
     This class provides a high-level API for interacting with the agent's
     brain. It handles the creation, retrieval, and connection of nodes and
     edges, abstracting away the underlying `networkx.MultiDiGraph`
-    implementation. It also maintains a fast lookup table for finding
-    nodes by name.
+    implementation. It also maintains fast lookup tables for finding
+    nodes by name and type.
     """
 
-    __slots__ = ("graph", "name_to_id")
+    __slots__ = ("graph", "name_to_id", "_type_index")
 
     def __init__(self) -> None:
         """Initialize an empty ConceptGraph."""
         self.graph = nx.MultiDiGraph()
         self.name_to_id: dict[str, str] = {}
+        self._type_index: dict[str, set[str]] = defaultdict(set)
 
     def add_node(self, node: ConceptNode) -> ConceptNode:
         """Add a new concept node to the graph if it doesn't already exist.
@@ -221,6 +225,7 @@ class ConceptGraph:
 
         self.graph.add_node(node.id, **node.to_dict())
         self.name_to_id[node.name] = node.id
+        self._type_index[node.type].add(node.id)
         return node
 
     def get_node_by_name(self, name: str) -> ConceptNode | None:
@@ -256,6 +261,15 @@ class ConceptGraph:
             node_data["id"] = node_id
             return ConceptNode.from_dict(node_data)
         return None
+
+    def get_nodes_by_type(self, node_type: str) -> list[ConceptNode]:
+        """Efficiently retrieves all nodes of a specific type using the index."""
+        node_ids = self._type_index.get(node_type, set())
+        nodes = []
+        for node_id in node_ids:
+            if node := self.get_node_by_id(node_id):
+                nodes.append(node)
+        return nodes
 
     def get_all_node_names(self) -> list[str]:
         """Retrieve a list of all concept names in the graph.
@@ -406,10 +420,9 @@ class ConceptGraph:
         graph_data = json_graph.node_link_data(self.graph, edges="links")
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(graph_data, f, indent=4)
-        print(f"Agent brain saved to {filename}")
 
     @classmethod
-    def load_from_dict(cls, data: dict[str, object]) -> Self:
+    def load_from_dict(cls, data: dict[str, Any]) -> Self:
         """Create a new ConceptGraph instance from a dictionary.
 
         This method de-serializes a graph from the NetworkX node-link
@@ -426,13 +439,16 @@ class ConceptGraph:
 
         instance.graph = json_graph.node_link_graph(data, edges="links")
 
-        instance.name_to_id = {
-            data["name"].lower(): node_id
-            for node_id, data in instance.graph.nodes(data=True)
-            if "name" in data
-        }
-        print(
-            f"   - Brain loaded from dictionary. Nodes: {len(instance.graph.nodes)}, Edges: {len(instance.graph.edges)}",
+        for node_id, node_data in instance.graph.nodes(data=True):
+            if "name" in node_data:
+                instance.name_to_id[node_data["name"].lower()] = node_id
+            if "type" in node_data:
+                instance._type_index[node_data["type"]].add(node_id)
+
+        logger.info(
+            "[green]   - Nodes: %d, Edges: %d[/green]",
+            len(instance.graph.nodes),
+            len(instance.graph.edges),
         )
         return instance
 
@@ -457,12 +473,14 @@ class ConceptGraph:
                     graph_data = json.load(f)
                 return cls.load_from_dict(graph_data)
             except Exception as e:
-                print(
-                    f"Error loading brain from {filename}: {e}. Creating a fresh brain.",
+                logger.error(
+                    "Error loading brain from %s: %s. Creating a fresh brain.",
+                    filename,
+                    e,
                 )
                 return cls()
         else:
-            print(f"No saved brain found at {filename}. Creating a fresh brain.")
+            logger.info("No saved brain found at %s. Creating a fresh brain.", filename)
             return cls()
 
     def get_conflicting_facts(self, relation: RelationData) -> list[ConceptNode]:
@@ -470,16 +488,17 @@ class ConceptGraph:
         Return a list of nodes that conflict with the given subject & relation type.
         This is used for exclusive relationships, to generate clarification questions.
         """
-        subject_name = relation.get("subject")
+        subject_name_raw = relation.get("subject")
         relation_type = (
             relation.get("predicate")
             or relation.get("verb")
             or relation.get("relation")
         )
-        if not subject_name or not relation_type:
+
+        if not isinstance(subject_name_raw, str) or not relation_type:
             return []
 
-        subject_node = self.get_node_by_name(subject_name)
+        subject_node = self.get_node_by_name(subject_name_raw)
         if not subject_node:
             return []
 
@@ -490,9 +509,8 @@ class ConceptGraph:
             data=True,
         ):
             if data.get("type") == relation_type:
-                target_node_data = self.graph.nodes.get(v)
-                if target_node_data:
-                    conflicts.append(ConceptNode.from_dict(target_node_data))
+                if target_node := self.get_node_by_id(v):
+                    conflicts.append(target_node)
         return conflicts
 
     def update_edge_properties(
@@ -510,8 +528,9 @@ class ConceptGraph:
                    If False, replace the entire dictionary.
         """
         if not self.graph.has_edge(edge.source, edge.target, key=edge.id):
-            print(
-                f"[Graph Core Warning]: Edge {edge.id} not found for property update.",
+            logger.warning(
+                "[Graph Core Warning]: Edge %s not found for property update.",
+                edge.id,
             )
             return
 
@@ -545,15 +564,20 @@ class ConceptGraph:
 
         if not candidates:
             if debug:
-                print(
-                    f"[Conflict Check]: No active edges found for '{subject_node.name}' --[{relation_type}]--> ?",
+                logger.debug(
+                    "[Conflict Check]: No active edges found for '%s' --[%s]--> ?",
+                    subject_node.name,
+                    relation_type,
                 )
             return None
 
         winner = max(candidates, key=lambda e: e.weight)
         if debug:
-            print(
-                f"[Conflict Check]: Found conflict edge {winner.id} (w={winner.weight:.2f}, type={winner.type})",
+            logger.debug(
+                "[Conflict Check]: Found conflict edge %s (w=%.2f, type=%s)",
+                winner.id,
+                winner.weight,
+                winner.type,
             )
         return winner
 
@@ -588,8 +612,9 @@ class ConceptGraph:
     ) -> None:
         """Update an edge's confidence weight with provenance-aware adjustment."""
         if not self.graph.has_edge(edge.source, edge.target, key=edge.id):
-            print(
-                f"[Graph Core Warning]: Could not find edge {edge.id} to update weight.",
+            logger.warning(
+                "[Graph Core Warning]: Could not find edge %s to update weight.",
+                edge.id,
             )
             return
 
@@ -623,10 +648,15 @@ class ConceptGraph:
             },
         )
 
-        print(
-            f"[Graph Update]: Edge '{edge.type}' confidence updated "
-            f"{old_weight:.2f} → {edge_data['weight']:.2f} "
-            f"(provenance: {old_provenance} → {provenance})",
+        logger.info(
+            "[Graph Update]: Edge '%s' confidence updated "
+            "%.2f -> %.2f "
+            "(provenance: %s -> %s)",
+            edge.type,
+            old_weight,
+            edge_data["weight"],
+            old_provenance,
+            provenance,
         )
 
     def revise_conflicting_edge(

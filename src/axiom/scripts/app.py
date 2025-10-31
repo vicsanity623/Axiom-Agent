@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import threading
 import time
 import traceback
+from typing import TYPE_CHECKING, cast
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import (
@@ -16,22 +16,29 @@ from flask import (
     request,
     send_from_directory,
 )
-from pyngrok import ngrok
 
 from ..cognitive_agent import CognitiveAgent
-from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, STATIC_DIR, TEMPLATE_DIR
-from ..knowledge_harvester import KnowledgeHarvester
-from ..logging_config import setup_logging
+from ..config import (
+    DEFAULT_BRAIN_FILE,
+    DEFAULT_STATE_FILE,
+    GEMINI_API_KEY,
+    STATIC_DIR,
+    TEMPLATE_DIR,
+)
+from ..logging_config import console, setup_logging
 from ..metacognitive_engine import MetacognitiveEngine
 from .cycle_manager import CycleManager
+
+if TYPE_CHECKING:
+    from ..knowledge_harvester import KnowledgeHarvester
 
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__, template_folder=str(TEMPLATE_DIR), static_folder=str(STATIC_DIR))
 
 axiom_agent: CognitiveAgent | None = None
-agent_interaction_lock = threading.Lock()
 agent_status: str = "uninitialized"
+agent_interaction_lock = threading.Lock()
 
 
 def load_agent() -> None:
@@ -49,21 +56,26 @@ def load_agent() -> None:
                     state_file=DEFAULT_STATE_FILE,
                 )
 
-                harvester = KnowledgeHarvester(
-                    agent=axiom_agent,
-                    lock=agent_interaction_lock,
-                )
+                harvester: KnowledgeHarvester | None = axiom_agent.harvester
+                if harvester is None:
+                    raise RuntimeError(
+                        "Harvester was not initialized correctly by the CognitiveAgent."
+                    )
+
                 scheduler = BackgroundScheduler(daemon=True)
 
-                gemini_api_key = os.environ.get("GEMINI_API_KEY")
                 metacognitive_engine = MetacognitiveEngine(
                     agent=axiom_agent,
-                    gemini_api_key=gemini_api_key,
+                    gemini_api_key=GEMINI_API_KEY,
                 )
-                manager = CycleManager(scheduler, harvester, metacognitive_engine)
+                manager = CycleManager(
+                    scheduler=scheduler,
+                    harvester=harvester,
+                    metacognitive_engine=metacognitive_engine,
+                    console=console,
+                )
 
                 manager.start()
-
                 scheduler.start()
 
                 agent_status = "ready"
@@ -86,18 +98,16 @@ def index() -> str:
 
 @app.route("/manifest.json")
 def manifest() -> Response:
-    """Serve the PWA manifest file for web app installation."""
-    return send_from_directory(STATIC_DIR, "manifest.json")
+    return cast("Response", send_from_directory(STATIC_DIR, "manifest.json"))
 
 
 @app.route("/sw.js")
 def service_worker() -> Response:
-    """Serve the service worker script for PWA offline capabilities."""
-    return send_from_directory(STATIC_DIR, "sw.js")
+    return cast("Response", send_from_directory(STATIC_DIR, "sw.js"))
 
 
 @app.route("/status")
-def status() -> str | Response:
+def status() -> Response:
     """Provide the agent's loading status and trigger initialization."""
     global agent_status
     if agent_status == "uninitialized":
@@ -107,7 +117,7 @@ def status() -> str | Response:
 
 
 @app.route("/chat", methods=["POST"])
-def chat() -> tuple[Response, int] | Response:
+def chat() -> Response | tuple[Response, int]:
     """Handle an incoming user message and return the agent's response."""
     start_time = time.time()
     while agent_status != "ready":
@@ -118,10 +128,10 @@ def chat() -> tuple[Response, int] | Response:
         time.sleep(1)
 
     if request.json is None:
-        return jsonify({"error": "Request json attribute is None"}), 503
+        return jsonify({"error": "Request must be a JSON"}), 400
 
     if axiom_agent is None:
-        return jsonify({"error": "axiom_agent is None"}), 503
+        return jsonify({"error": "Agent is not available."}), 503
 
     user_message = request.json.get("message")
     if not user_message:
@@ -143,25 +153,14 @@ def run() -> None:
     """Parse command-line arguments and start the Flask web server."""
     parser = argparse.ArgumentParser(description="Run the Axiom Agent Training App.")
     parser.add_argument(
-        "--ngrok",
-        action="store_true",
-        help="Expose the server to the internet using ngrok.",
+        "--port",
+        type=int,
+        default=7500,
+        help="Port to run the Flask server on.",
     )
     args = parser.parse_args()
 
-    if args.ngrok:
-        authtoken = os.environ.get("NGROK_AUTHTOKEN")
-        if authtoken:
-            ngrok.set_auth_token(authtoken)
-        else:
-            logger.warning(
-                "[ngrok Warning]: NGROK_AUTHTOKEN environment variable not set. Using anonymous tunnel.",
-            )
-
-        public_url = ngrok.connect(7500)
-        logger.info(" * ngrok tunnel is active at: %s", public_url)
-
-    app.run(host="0.0.0.0", port=7500, debug=False)
+    app.run(host="0.0.0.0", port=args.port, debug=False)
 
 
 def main() -> None:

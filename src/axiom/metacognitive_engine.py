@@ -100,11 +100,10 @@ class _LogAnalysisData:
     entries_by_func: dict[str, list[_LogEntry]] = field(
         default_factory=lambda: defaultdict(list),
     )
-    deferred_targets: list[OptimizationTarget] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
-# PerformanceMonitor - Refactored for Robustness
+# PerformanceMonitor - Analyzes logs for optimization targets
 # ---------------------------------------------------------------------------
 
 
@@ -122,7 +121,7 @@ class PerformanceMonitor:
         r"^(?P<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})",
     )
     _DEFERRED_FACT_RE: ClassVar[re.Pattern] = re.compile(
-        r"Deferred learning for\s+(?P<fact>[\w\-\._]+)",
+        r"[yellow] Deferred learning for\s+(?P<fact>[\w\-\._]+)[/yellow]",
         re.IGNORECASE,
     )
     _LEARNING_LOG_RE: ClassVar[re.Pattern] = re.compile(
@@ -266,8 +265,8 @@ class PerformanceMonitor:
 
     def _parse_log_file(self, log_file: Path) -> _LogAnalysisData:
         """
-        Parses a log file, correctly associating all events, including special
-        cases like 'Deferred learning', with their true source function.
+        Parses a log file, using intelligent attribution to associate all events,
+        including tracebacks and learning events, with their true source function.
         """
         lines = log_file.read_text(encoding="utf-8").splitlines()
         analysis_data = _LogAnalysisData()
@@ -281,21 +280,13 @@ class PerformanceMonitor:
                 continue
 
             message = (match.group("message") or "").strip()
+            # Initial guess for the function name
             func = (match.group("function") or "unknown_function").strip()
 
-            if "Deferred learning" in message:
-                message = line.strip()
-                target = OptimizationTarget(
-                    file_path=self._guess_source_file(func),
-                    target_name=func,
-                    issue_description=(
-                        "High-priority systemic issue: Deferred learning was triggered. "
-                        "This suggests a flaw in the core learning strategy."
-                        f"\nLog entry: {line.strip()}"
-                    ),
-                    relevant_logs=line.strip(),
-                )
-                analysis_data.deferred_targets.append(target)
+            # High-priority override: Check for learning events
+            learning_match = PerformanceMonitor._LEARNING_LOG_RE.search(message)
+            if learning_match:
+                func = "CognitiveAgent._add_new_fact"
 
             ts_match = PerformanceMonitor._TS_PATTERN.search(line)
             ts = int(time.time())
@@ -308,7 +299,7 @@ class PerformanceMonitor:
 
             upper_line = line.upper()
             log_level = "INFO"
-            if "ERROR" in upper_line:
+            if "ERROR" in upper_line or "CRITICAL" in upper_line:
                 log_level = "ERROR"
             elif "WARNING" in upper_line:
                 log_level = "WARNING"
@@ -319,7 +310,7 @@ class PerformanceMonitor:
 
             i += 1
 
-            if "ERROR" in log_level or "CRITICAL" in log_level:
+            if log_level == "ERROR":
                 if (
                     i < len(lines)
                     and lines[i].strip() == "Traceback (most recent call last):"
@@ -333,6 +324,18 @@ class PerformanceMonitor:
                         traceback_buffer.append(lines[i].strip())
                         i += 1
                     traceback_str = "\n".join(traceback_buffer)
+
+                    # Highest-priority override: Introspect the traceback
+                    for tb_line in reversed(traceback_buffer):
+                        if tb_line.strip().startswith("File "):
+                            tb_match = re.search(
+                                r"in\s+<module>|in\s+([a-zA-Z0-9_]+)", tb_line
+                            )
+                            if tb_match:
+                                extracted_func = tb_match.group(1)
+                                if extracted_func and extracted_func != "<module>":
+                                    func = extracted_func
+                                    break
 
             entry = _LogEntry(func, message, ts, log_level, exec_time, traceback_str)
             analysis_data.entries_by_func[func].append(entry)
@@ -388,6 +391,8 @@ class PerformanceMonitor:
                 candidate_reasons[func].append(
                     f"semantic cluster concentration (largest={largest_cluster})",
                 )
+
+            # --- FIX: Re-insert the missing composite_score calculation ---
             composite_score = (
                 PerformanceMonitor._SCORING_WEIGHTS["error_recurrence"]
                 * max(0.0, err_score)
@@ -395,40 +400,51 @@ class PerformanceMonitor:
                 * max(0.0, timing_score)
                 + PerformanceMonitor._SCORING_WEIGHTS["semantic_cluster"] * sem_score
             )
+
             if composite_score > 0:
                 candidate_scores[func] = (composite_score, candidate_reasons[func])
-        learning_score, learning_reasons = self._score_learning_quality(analysis_data)
-        if learning_score > 0:
-            meta_func_name = "CognitiveAgent.LearningProcess"
+
+        learning_score, learning_reasons, responsible_func = (
+            self._score_learning_quality(analysis_data)
+        )
+        if learning_score > 0 and responsible_func:
             weighted_score = (
                 self._SCORING_WEIGHTS["learning_inefficiency"] * learning_score
             )
-            if meta_func_name in candidate_scores:
-                existing_score, existing_reasons = candidate_scores[meta_func_name]
-                candidate_scores[meta_func_name] = (
+            if responsible_func in candidate_scores:
+                existing_score, existing_reasons = candidate_scores[responsible_func]
+                candidate_scores[responsible_func] = (
                     existing_score + weighted_score,
                     existing_reasons + learning_reasons,
                 )
             else:
-                candidate_scores[meta_func_name] = (weighted_score, learning_reasons)
+                candidate_scores[responsible_func] = (weighted_score, learning_reasons)
         return candidate_scores
 
     def _score_learning_quality(
         self,
         analysis_data: _LogAnalysisData,
-    ) -> tuple[float, list[str]]:
+    ) -> tuple[float, list[str], str | None]:
         learned_facts = []
         all_concepts = set()
-        for entries in analysis_data.entries_by_func.values():
-            for entry in entries:
-                match = PerformanceMonitor._LEARNING_LOG_RE.search(entry.message)
-                if match:
-                    subj, obj = match.group("sub").strip(), match.group("obj").strip()
-                    learned_facts.append((subj, obj))
-                    all_concepts.add(subj.lower())
-                    all_concepts.add(obj.lower())
+        learning_callers = []
+
+        learning_entries = analysis_data.entries_by_func.get(
+            "CognitiveAgent._add_new_fact", []
+        )
+        for entry in learning_entries:
+            match = PerformanceMonitor._LEARNING_LOG_RE.search(entry.message)
+            if match:
+                subj, obj = match.group("sub").strip(), match.group("obj").strip()
+                learned_facts.append((subj, obj))
+                all_concepts.add(subj.lower())
+                all_concepts.add(obj.lower())
+                learning_callers.append(entry.function_name)
+
         if not learned_facts:
-            return 0.0, []
+            return 0.0, [], None
+
+        responsible_func = "CognitiveAgent._add_new_fact"
         total_facts = len(learned_facts)
         simple_facts_count = sum(
             1 for s, o in learned_facts if len(s.split()) + len(o.split()) <= 3
@@ -449,7 +465,9 @@ class PerformanceMonitor:
             reasons.append(
                 f"low new concept discovery rate (ratio={discovery_ratio:.2f})",
             )
-        return inefficiency_score, reasons
+
+        # --- FIX: Correct the return statement to include the responsible_func ---
+        return inefficiency_score, reasons, responsible_func
 
     def _select_best_target(
         self,
@@ -457,11 +475,21 @@ class PerformanceMonitor:
         scored_candidates: dict[str, tuple[float, list[str]]],
     ) -> OptimizationTarget | None:
         """Selects the best target from scored candidates or high-priority alerts."""
-        if analysis_data.deferred_targets:
-            logger.warning(
-                "[Metacognition]: Prioritizing 'Deferred learning' issue over other anomalies.",
-            )
-            return analysis_data.deferred_targets[0]
+
+        for func, entries in analysis_data.entries_by_func.items():
+            first_error_entry = next((e for e in entries if e.traceback), None)
+            if first_error_entry and first_error_entry.traceback:
+                logger.warning(
+                    "[Metacognition]: Prioritizing critical error (traceback) in '%s'.",
+                    func,
+                )
+                return OptimizationTarget(
+                    file_path=self._guess_source_file(func),
+                    target_name=func,
+                    issue_description=f"A critical error with a traceback occurred in `{func}`.",
+                    relevant_logs=first_error_entry.traceback,
+                )
+
         if not scored_candidates:
             return None
 
@@ -470,11 +498,8 @@ class PerformanceMonitor:
             key=lambda item: item[1][0],
         )
 
-        if func == "CognitiveAgent.LearningProcess":
-            threshold = 1.0
-        else:
-            baseline = self.baselines.get(func, BaselineStats())
-            threshold = 2.0 + 0.5 * baseline.error_count_ewma
+        baseline = self.baselines.get(func, BaselineStats())
+        threshold = 2.0 + 0.5 * baseline.error_count_ewma
 
         logger.debug(
             "[Metacognition]: Candidate '%s' score=%.3f threshold=%.3f",
@@ -485,13 +510,7 @@ class PerformanceMonitor:
         if top_score < threshold:
             return None
 
-        if func == "CognitiveAgent.LearningProcess":
-            all_entries = []
-            for func_entries in analysis_data.entries_by_func.values():
-                all_entries.extend(func_entries)
-            entries = all_entries
-        else:
-            entries = analysis_data.entries_by_func.get(func, [])
+        entries = analysis_data.entries_by_func.get(func, [])
 
         anomaly_time = entries[0].timestamp if entries else int(time.time())
         commit_hint = ""
@@ -502,36 +521,31 @@ class PerformanceMonitor:
                 for c in correlated_commits
             )
 
-        first_error_entry = next((e for e in entries if e.traceback), None)
-        traceback_log = first_error_entry.traceback if first_error_entry else None
-
-        if func == "CognitiveAgent.LearningProcess":
-            relevant_log_messages = [
-                e.message
-                for e in entries
-                if PerformanceMonitor._LEARNING_LOG_RE.search(e.message)
-            ]
-        else:
-            relevant_log_messages = [
-                e.message for e in entries if e.log_level in ("ERROR", "WARNING")
-            ]
+        relevant_log_messages = [
+            e.message for e in entries if e.log_level in ("ERROR", "WARNING")
+        ]
+        if "high ratio" in " ".join(reasons):
+            relevant_log_messages.extend(
+                [
+                    e.message
+                    for e in entries
+                    if PerformanceMonitor._LEARNING_LOG_RE.search(e.message)
+                ]
+            )
 
         sample_logs = "\n".join(list(dict.fromkeys(relevant_log_messages))[:8])
-        relevant_logs_for_target = traceback_log or sample_logs
 
         issue_description = f"Automated analysis flagged `{func}` with anomaly score {top_score:.2f}. Contributing factors: {', '.join(reasons or ['elevated composite score'])}."
         if commit_hint:
             issue_description += f"\n\n{commit_hint}"
 
         final_target_name = func
-        if func == "CognitiveAgent.LearningProcess":
-            final_target_name = "CognitiveAgent.__init__"
 
         return OptimizationTarget(
             file_path=self._guess_source_file(func),
             target_name=final_target_name,
             issue_description=issue_description,
-            relevant_logs=relevant_logs_for_target or "(no sample logs captured)",
+            relevant_logs=sample_logs or "(no sample logs captured)",
         )
 
     def _guess_source_file(self, func_name: str) -> Path:
@@ -641,14 +655,16 @@ class ExternalAnalysisBridge:
         genai.configure(api_key=api_key_final)
         self.model_name = self._detect_best_model()
         self.model = genai.GenerativeModel(self.model_name)
-        logger.info(
-            "[ExternalAnalysisBridge] Initialized with model: %s", self.model_name
+        logger.warning(
+            "[warning]   - Initialized with model: %s[/warning]", self.model_name
         )
 
     def _detect_best_model(self) -> str:
         """Detects the best available Gemini model that supports content generation."""
         try:
-            logger.info("[ExternalAnalysisBridge] Detecting best available model...")
+            logger.warning(
+                "[warning]   - Detecting best available model for PerformanceMonitor...[/warning]"
+            )
             available_models = genai.list_models()
             supported_models = [
                 m.name
@@ -660,11 +676,11 @@ class ExternalAnalysisBridge:
             if "models/gemini-2.5-flash" in supported_models:
                 return "gemini-2.5-flash"
             logger.warning(
-                "[ExternalAnalysisBridge] Preferred models not found. Falling back to default."
+                "[yellow][ExternalAnalysisBridge] Preferred models not found. Falling back to default.[/yellow]"
             )
         except Exception as e:
             logger.warning(
-                "[ExternalAnalysisBridge] Model detection failed (%s). Using fallback.",
+                "[error][ExternalAnalysisBridge] Model detection failed (%s). Using fallback.[/error]",
                 e,
             )
         return "gemini-1.5-pro-latest"
@@ -991,7 +1007,7 @@ class MetacognitiveEngine:
                 e,
             )
 
-    def run_introspection_cycle(self):
+    def run_introspection_cycle(self) -> None:
         """
         Executes one full self-analysis cycle in 'Verified Advisory Mode'.
         It identifies a problem, generates a fix, verifies it in a sandbox,
@@ -1011,45 +1027,43 @@ class MetacognitiveEngine:
         logger.info("--- [METACOGNITIVE CYCLE STARTED (Verified Advisory Mode)] ---")
         logger.info("=" * 80)
 
-        log_file = Path("axiom.log")
-        target = self.performance_monitor.find_optimization_target(log_file)
-        if not target:
-            logger.info("--- [METACOGNITIVE CYCLE FINISHED]: No targets found. ---")
-            return
+        try:
+            log_file = Path("axiom.log")
+            target = self.performance_monitor.find_optimization_target(log_file)
+            if not target:
+                return
 
-        function_name = target.target_name.split(".")[-1]
-        problematic_code = self.code_introspector.get_function_source(
-            target.file_path,
-            function_name,
-        )
-        if not problematic_code:
+            function_name = target.target_name.split(".")[-1]
+            problematic_code = self.code_introspector.get_function_source(
+                target.file_path,
+                function_name,
+            )
+            if not problematic_code:
+                return
+
+            suggested_code = self.analysis_bridge.get_code_suggestion(
+                problematic_code,
+                target.issue_description,
+                target.relevant_logs,
+            )
+            if not suggested_code:
+                return
+
+            is_safe = self.sandbox_verifier.verify_change(
+                target.file_path,
+                function_name,
+                suggested_code,
+            )
+
+            self._save_suggestion_report(target, suggested_code, is_safe)
+
+        except Exception as e:
             logger.error(
-                "--- [METACOGNITIVE CYCLE FAILED]: Could not retrieve source code for target. ---",
+                "--- [METACOGNITIVE CYCLE FAILED]: An unexpected error occurred: %s ---",
+                e,
+                exc_info=True,
             )
-            return
-
-        suggested_code = self.analysis_bridge.get_code_suggestion(
-            problematic_code,
-            target.issue_description,
-            target.relevant_logs,
-        )
-        if not suggested_code:
-            logger.warning(
-                "--- [METACOGNITIVE CYCLE FINISHED]: External LLM provided no suggestion. ---",
-            )
-            return
-
-        is_safe = self.sandbox_verifier.verify_change(
-            target.file_path,
-            function_name,
-            suggested_code,
-        )
-
-        self._save_suggestion_report(target, suggested_code, is_safe)
-
-        logger.info("=" * 80)
-        logger.info("--- [METACOGNITIVE CYCLE FINISHED SUCCESSFULLY] ---")
-        logger.info(
-            "Verified suggestion saved to code_suggestion.json for human review.",
-        )
-        logger.info("=" * 80)
+        finally:
+            logger.info("=" * 80)
+            logger.info("--- [METACOGNITIVE CYCLE FINISHED] ---")
+            logger.info("=" * 80)
