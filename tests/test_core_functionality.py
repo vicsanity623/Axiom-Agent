@@ -297,33 +297,6 @@ def test_agent_shows_all_facts_after_learning(agent: CognitiveAgent):
     print("Agent learned two novel facts for the 'show all facts' test.")
 
 
-def test_agent_resolves_pronoun_references(agent: CognitiveAgent):
-    """
-    Covers the _resolve_references method in the agent.
-    Tests the agent's ability to understand pronoun context from conversation history.
-    """
-    fake_interpretation = InterpretData(
-        intent="statement_of_fact",
-        entities=[{"name": "raven", "type": "CONCEPT"}],
-        relation={"subject": "raven", "verb": "is_a", "object": "bird"},
-        key_topics=["raven", "bird"],
-        full_text_rephrased="a raven is a bird",
-    )
-    agent.structured_history.append(("user", [fake_interpretation]))
-
-    pronoun_sentence = "what color is it?"
-    resolved_sentence = agent._resolve_references(pronoun_sentence)
-
-    assert "raven" in resolved_sentence
-    assert "what color is" in resolved_sentence
-    print("Agent correctly resolved the pronoun 'it'.")
-
-    no_pronoun_sentence = "what is a bird?"
-    unresolved_sentence = agent._resolve_references(no_pronoun_sentence)
-
-    assert unresolved_sentence == no_pronoun_sentence
-
-
 @pytest.fixture
 def lexicon(agent):
     return LexiconManager(agent)

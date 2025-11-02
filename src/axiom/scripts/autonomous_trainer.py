@@ -36,7 +36,7 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 {known_concepts}
 
 **EXAMPLE OUTPUT (Do NOT copy this example; use it only for structure):**
-"Embark on a journey to master language, evolving from a novice listener to a sophisticated communicator.[Stage 1: Phonemic Awareness]: Learn to distinguish the fundamental sound units (phonemes) of a language, the building blocks of all spoken words. [Stage 2: Syllabic Construction]: Begin combining sounds into simple syllables and understanding basic rhythmic patterns. [Stage 3: Lexical Association]: Build a core vocabulary by linking simple words directly to objects, actions, and concepts. [Stage 4: Morphological Inflection]: Understand how words change form to express quantity, tense, or possession (e.g., 'dog' vs 'dogs', 'walk' vs 'walked'). [Stage 5: Core Sentence Patterns]: Grasp the foundational Subject-Verb-Object structure to form simple, coherent sentences. [Stage 6: Dependency Grammar Analysis]: Deconstruct complex sentences to identify the grammatical relationships and dependencies between all words. [Stage 7: Compositional Semantics]: Learn to derive the literal meaning of a sentence by combining the meanings of its individual words and grammatical structure."
+"Embark on a mission to understand the world through the scientific method, evolving from a simple observer to a systematic investigator.[Stage 1: Empirical Observation]: Learn to identify and describe objective phenomena, distinguishing between objects, properties, and events. [Stage 2: Pattern Recognition]: Analyze collections of observations to identify correlations, sequences, and recurring patterns in the data. [Stage 3: Hypothesis Formulation]: Based on observed patterns, learn to generate simple, testable explanations or 'if-then' hypotheses about cause and effect. [Stage 4: Variable Isolation]: Understand the concept of variables and how to distinguish between independent, dependent, and confounding variables in a system. [Stage 5: Experimental Design]: Learn to construct a logical procedure to test a hypothesis by manipulating an independent variable and measuring its effect on a dependent variable. [Stage 6: Evidence Evaluation]: Analyze the results of an experiment to determine whether the evidence supports, refutes, or is inconclusive regarding the hypothesis. [Stage 7: Theory Building]: Learn to synthesize multiple, validated hypotheses into a broader, more comprehensive explanatory model or theory."
 """
 
 
@@ -63,7 +63,7 @@ def _generate_or_set_initial_goal(
     )
 
     creative_seeds = [
-        "Approach this from the perspective of a linguist, focusing on the formal structures of language.",
+        "Approach this from the perspective of a scientist, focusing on empirical observation and causal reasoning.",
         "Design this curriculum as if teaching a child, starting with concrete objects and moving to abstract ideas.",
         "Frame the learning process through the lens of a computer scientist, treating language as a formal system to be parsed.",
         "Use a philosophical approach, focusing on the connection between symbols, meaning, and truth.",

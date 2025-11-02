@@ -48,6 +48,23 @@ class LexiconManager:
             return False
         return self.agent.graph.get_node_by_name(clean_word) is not None
 
+    def _is_part_of_speech(self, word: str, pos: str) -> bool:
+        """
+        Check if a word has been promoted as a specific part of speech.
+        This is a fast, internal check that does NOT use spaCy.
+
+        Args:
+            word: The word to check.
+            pos: The part of speech to check for (e.g., 'noun', 'verb').
+
+        Returns:
+            True if the word is known and promoted as the given part of speech,
+            False otherwise.
+        """
+        promoted_parts = self.get_promoted_pos(word)
+        # Check if the requested part of speech is a key in the dictionary.
+        return pos.lower() in promoted_parts
+
     def add_linguistic_knowledge_quietly(
         self,
         word: str,

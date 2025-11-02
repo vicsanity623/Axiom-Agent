@@ -364,71 +364,87 @@ class CognitiveAgent:
             self._has_reentered_chat = False
 
     def _resolve_references(self, text: str) -> str:
-        """Resolve simple pronouns using the stored interpretations from history."""
+        """
+        Resolves simple pronouns by prioritizing nouns that appear *before* the
+        pronoun in the same sentence, before falling back to conversational history.
+        """
         pronouns_to_resolve = {"it", "they", "its", "their", "them"}
-        if not any(
-            re.search(rf"\b{pronoun}\b", text, re.IGNORECASE)
-            for pronoun in pronouns_to_resolve
-        ):
-            logger.debug("[Coreference]: No pronouns found in text.")
+        words = text.split()
+
+        pronoun_found_at_index: int | None = None
+        for i, word in enumerate(words):
+            if word.lower().strip(".,!?;") in pronouns_to_resolve:
+                pronoun_found_at_index = i
+                break
+
+        # If no pronouns are in the text, return it unchanged.
+        if pronoun_found_at_index is None:
             return text
 
-        antecedent_raw: str | dict[str, Any] | list | None = None
-        for speaker, interpretations in reversed(self.structured_history):
-            if speaker == "user" and interpretations:
-                primary_interpretation = interpretations[0]
-                relation = primary_interpretation.get("relation")
-                entities = primary_interpretation.get("entities")
+        antecedent: str | None = None
 
-                if relation and relation.get("subject"):
-                    antecedent_raw = relation["subject"]
-                    break
-                if entities:
-                    antecedent_raw = entities[0]["name"]
-                    break
+        if pronoun_found_at_index > 0:
+            # Search for nouns in the part of the sentence *before* the pronoun.
+            words_before_pronoun = words[:pronoun_found_at_index]
+            local_candidates = [
+                word.strip(".,!?;")
+                for word in reversed(words_before_pronoun)
+                if self.lexicon._is_part_of_speech(word, "noun")
+            ]
+            if local_candidates:
+                # The first noun found when searching backwards is the most likely antecedent.
+                antecedent = local_candidates[0]
+                logger.debug("[Coreference]: Found local antecedent: '%s'", antecedent)
 
-        if antecedent_raw:
-            antecedent: str | None = None
+        if not antecedent:
+            logger.debug("[Coreference]: No local antecedent found. Checking history.")
+            antecedent_raw: str | dict[str, Any] | list | None = None
+            for speaker, interpretations in reversed(self.structured_history):
+                if speaker == "user" and interpretations:
+                    primary_interpretation = interpretations[0]
+                    relation = primary_interpretation.get("relation")
+                    entities = primary_interpretation.get("entities")
+
+                    if relation and relation.get("subject"):
+                        antecedent_raw = relation["subject"]
+                        break
+                    if entities:
+                        antecedent_raw = entities[0]["name"]
+                        break
+
             if isinstance(antecedent_raw, str):
                 antecedent = antecedent_raw
             elif isinstance(antecedent_raw, dict):
                 antecedent = antecedent_raw.get("name")
 
-            if antecedent:
-                clean_antecedent = self._clean_phrase(antecedent)
-                if not clean_antecedent:
-                    logger.debug(
-                        "[Coreference]: Found antecedent %s, but it was empty after cleaning.",
-                        antecedent,
-                    )
-                    return text
+        # --- Apply the resolution using the found antecedent ---
+        if antecedent:
+            clean_antecedent = self._clean_phrase(antecedent)
+            if not clean_antecedent:
+                return text
 
-                modified_text = re.sub(
-                    r"\b(it|they|them)\b",
-                    clean_antecedent,
+            modified_text = re.sub(
+                r"\b(it|they|them)\b",
+                clean_antecedent,
+                text,
+                flags=re.IGNORECASE,
+            )
+            modified_text = re.sub(
+                r"\b(its|their)\b",
+                f"{clean_antecedent}'s",
+                modified_text,
+                flags=re.IGNORECASE,
+            )
+
+            if modified_text != text:
+                logger.info(
+                    "  [Coreference]: Resolved pronouns, transforming '%s' to '%s'",
                     text,
-                    flags=re.IGNORECASE,
-                )
-                modified_text = re.sub(
-                    r"\b(its|their)\b",
-                    f"{clean_antecedent}'s",
                     modified_text,
-                    flags=re.IGNORECASE,
                 )
+                return modified_text
 
-                if modified_text != text:
-                    logger.info(
-                        "  [Coreference]: Resolved pronouns, transforming '%s' to '%s'",
-                        text,
-                        modified_text,
-                    )
-                    return modified_text
-                logger.debug(
-                    "[Coreference]: No substitution occurred despite antecedent found.",
-                )
-        else:
-            logger.debug("[Coreference]: No antecedent found for pronoun resolution.")
-
+        logger.debug("[Coreference]: No suitable antecedent found.")
         return text
 
     def _handle_clarification(self, user_input: str) -> str:
@@ -1368,63 +1384,89 @@ class CognitiveAgent:
         relation_type: str,
         relation_data: RelationData,
     ) -> tuple[bool, str]:
-        """Add a new, non-conflicting fact to the knowledge graph."""
-        edge_exists = any(
+        """Attempts to add a new fact to the knowledge graph after validation.
+
+        This method first performs a quick check to see if an identical
+        relation (same type, same target) already exists for the subject node.
+        If not, it delegates to a deeper validation and insertion routine,
+        handling various outcomes like successful insertion, deferral due to
+        unresolved concepts, or detected contradictions.
+
+        Args:
+            sub_node: The ConceptNode representing the subject of the fact.
+            obj_node: The ConceptNode representing the object of the fact.
+            relation_type: The type of relationship (e.g., 'is_a', 'has_property').
+            relation_data: A dictionary containing metadata about the relation,
+                such as properties.
+
+        Returns:
+            A tuple containing:
+            - bool: True if the fact was successfully learned ('inserted' or
+            'replaced'), False otherwise.
+            - str: A status code detailing the outcome (e.g., 'fact_exists',
+            'inserted', 'deferred', 'contradiction_stored').
+        """
+
+        # 1. Pre-condition check: Abort if the exact same fact already exists.
+
+        if any(
             edge.type == relation_type and edge.target == obj_node.id
             for edge in self.graph.get_edges_from_node(sub_node.id)
-        )
-
-        if edge_exists:
+        ):
             logger.debug(
-                "    - Fact already exists: %s --[%s]--> %s",
+                "Fact already exists: %s --[%s]--> %s",
                 sub_node.name,
                 relation_type,
                 obj_node.name,
             )
-            return (False, "fact_exists")
+            return False, "fact_exists"
 
-        rel_props = relation_data.get("properties") or {}
-        candidate = {
+        # 2. Prepare data for the validation and addition logic.
+        rel_props = relation_data.get("properties", {})
+        candidate_fact = {
             "subject": sub_node.name,
             "verb": relation_type,
             "object": obj_node.name,
         }
         caller_name = f"{self.__class__.__name__}._add_new_fact"
 
+        # 3. Delegate to the core validation and insertion function.
         status = validate_and_add_relation(
-            self,
-            dict(candidate),
-            rel_props,
-            caller_name=caller_name,
+            self, candidate_fact, rel_props, caller_name=caller_name
         )
 
-        if status in ("inserted", "replaced"):
-            logger.info(
-                "[success]Learned new fact: %s --[%s]--> %s (status=%s)[/success]",
-                sub_node.name,
-                relation_type,
-                obj_node.name,
-                status,
-            )
-            return (True, status)
-
-        if status == "deferred":
-            logger.warning(
-                "[warning]Deferred learning for[/warning] %s --[%s]--> %s. (in %s)",
-                sub_node.name,
-                relation_type,
-                obj_node.name,
-                caller_name,
-            )
-        elif status == "contradiction_stored":
-            logger.warning(
-                "[warning]   - Contradiction detected and stored for[/warning] %s --[%s]--> %s.",
-                sub_node.name,
-                relation_type,
-                obj_node.name,
-            )
-
-        return (False, status)
+        # 4. Handle the outcome with clear logging for each case.
+        match status:
+            case "inserted" | "replaced":
+                logger.info(
+                    "[success]Learned new fact: %s --[%s]--> %s (status=%s)[/success]",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                    status,
+                )
+                return True, status
+            case "deferred":
+                logger.warning(
+                    "[warning]Deferred learning for[/warning] %s --[%s]--> %s (in %s).",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                    caller_name,
+                )
+                return False, status
+            case "contradiction_stored":
+                logger.warning(
+                    "[warning]Contradiction detected and stored for[/warning] %s --[%s]--> %s.",
+                    sub_node.name,
+                    relation_type,
+                    obj_node.name,
+                )
+                return False, status
+            case _:
+                # Any other non-successful status from the validation logic.
+                # This is a generic fallback for other failure modes.
+                return False, status
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb."""
