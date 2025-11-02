@@ -22,22 +22,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
 
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
-
-      - name: Add uv to PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          cache-key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/uv.lock') }}
 
       - name: Install dependencies with uv
         run: uv sync --extra dev
 
-      - name: Run quality checks
-        run: ./check.sh
-
-      - name: Run tests
-        run: pytest -q --cov=axiom --cov-report=term-missing --cov-report=xml
+      - name: Run quality checks and tests
+        run: uv run ./check.sh
 
       - name: Upload coverage artifact
         if: success()
