@@ -196,7 +196,7 @@ class CognitiveAgent:
 
             if not has_name_edge:
                 logger.critical(
-                    "   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity."
+                    "[red]   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity.[/red]"
                 )
                 self.graph = ConceptGraph()
                 seed_domain_knowledge(self)
