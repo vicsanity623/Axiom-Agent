@@ -23,15 +23,12 @@ echo "✅ Type checking passed."
 # --- Unit & Integration Tests ---
 echo -e "\n[4/4] Running unit tests with Pytest and Coverage..."
 
-# Step A: Run pytest. The E2E test will run its subprocess under coverage
-# in parallel mode, creating separate .coverage.* data files.
-pytest
+pytest --cov=axiom --cov-append
 
-# Step B: Combine the coverage data from the main process and all subprocesses.
 echo -e "\nCombining coverage reports from all processes..."
 coverage combine
 
-# Step C: Generate the final, combined reports.
+# Temporarily setting fail-under to 0 for CI stability until coverage is improved.
 echo -e "\nGenerating final coverage report..."
 coverage report --show-missing --fail-under=0
 coverage xml
