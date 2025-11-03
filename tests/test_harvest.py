@@ -9,6 +9,7 @@ import pytest
 
 from axiom.knowledge_harvester import KnowledgeHarvester
 from axiom.lexicon_manager import LexiconManager
+from axiom.universal_interpreter import Goal
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -116,9 +117,11 @@ def test_discover_cycle(
     """
     Given: A harvester with a mocked topic finder.
     When: The discover cycle is run.
-    Then: An "INVESTIGATE" goal for the new topic is added to the agent.
+    Then: A structured "INVESTIGATE" goal for the new topic is added to the agent.
     """
     # Arrange
+    # --- FIX: Patch the method on the CLASS, not the INSTANCE ---
+    # This is necessary because the KnowledgeHarvester class uses __slots__.
     monkeypatch.setattr(
         KnowledgeHarvester, "_find_new_topic", lambda self, max_attempts=5: "ontology"
     )
@@ -128,4 +131,5 @@ def test_discover_cycle(
     harvester.discover_cycle()
 
     # Assert
-    assert "INVESTIGATE: ontology" in agent.learning_goals
+    expected_goal = Goal(task="INVESTIGATE", topic="ontology")
+    assert expected_goal in agent.learning_goals

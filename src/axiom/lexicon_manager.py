@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from axiom.knowledge_base import promote_word
+
 from .universal_interpreter import PropertyData
 
 if TYPE_CHECKING:
@@ -48,21 +50,13 @@ class LexiconManager:
             return False
         return self.agent.graph.get_node_by_name(clean_word) is not None
 
-    def _is_part_of_speech(self, word: str, pos: str) -> bool:
+    def is_part_of_speech(self, word: str, pos: str) -> bool:
         """
         Check if a word has been promoted as a specific part of speech.
+
         This is a fast, internal check that does NOT use spaCy.
-
-        Args:
-            word: The word to check.
-            pos: The part of speech to check for (e.g., 'noun', 'verb').
-
-        Returns:
-            True if the word is known and promoted as the given part of speech,
-            False otherwise.
         """
         promoted_parts = self.get_promoted_pos(word)
-        # Check if the requested part of speech is a key in the dictionary.
         return pos.lower() in promoted_parts
 
     def add_linguistic_knowledge_quietly(
@@ -70,6 +64,7 @@ class LexiconManager:
         word: str,
         part_of_speech: str,
         definition: str | None = None,
+        quiet: bool = False,
     ) -> None:
         """Add a new word and its linguistic properties WITHOUT printing.
 
@@ -107,9 +102,9 @@ class LexiconManager:
                 properties=PropertyData(provenance="seed", confidence=0.95),
             )
 
-            from axiom import knowledge_base as kb
-
-            kb.promote_word(self.agent, clean_word, part_of_speech, confidence=0.95)
+            promote_word(
+                self.agent, clean_word, part_of_speech, confidence=0.95, quiet=True
+            )
 
             if part_of_speech == "adjective":
                 property_node = self.agent._add_or_update_concept("property")
@@ -229,11 +224,17 @@ class LexiconManager:
             promoted_as[pos] = 1.0
         props["lexical_promoted_confidence"] = 1.0
 
-    def promote_word(self, word: str, pos: str, confidence: float = 0.95) -> None:
+    def promote_word(
+        self,
+        word: str,
+        pos: str,
+        confidence: float = 0.95,
+        quiet: bool = False,
+    ) -> None:
         """Wrapper for knowledge_base.promote_word() for consistency."""
         try:
             from . import knowledge_base as kb
 
-            kb.promote_word(self.agent, word, pos, confidence)
+            kb.promote_word(self.agent, word, pos, confidence, quiet=quiet)
         except Exception:
             logger.exception("Failed to promote word: %s", word)

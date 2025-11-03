@@ -81,6 +81,7 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 | Command | Description |
 |---|---|
 | `axiom-llm` | Auto downloads the powerful yet compact enough **LLM** to run on older pcs and CPUs. |
+| `axiom-reset` | Wipes the slate clean and deletes all brain, cache, logs and rendered files for a fresh start. |
 | `axiom-train` | **(Primary Workflow)** Starts the agent's autonomous learning cycles. |
 | `axiom-webui` | Launches an interactive web UI to chat with the agent. |
 | `axiom-teach` | Teach the agent facts directly via the terminal. |
@@ -95,8 +96,8 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 
 1.  **Start with a clean slate:**
     ```bash
-    # This command safely removes only the agent's brain and state files.
-    rm -f src/axiom/brain/* data/*
+    # This command safely removes the agent's brain and state files and rendered file.
+    axiom-reset
     ```
 2.  **Run the trainer and watch the logs:**
     ```bash

@@ -309,7 +309,7 @@ class ConceptGraph:
             None if the source or target node is invalid.
         """
         if not all([source_node, target_node]):
-            return None
+            raise ValueError("Source or target node missing")
 
         if self.graph.has_edge(source_node.id, target_node.id):
             for key, data in self.graph.get_edge_data(
@@ -352,11 +352,11 @@ class ConceptGraph:
         if not self.graph.has_node(node_id):
             return []
         edges = []
-        for u, v, data in self.graph.out_edges(node_id, data=True):
-            full_edge_data = data.copy()
-            full_edge_data["source"] = u
-            full_edge_data["target"] = v
-            edges.append(RelationshipEdge.from_dict(full_edge_data))
+        for u, v, key, data in self.graph.out_edges(node_id, keys=True, data=True):
+            full_data = data.copy()
+            full_data["source"] = u
+            full_data["target"] = v
+            edges.append(RelationshipEdge.from_dict(full_data))
         return edges
 
     def get_edges_to_node(self, node_id: str) -> list[RelationshipEdge]:
@@ -549,16 +549,15 @@ class ConceptGraph:
         relation_type: str,
         debug: bool = False,
     ) -> RelationshipEdge | None:
-        """Return the strongest non-superseded edge matching this relation type.
+        """Return the strongest non-superseded edge matching this relation type."""
+        outgoing = self.get_edges_from_node(subject_node.id)
+        incoming = self.get_edges_to_node(subject_node.id)
 
-        This is used by the CognitiveAgent’s belief revision process.
-        Only one 'exclusive' fact per subject-relation type should exist.
-        """
         candidates = []
-        for edge in self.get_edges_from_node(subject_node.id):
+        for edge in outgoing + incoming:
             if edge.type != relation_type:
                 continue
-            status = edge.properties.get("revision_status", "active")
+            status = (edge.properties or {}).get("revision_status", "active")
             if status != "superseded":
                 candidates.append(edge)
 
@@ -571,7 +570,7 @@ class ConceptGraph:
                 )
             return None
 
-        winner = max(candidates, key=lambda e: e.weight)
+        winner: RelationshipEdge = max(candidates, key=lambda e: e.weight)
         if debug:
             logger.debug(
                 "[Conflict Check]: Found conflict edge %s (w=%.2f, type=%s)",

@@ -74,6 +74,7 @@ class PropertyData(TypedDict, total=False):
     confidence: NotRequired[float]
     provenance: NotRequired[str]
     negated: NotRequired[bool]
+    contradicted: NotRequired[bool]
     revision_status: NotRequired[
         Literal[
             "active",
@@ -117,6 +118,14 @@ class InterpretData(TypedDict):
     full_text_rephrased: str
     provenance: NotRequired[str]
     confidence: NotRequired[float]
+
+
+class Goal(TypedDict):
+    """A structured representation of a learning task."""
+
+    task: Literal["INVESTIGATE", "CLARIFY"]
+    topic: str
+    context: NotRequired[str]
 
 
 PRONOUNS: Final = ("it", "its", "they", "them", "their", "he", "she", "his", "her")

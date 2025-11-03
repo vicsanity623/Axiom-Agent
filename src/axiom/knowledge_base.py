@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import inspect
 import logging
-import time
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import nltk
 from tqdm import tqdm
 
 from axiom.dictionary_utils import get_word_info_from_wordnet
+from axiom.universal_interpreter import Goal, PropertyData, RelationData
+from axiom.utils.tqdm_utils import TqdmToLogger
 
 if TYPE_CHECKING:
     from axiom.cognitive_agent import CognitiveAgent
-    from axiom.universal_interpreter import PropertyData, RelationData
 
 
 logger = logging.getLogger(__name__)
@@ -414,6 +414,8 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
     """Seed the agent's brain with a foundational set of facts using progress bars."""
     logger.info("   - Seeding a vast initial world knowledge base...")
 
+    tqdm_out = TqdmToLogger(logger, level=logging.INFO)
+
     concepts_to_promote = {}
     for subject, s_type, relation, obj, weight in ALL_KNOWLEDGE:
         concepts_to_promote[subject] = s_type
@@ -423,12 +425,16 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
     for concept, concept_type in tqdm(
         concepts_to_promote.items(),
         desc="     - Seeding & Promoting Concepts",
+        file=tqdm_out,
+        mininterval=1,
     ):
         agent_instance.lexicon.add_linguistic_knowledge_quietly(concept, concept_type)
 
     for subject, s_type, relation, obj, weight in tqdm(
         ALL_KNOWLEDGE,
         desc="     - Seeding Relationships     ",
+        file=tqdm_out,
+        mininterval=1,
     ):
         agent_instance.manual_add_knowledge_quietly(
             subject,
@@ -446,7 +452,12 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         if " " not in data["name"]
     }
 
-    for word in tqdm(list(seeded_words), desc="     - Integrating WordNet     "):
+    for word in tqdm(
+        list(seeded_words),
+        desc="     - Integrating WordNet     ",
+        file=tqdm_out,
+        mininterval=1,
+    ):
         word_info_list = get_word_info_from_wordnet(word)
         if word_info_list:
             word_info = word_info_list[0]
@@ -467,6 +478,7 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
 def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
     """Seed the agent's Lexicon with a foundational English vocabulary."""
     logger.info("     - Seeding core vocabulary for Lexicon...")
+    tqdm_out = TqdmToLogger(logger, level=logging.INFO)
     core_vocab = {
         "noun": "concept",
         "verb": "concept",
@@ -741,7 +753,12 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
         "how": "conjunction",
     }
 
-    for word, pos in tqdm(core_vocab.items(), desc="     - Seeding lexicon         "):
+    for word, pos in tqdm(
+        core_vocab.items(),
+        desc="     - Seeding lexicon         ",
+        file=tqdm_out,
+        mininterval=1,
+    ):
         agent_instance.lexicon.add_linguistic_knowledge_quietly(word, pos)
 
     logger.info("     - Core vocabulary seeding complete.")
@@ -752,27 +769,31 @@ def promote_word(
     word: str,
     pos: str,
     confidence: float,
+    quiet: bool = False,
 ) -> None:
-    """Directly promotes a word to a given part of speech."""
+    """
+    Directly promotes a word to a given part of speech by updating its
+    node properties in the graph. This is the final step in lexical learning.
+    """
     node = agent_instance.graph.get_node_by_name(word)
     if not node:
         return
 
     props = agent_instance.graph.graph.nodes[node.id].setdefault("properties", {})
-    props["lexical_promoted_as"] = pos
-    props["lexical_promoted_confidence"] = confidence
+
+    promoted_as = props.setdefault("lexical_promoted_as", {})
+    if isinstance(promoted_as, dict):
+        promoted_as[pos] = confidence
+
     props.pop("lexical_observations", None)
 
-    for rel, interp, ts in list(getattr(agent_instance, "pending_relations", [])):
-        sub = (rel.get("subject") or "").lower()
-        obj = (rel.get("object") or "").lower()
-        if word in sub or word in obj:
-            status = validate_and_add_relation(agent_instance, rel, interp)
-            if status in ("inserted", "replaced", "contradiction_stored"):
-                try:
-                    agent_instance.pending_relations.remove((rel, interp, ts))
-                except ValueError:
-                    pass
+    if not quiet:
+        logger.info(
+            "   - [Lexicon]: Promoted '%s' to a known '%s' (confidence: %.2f).",
+            word,
+            pos,
+            confidence,
+        )
 
 
 def record_lexical_observation(
@@ -850,50 +871,75 @@ def try_promote_lexicon(
     return False
 
 
+def add_pending_relation(
+    agent_instance: CognitiveAgent,
+    relation: RelationData,
+    properties: PropertyData,
+    unknown_words: list[str],
+) -> None:
+    """
+    Store a relation temporarily, indexed by the unknown words that are blocking it.
+    """
+    fact_tuple = (relation, properties)
+    for word in unknown_words:
+        if word not in agent_instance.pending_relations:
+            agent_instance.pending_relations[word] = []
+        if fact_tuple not in agent_instance.pending_relations[word]:
+            agent_instance.pending_relations[word].append(fact_tuple)
+
+
 def validate_and_add_relation(
     agent: CognitiveAgent,
-    relation: dict[str, Any],
-    properties: PropertyData | dict[str, Any] | None = None,
+    relation: RelationData,
+    properties: PropertyData | None = None,
     caller_name: str | None = None,
-    allow_unknowns_for_topic: str | None = None,  # NEW PARAMETER
+    allow_unknowns_for_topic: str | None = None,
 ) -> str:
     """
-    Validate a relation and add it to the graph. If vocabulary is missing,
-    create INVESTIGATE goals and defer the fact.
+    Validate a relation. If vocabulary is missing, create structured,
+    context-aware INVESTIGATE goals and defer the fact.
     """
     props = properties or {}
 
-    subject_name = agent._clean_phrase(relation["subject"])
-    object_name = agent._clean_phrase(relation["object"])
-    relation_type = agent._clean_phrase(relation["verb"])
+    subject_name_or_none = agent._extract_name_from_relation(relation.get("subject"))
+    object_name_or_none = agent._extract_name_from_relation(relation.get("object"))
+    relation_type_or_none = agent._extract_name_from_relation(relation.get("verb"))
+
+    if not all((subject_name_or_none, object_name_or_none, relation_type_or_none)):
+        logger.warning(
+            "[KnowledgeBase] Could not extract valid names from relation: %s", relation
+        )
+        return "error_extracting_names"
+
+    subject_name = cast("str", subject_name_or_none)
+    object_name = cast("str", object_name_or_none)
+    relation_type = cast("str", relation_type_or_none)
 
     all_words = set(subject_name.split()) | set(object_name.split())
-
     unknown_words = []
     for word in all_words:
-        # If we are investigating a topic, we allow that specific topic word to be "unknown".
         if allow_unknowns_for_topic and word == allow_unknowns_for_topic:
             continue
         if not agent.lexicon.is_known_word(word):
             unknown_words.append(word)
 
     if unknown_words:
-        final_caller_name = caller_name
-        if not final_caller_name:
-            caller_frame = inspect.stack()[1]
-            final_caller_name = f"{caller_frame.function}"
-
+        final_caller_name = caller_name or inspect.stack()[1].function
         logger.warning(
             "[warning]Validation failed: Found unknown words in concepts:[/warning] %s (in %s)",
             unknown_words,
             final_caller_name,
         )
         for word in unknown_words:
-            goal = f"INVESTIGATE: {word}"
-            if goal not in agent.learning_goals:
-                agent.learning_goals.insert(0, goal)
+            goal = Goal(
+                task="INVESTIGATE",
+                topic=word,
+                context=f"related to the concept of '{subject_name}'",
+            )
+            if goal not in agent.high_priority_tasks:
+                agent.high_priority_tasks.insert(0, goal)
 
-        add_pending_relation(agent, relation, cast("PropertyData", props))
+        add_pending_relation(agent, relation, props, unknown_words)
         return "deferred"
 
     sub_node = agent._add_or_update_concept(subject_name)
@@ -904,9 +950,9 @@ def validate_and_add_relation(
 
     new_conf = float(props.get("confidence", 0.95))
     new_neg = bool(props.get("negated", False))
-    new_provenance = props.get("provenance", "user")
+    new_provenance = str(props.get("provenance", "user"))
 
-    new_props = {
+    new_props: PropertyData = {
         "negated": new_neg,
         "provenance": new_provenance,
         "confidence": new_conf,
@@ -927,7 +973,9 @@ def validate_and_add_relation(
 
         if existing_neg != new_neg:
             if new_conf > existing_conf + 0.2:
-                agent.graph.update_edge_properties(e, new_props)
+                agent.graph.update_edge_properties(
+                    e, cast("dict[str, object]", new_props)
+                )
                 return "replaced"
 
             contradiction_props = new_props.copy()
@@ -937,7 +985,7 @@ def validate_and_add_relation(
                 sub_node,
                 obj_node,
                 relation_type,
-                properties=cast("PropertyData", contradiction_props),
+                properties=contradiction_props,
             )
 
             clarify_goal = f"CLARIFY: {subject_name} {relation_type} {object_name}"
@@ -947,13 +995,12 @@ def validate_and_add_relation(
                     "  [Cognitive Dissonance]: Contradiction found. Added '%s' to learning goals.",
                     clarify_goal,
                 )
-
             return "contradiction_stored"
 
         merged_conf = max(existing_conf, new_conf)
         update_props = new_props.copy()
         update_props["confidence"] = merged_conf
-        agent.graph.update_edge_properties(e, update_props)
+        agent.graph.update_edge_properties(e, cast("dict[str, object]", update_props))
         return "inserted"
 
     agent.graph.add_edge(
@@ -961,21 +1008,6 @@ def validate_and_add_relation(
         obj_node,
         relation_type,
         new_conf,
-        properties=cast("PropertyData", new_props),
+        properties=new_props,
     )
     return "inserted"
-
-
-def add_pending_relation(
-    agent_instance: CognitiveAgent,
-    relation: dict[str, Any],
-    interpretation: PropertyData | dict[str, Any],
-) -> None:
-    """Store a relation temporarily until dependent lexicon entries are promoted."""
-    agent_instance.pending_relations.append(
-        (
-            cast("RelationData", relation),
-            cast("dict[Any, Any]", interpretation),
-            time.time(),
-        )
-    )

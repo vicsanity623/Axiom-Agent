@@ -17,8 +17,6 @@ from typing import (
     cast,
 )
 
-from thefuzz import fuzz
-
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -39,7 +37,9 @@ from .lexicon_manager import LexiconManager
 from .symbolic_parser import SymbolicParser
 from .universal_interpreter import (
     Entity,
+    Goal,
     InterpretData,
+    PropertyData,
     RelationData,
     UniversalInterpreter,
 )
@@ -161,7 +161,6 @@ class CognitiveAgent:
         if self.inference_mode:
             logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
-        # LLM FAILED HERE by adding the following 3 comments below (initialize, load, ensure), but still a success!
         # Initialize core components
         self.brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_lock = threading.Lock()
@@ -170,8 +169,11 @@ class CognitiveAgent:
         self.parser: SymbolicParser = SymbolicParser(self)
         self.lemmatizer = WordNetLemmatizer()
         self.goal_manager: GoalManager = GoalManager(self)
-        self.learning_goals: list[str | dict[str, object]] = []
-        self.pending_relations: list[tuple[RelationData, dict[str, object], float]] = []
+        self.learning_goals: list[str | Goal] = []
+        self.high_priority_tasks: list[Goal] = []
+
+        self.pending_relations: dict[str, list[tuple[RelationData, PropertyData]]] = {}
+
         self.recently_researched: dict[str, float] = {}
         self.harvester: KnowledgeHarvester | None = None
         if not self.inference_mode:
@@ -384,12 +386,12 @@ class CognitiveAgent:
         antecedent: str | None = None
 
         if pronoun_found_at_index > 0:
-            # Search for nouns in the part of the sentence *before* the pronoun.
             words_before_pronoun = words[:pronoun_found_at_index]
+
             local_candidates = [
                 word.strip(".,!?;")
                 for word in reversed(words_before_pronoun)
-                if self.lexicon._is_part_of_speech(word, "noun")
+                if self.lexicon.is_part_of_speech(word, "noun")
             ]
             if local_candidates:
                 # The first noun found when searching backwards is the most likely antecedent.
@@ -1233,50 +1235,26 @@ class CognitiveAgent:
         if self.inference_mode:
             return False, "Agent is in read-only mode."
 
-        subj_raw = cast("str | dict[str, Any] | list | None", relation.get("subject"))
-        verb_raw = cast("str | None", relation.get("verb"))
-        obj_raw = cast("str | dict[str, Any] | list | None", relation.get("object"))
+        subject_name_or_none = self._extract_name_from_relation(relation.get("subject"))
+        object_name_or_none = self._extract_name_from_relation(relation.get("object"))
+        verb_name_or_none = self._extract_name_from_relation(relation.get("verb"))
 
-        if subj_raw is None or verb_raw is None or obj_raw is None:
-            return (
-                False,
-                "Incomplete fact structure: requires subject, verb, and object.",
-            )
+        if not all((subject_name_or_none, object_name_or_none, verb_name_or_none)):
+            return False, "Incomplete fact structure."
 
-        subject_name = self._extract_name_from_relation(subj_raw)
-        object_name = self._extract_name_from_relation(obj_raw)
+        subject_name = cast("str", subject_name_or_none)
+        object_name = cast("str", object_name_or_none)
+        verb_name = cast("str", verb_name_or_none)
 
-        if subject_name is None:
-            return False, "Could not determine the subject of the fact."
-        if object_name is None:
-            return False, "Could not determine the object of the fact."
-
-        if subject_name == object_name or fuzz.ratio(subject_name, object_name) > 95:
-            logger.info(
-                "  [Learning Filter]: Skipping trivial fact (subject and object are too similar: '%s' vs '%s').",
-                subject_name,
-                object_name,
-            )
-            return (False, "trivial_fact")
-
-        if len(object_name.split()) > 5:
-            truncated = (
-                (object_name[:60] + "...") if len(object_name) > 60 else object_name
-            )
-            msg = f"Deferred learning: The object '{truncated}' appears to be a description, not a concept."
-            logger.warning(msg)
-            return False, msg
-
-        verb_cleaned = verb_raw.lower().strip()
+        if subject_name == object_name:
+            return False, "trivial_fact"
 
         logger.info(
             "[cyan]   - Processing: %s -> %s -> %s[/cyan]",
             subject_name,
-            verb_cleaned,
+            verb_name,
             object_name,
         )
-
-        self.learning_iterations += 1
 
         sub_node = self._add_or_update_concept(subject_name)
         obj_node = self._add_or_update_concept(object_name)
@@ -1287,40 +1265,31 @@ class CognitiveAgent:
                 f"Failed to create concepts for '{subject_name}' or '{object_name}'.",
             )
 
-        relation_type = self.get_relation_type(verb_cleaned, subject_name, object_name)
+        relation_type = self.get_relation_type(verb_name, subject_name, object_name)
 
         if relation_type in self._EXCLUSIVE_RELATIONS:
             was_learned, message = self._resolve_exclusive_conflict(
-                sub_node,
-                obj_node,
-                relation_type,
-                relation,
+                sub_node, obj_node, relation_type, relation
             )
         else:
             was_learned, message = self._add_new_fact(
-                sub_node,
-                obj_node,
-                relation_type,
-                relation,
+                sub_node, obj_node, relation_type, relation
             )
 
-        if not was_learned:
-            return False, message
+        if was_learned:
+            try:
+                self._gather_facts_multihop.cache_clear()
+                logger.info(
+                    "[border]   - Cleared reasoning cache due to new knowledge.[/border]"
+                )
+            except Exception:
+                logger.debug("  [Cache]: could not clear reasoning cache.")
 
-        try:
-            self._gather_facts_multihop.cache_clear()
-        except Exception:
-            logger.debug(
-                "  [Cache]: could not clear reasoning cache (missing cache_clear).",
-            )
+            self.save_brain()
+            self.save_state()
+            return True, "I understand. I have noted that."
 
-        logger.info(
-            "[border]   - Cleared reasoning cache due to new knowledge.[/border]"
-        )
-        self.save_brain()
-        self.save_state()
-
-        return True, "I understand. I have noted that."
+        return False, message
 
     def _resolve_exclusive_conflict(
         self,
@@ -1336,46 +1305,27 @@ class CognitiveAgent:
 
         rel_props = relation_data.get("properties") or {}
         candidate_confidence = float(rel_props.get("confidence", 0.95))
-        candidate_provenance = rel_props.get("provenance", "user")
+        candidate_provenance = str(rel_props.get("provenance", "user"))
         candidate_rank = PROVENANCE_RANK.get(candidate_provenance, 0)
         candidate_strength = (candidate_confidence, candidate_rank)
 
         existing_confidence = getattr(conflict_edge, "weight", 0.6)
-        existing_prov = conflict_edge.properties.get("provenance", "unknown")
+        existing_prov = str(conflict_edge.properties.get("provenance", "unknown"))
         existing_rank = PROVENANCE_RANK.get(existing_prov, 0)
         existing_strength = (existing_confidence, existing_rank)
 
         if candidate_strength > existing_strength:
-            logger.warning(
-                "  [Belief Revision]: New fact is stronger. Deprecating old fact.",
-            )
             self.graph.update_edge_properties(
                 conflict_edge,
-                {"superseded_by": obj_node.name},
+                cast("dict[str, object]", {"revision_status": "superseded"}),
             )
-            self.graph.update_edge_weight(conflict_edge, 0.2)
             return self._add_new_fact(sub_node, obj_node, relation_type, relation_data)
 
         if candidate_strength < existing_strength:
-            logger.warning(
-                "  [Belief Revision]: Existing fact is stronger. Rejecting new fact.",
-            )
-            return (False, "existing_fact_stronger")
+            return False, "existing_fact_stronger"
 
-        logger.warning(
-            "  [Belief Revision]: Stalemate detected. Triggering clarification.",
-        )
-        if self.harvester:
-            target_node = self.graph.get_node_by_id(conflict_edge.target)
-            if target_node:
-                goal = (
-                    f"RESOLVE_CONFLICT: {sub_node.name} --[{relation_type}]--> {obj_node.name} "
-                    f"vs {target_node.name}"
-                )
-                if goal not in self.learning_goals:
-                    self.learning_goals.append(goal)
-                    self.save_state()
-        return (False, "exclusive_conflict")
+        # Stalemate case
+        return False, "exclusive_conflict"
 
     def _add_new_fact(
         self,
@@ -1384,89 +1334,24 @@ class CognitiveAgent:
         relation_type: str,
         relation_data: RelationData,
     ) -> tuple[bool, str]:
-        """Attempts to add a new fact to the knowledge graph after validation.
-
-        This method first performs a quick check to see if an identical
-        relation (same type, same target) already exists for the subject node.
-        If not, it delegates to a deeper validation and insertion routine,
-        handling various outcomes like successful insertion, deferral due to
-        unresolved concepts, or detected contradictions.
-
-        Args:
-            sub_node: The ConceptNode representing the subject of the fact.
-            obj_node: The ConceptNode representing the object of the fact.
-            relation_type: The type of relationship (e.g., 'is_a', 'has_property').
-            relation_data: A dictionary containing metadata about the relation,
-                such as properties.
-
-        Returns:
-            A tuple containing:
-            - bool: True if the fact was successfully learned ('inserted' or
-            'replaced'), False otherwise.
-            - str: A status code detailing the outcome (e.g., 'fact_exists',
-            'inserted', 'deferred', 'contradiction_stored').
-        """
-
-        # 1. Pre-condition check: Abort if the exact same fact already exists.
-
-        if any(
-            edge.type == relation_type and edge.target == obj_node.id
-            for edge in self.graph.get_edges_from_node(sub_node.id)
-        ):
-            logger.debug(
-                "Fact already exists: %s --[%s]--> %s",
-                sub_node.name,
-                relation_type,
-                obj_node.name,
-            )
-            return False, "fact_exists"
-
-        # 2. Prepare data for the validation and addition logic.
-        rel_props = relation_data.get("properties", {})
-        candidate_fact = {
-            "subject": sub_node.name,
-            "verb": relation_type,
-            "object": obj_node.name,
-        }
+        """A simple wrapper that delegates fact addition to the knowledge_base."""
+        candidate_fact = cast(
+            "RelationData",
+            {
+                "subject": sub_node.name,
+                "verb": relation_type,
+                "object": obj_node.name,
+            },
+        )
+        properties = relation_data.get("properties")
         caller_name = f"{self.__class__.__name__}._add_new_fact"
 
-        # 3. Delegate to the core validation and insertion function.
         status = validate_and_add_relation(
-            self, candidate_fact, rel_props, caller_name=caller_name
+            self, candidate_fact, properties, caller_name=caller_name
         )
 
-        # 4. Handle the outcome with clear logging for each case.
-        match status:
-            case "inserted" | "replaced":
-                logger.info(
-                    "[success]Learned new fact: %s --[%s]--> %s (status=%s)[/success]",
-                    sub_node.name,
-                    relation_type,
-                    obj_node.name,
-                    status,
-                )
-                return True, status
-            case "deferred":
-                logger.warning(
-                    "[warning]Deferred learning for[/warning] %s --[%s]--> %s (in %s).",
-                    sub_node.name,
-                    relation_type,
-                    obj_node.name,
-                    caller_name,
-                )
-                return False, status
-            case "contradiction_stored":
-                logger.warning(
-                    "[warning]Contradiction detected and stored for[/warning] %s --[%s]--> %s.",
-                    sub_node.name,
-                    relation_type,
-                    obj_node.name,
-                )
-                return False, status
-            case _:
-                # Any other non-successful status from the validation logic.
-                # This is a generic fallback for other failure modes.
-                return False, status
+        was_learned = status in ("inserted", "replaced")
+        return was_learned, status
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb."""

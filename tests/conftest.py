@@ -3,9 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+import spacy
+from spacy.language import Language
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from spacy.language import Language
 
     from axiom.cognitive_agent import CognitiveAgent
     from axiom.universal_interpreter import InterpretData
@@ -118,3 +122,15 @@ def blank_agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
     brain_file = tmp_path / "blank_brain.json"
     state_file = tmp_path / "blank_state.json"
     return CognitiveAgent(brain_file=brain_file, state_file=state_file)
+
+
+@pytest.fixture(scope="session")
+def spacy_nlp_lg() -> Language | None:
+    """
+    A session-scoped fixture that loads the large spaCy model once.
+    This dramatically reduces memory usage and test startup time.
+    """
+    try:
+        return spacy.load("en_core_web_lg")
+    except ImportError:
+        return None

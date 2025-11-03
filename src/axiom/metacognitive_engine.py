@@ -325,7 +325,6 @@ class PerformanceMonitor:
                         i += 1
                     traceback_str = "\n".join(traceback_buffer)
 
-                    # Highest-priority override: Introspect the traceback
                     for tb_line in reversed(traceback_buffer):
                         if tb_line.strip().startswith("File "):
                             tb_match = re.search(
@@ -392,7 +391,6 @@ class PerformanceMonitor:
                     f"semantic cluster concentration (largest={largest_cluster})",
                 )
 
-            # --- FIX: Re-insert the missing composite_score calculation ---
             composite_score = (
                 PerformanceMonitor._SCORING_WEIGHTS["error_recurrence"]
                 * max(0.0, err_score)
@@ -466,7 +464,6 @@ class PerformanceMonitor:
                 f"low new concept discovery rate (ratio={discovery_ratio:.2f})",
             )
 
-        # --- FIX: Correct the return statement to include the responsible_func ---
         return inefficiency_score, reasons, responsible_func
 
     def _select_best_target(
