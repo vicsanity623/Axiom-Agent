@@ -63,13 +63,13 @@ def _generate_or_set_initial_goal(
     )
 
     creative_seeds = [
-        "Approach this from the perspective of a scientist, focusing on empirical observation and causal reasoning.",
-        "Design this curriculum as if teaching a child, starting with concrete objects and moving to abstract ideas.",
-        "Frame the learning process through the lens of a computer scientist, treating language as a formal system to be parsed.",
-        "Use a philosophical approach, focusing on the connection between symbols, meaning, and truth.",
-        "Create a practical, goal-oriented curriculum for an AI assistant that needs to complete tasks for a user.",
-        "Focus on the historical evolution of language, from ancient roots to modern dialects.",
-        "Emphasize the social aspect of language, including pragmatics, discourse, and cultural context.",
+        "Develop a core capacity for sensorimotor integration, learning to associate raw sensory inputs with motor commands to build a grounded model of physical reality.",
+        "Establish a foundational ontology and categorization system to parse the continuous flow of experience into discrete, relatable objects, agents, and events.",
+        "Build a predictive modeling engine that continuously generates expectations about the world and updates its beliefs based on prediction errors.",
+        "Learn the principles of cause and effect through intervention, understanding how actions change the state of the environment to achieve desired outcomes.",
+        "Develop a hierarchical reasoning system, moving from simple stimulus-response to multi-step planning and abstract goal decomposition.",
+        "Acquire a theory of mind, inferring the intentions, knowledge, and beliefs of other agents to enable social prediction and collaboration.",
+        "Construct a symbolic reasoning layer on top of subsymbolic data, enabling the manipulation of abstract concepts and logical propositions.",
     ]
     selected_seed = random.choice(creative_seeds)
     logger.info(
