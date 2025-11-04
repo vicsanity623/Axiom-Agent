@@ -13,6 +13,7 @@ from axiom.cognitive_agent import (
     InterpretData,
     RelationData,
 )
+from axiom.universal_interpreter import Goal
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -164,31 +165,38 @@ def test_handle_cognitive_reflex_no_unknown_words(agent: CognitiveAgent, monkeyp
     assert response is None
 
 
-def test_handle_cognitive_reflex_research_success_and_reentry(
-    agent: CognitiveAgent, monkeypatch
-):
-    # First encounter of "unknown" returns False; subsequent checks return True.
-    call_counts: dict[str, int] = {}
+def test_handle_cognitive_reflex_queues_high_priority_task(
+    agent: CognitiveAgent,
+) -> None:
+    """
+    Given: An input with an unknown word.
+    When: The cognitive reflex is handled.
+    Then: A structured Goal is added to the high-priority queue, and an
+          informative response is returned.
+    """
+    # Arrange
+    input_text = "this is an unknown word"
+    # Ensure the agent's queues are empty before the test
+    agent.high_priority_tasks.clear()
+    agent.learning_goals.clear()
 
-    def is_known_word_side_effect(self, word: str) -> bool:
-        count = call_counts.get(word, 0)
-        call_counts[word] = count + 1
-        if word == "unknown":
-            return count > 0
-        return True
+    # Act
+    response = agent._handle_cognitive_reflex(input_text)
 
-    monkeypatch.setattr(type(agent.lexicon), "is_known_word", is_known_word_side_effect)
+    # Assert
+    # 1. Assert that the correct, informative string is returned.
+    expected_response = "I'm not familiar with the word 'unknown'. I will add it to my study queue and research it later."
+    assert response == expected_response
 
-    assert agent.harvester is not None
-    monkeypatch.setattr(
-        agent.harvester, "_resolve_investigation_goal", lambda goal: True, raising=False
-    )
-    monkeypatch.setattr(
-        agent, "_chat_reentry_once", lambda text: "Re-entry successful."
-    )
+    # 2. Assert that the high-priority queue now contains the task.
+    assert len(agent.high_priority_tasks) == 1
 
-    response = agent._handle_cognitive_reflex("unknown word here")
-    assert response == "Re-entry successful."
+    # 3. Assert that the task has the correct structure.
+    expected_goal = Goal(task="INVESTIGATE", topic="unknown")
+    assert agent.high_priority_tasks[0] == expected_goal
+
+    # 4. Assert that the long-term curriculum queue was not affected.
+    assert len(agent.learning_goals) == 0
 
 
 def test_learn_from_introspection_no_context(agent: CognitiveAgent, monkeypatch):

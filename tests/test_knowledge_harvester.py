@@ -45,24 +45,23 @@ def test_resolve_investigation_goal_single_word_api_success(
     """
     Given: A single-word investigation goal.
     When: The dictionary API returns a valid definition and POS.
-    Then: The agent learns the facts and the goal is resolved.
+    Then: The function returns True and attempts to learn the new facts.
     """
-    # Covers lines 162-205
+    # Arrange
     goal = "INVESTIGATE: testword"
     mock_api.return_value = ("noun", "a word for testing")
 
-    # FIX: Use monkeypatch.setattr for type-safe mocking instead of direct assignment.
     mock_learn = MagicMock(return_value=True)
     monkeypatch.setattr(agent, "learn_new_fact_autonomously", mock_learn)
 
-    agent.learning_goals.append(goal)
-
+    # Act
     result = harvester._resolve_investigation_goal(goal)
 
+    # Assert
     assert result is True
-    assert goal not in agent.learning_goals
-    # Verify that the learning function was actually called.
-    mock_learn.assert_called()
+
+    # The function's job is to call the learning methods, not to manage the queue.
+    mock_learn.assert_called_once_with("a word for testing", "testword")
 
 
 def test_prune_research_cache_no_terms(harvester: KnowledgeHarvester) -> None:

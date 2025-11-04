@@ -289,28 +289,34 @@ class CognitiveAgent:
         return interpretations
 
     def _handle_cognitive_reflex(self, normalized_input: str) -> str | None:
-        """Handle cases where interpretation fails due to unknown words."""
+        """
+        Handles cases where interpretation fails due to unknown words.
+        This is the agent's primary mechanism for identifying new vocabulary
+        during a conversation. It creates a high-priority task for the study
+        cycle to resolve.
+        """
         words = normalized_input.lower().split()
         unknown_words = [w for w in words if w and not self.lexicon.is_known_word(w)]
 
         if not unknown_words:
             return None
 
+        # --- FIX: Modernize the entire reflex logic ---
         word_to_learn = sorted(set(unknown_words))[0]
-        goal = f"INVESTIGATE: {word_to_learn}"
-        self.learning_goals.append(goal)
-        logger.info(
-            "  [Cognitive Reflex]: Unknown word '%s', added to learning goals.",
-            word_to_learn,
-        )
 
-        if self.harvester and not self.inference_mode:
-            was_resolved = self.harvester._resolve_investigation_goal(goal)
-            if was_resolved and self.lexicon.is_known_word(word_to_learn):
-                return self._chat_reentry_once(normalized_input)
-            return f"I discovered a new word, '{word_to_learn}', but my attempt to research it in real-time failed. I will study it later."
+        # 1. Create a structured, high-priority goal.
+        goal = Goal(task="INVESTIGATE", topic=word_to_learn)
 
-        return f"New word '{word_to_learn}' discovered. I must study it before I can understand."
+        # 2. Add it to the correct queue.
+        if goal not in self.high_priority_tasks:
+            self.high_priority_tasks.insert(0, goal)
+            logger.info(
+                "  [Cognitive Reflex]: Found unknown word '%s'. Queued for high-priority study.",
+                word_to_learn,
+            )
+
+        # 3. Return a consistent, informative response. Do NOT learn synchronously.
+        return f"I'm not familiar with the word '{word_to_learn}'. I will add it to my study queue and research it later."
 
     def _update_history(self, interpretations: list[InterpretData]) -> None:
         """Updates the conversational history."""

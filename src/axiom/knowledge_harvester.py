@@ -142,13 +142,12 @@ class KnowledgeHarvester:
 
     def _resolve_investigation_goal(self, goal: Goal | str) -> bool:
         """
-        Resolve an "INVESTIGATE" goal by learning its part of speech and definition,
-        using context if provided.
+        Attempts to resolve an "INVESTIGATE" goal.
+        Returns True on success, False on failure.
+        This method NO LONGER MODIFIES THE GOAL QUEUES.
         """
-        # Normalize the goal input to handle both old strings and new dicts
         term_to_learn: str
         context: str | None = None
-        goal_obj: Goal | str = goal
 
         if isinstance(goal, str):
             match = re.match(r"INVESTIGATE: (.*)", goal)
@@ -162,37 +161,28 @@ class KnowledgeHarvester:
         if not term_to_learn:
             return False
 
-        if (
-            self.agent.lexicon.is_known_word(term_to_learn)
-            or term_to_learn in self.researched_terms
-        ):
+        if self.agent.lexicon.is_known_word(term_to_learn):
             logger.info(
-                "[purple][Study Cycle]: Skipping '%s' — already known or researched.[/purple]",
+                "[purple][Study Cycle]: Skipping '%s' — already known.[/purple]",
                 term_to_learn,
             )
-            with self.lock:
-                if goal_obj in self.agent.learning_goals:
-                    self.agent.learning_goals.remove(goal_obj)
-            return True
+            return (
+                True  # The goal is considered "resolved" if the word is already known.
+            )
 
         logger.info(
             "[purple][Study Cycle]: Prioritizing learning goal: To define '%s'.[/purple]",
             term_to_learn,
         )
 
-        is_single_word = " " not in term_to_learn
-
-        if is_single_word:
-            logger.info(
-                "[yellow]   - Term is a single word. Prioritizing Dictionary API.[/yellow]",
-            )
+        # --- Primary Learning Path: Dictionary API (for single words) ---
+        if " " not in term_to_learn:
             api_result = self.get_definition_from_api(term_to_learn, context=context)
             if api_result:
                 part_of_speech, definition = api_result
-                pos_learned = False
-                definition_learned = False
-
+                was_learned = False
                 with self.lock:
+                    # Learn the part of speech
                     pos_relation = cast(
                         "RelationData",
                         {
@@ -203,86 +193,60 @@ class KnowledgeHarvester:
                     )
                     pos_properties = cast(
                         "PropertyData",
-                        {
-                            "provenance": "dictionary_api",
-                            "confidence": 0.95,
-                        },
+                        {"provenance": "dictionary_api", "confidence": 0.95},
                     )
-
                     status_pos = validate_and_add_relation(
                         self.agent,
                         pos_relation,
                         pos_properties,
-                        caller_name="_resolve_investigation_goal",
-                        allow_unknowns_for_topic=term_to_learn,
+                        "_resolve_investigation_goal",
+                        term_to_learn,
                     )
 
                     if status_pos == "inserted":
-                        pos_learned = True
-                        if definition:
-                            definition_learned = self.agent.learn_new_fact_autonomously(
-                                fact_sentence=definition,
-                                source_topic=term_to_learn,
-                            )
+                        was_learned = True
 
-                if pos_learned or definition_learned:
+                    # Learn the definition
+                    if definition:
+                        if self.agent.learn_new_fact_autonomously(
+                            definition, term_to_learn
+                        ):
+                            was_learned = True
+
+                if was_learned:
                     logger.info(
                         "[success]  [Study Cycle]: Successfully learned from Dictionary API.[/success]"
                     )
-                    with self.lock:
-                        if goal_obj in self.agent.learning_goals:
-                            self.agent.learning_goals.remove(goal_obj)
                     return True
-                self._mark_as_researched(term_to_learn)
 
-        if is_single_word:
-            logger.info(
-                "[yellow]   - Dictionary API failed for '%s'. Falling back to web search.[/yellow]",
-                term_to_learn,
-            )
-        else:
-            logger.info(
-                "[yellow]   - Term is a multi-word concept. Using web search directly.[/yellow]",
-            )
-
+        # --- Fallback Learning Path: Web Search ---
+        logger.info(
+            "[yellow]   - Dictionary API failed for '%s'. Falling back to web search.[/yellow]",
+            term_to_learn,
+        )
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}", term_to_learn]
-        web_fact = None
-        source_topic = None
         for query in queries:
             result = self.get_fact_from_wikipedia(
-                query,
+                query
             ) or self.get_fact_from_duckduckgo(query)
             if result:
-                source_topic, web_fact = result
-                break
+                _source, web_fact = result
+                with self.lock:
+                    if self.agent.learn_new_fact_autonomously(web_fact, term_to_learn):
+                        logger.info(
+                            "[success]   - Agent successfully learned the new fact from web.[/success]"
+                        )
+                        return True
+                break  # Stop searching if we found a result but failed to learn
             time.sleep(1)
 
-        if not web_fact:
-            logger.warning(
-                "  [Study Cycle]: Web search also failed for '%s'.",
-                term_to_learn,
-            )
-            return False
-
-        logger.info(
-            "[purple]   - Found potential fact from web: '%s'[/purple]", web_fact
+        logger.warning(
+            "[yellow]   - All learning attempts failed for '%s'.[/yellow]",
+            term_to_learn,
         )
-        with self.lock:
-            was_learned = self.agent.learn_new_fact_autonomously(
-                fact_sentence=web_fact,
-                source_topic=source_topic or term_to_learn,
-            )
-
-        if was_learned:
-            logger.info(
-                "[success]   - Agent successfully learned the new fact from web.[/success]",
-            )
-            with self.lock:
-                if goal_obj in self.agent.learning_goals:
-                    self.agent.learning_goals.remove(goal_obj)
-            return True
-
-        logger.warning("[yellow]   - Agent failed to learn from the web fact.[/yellow]")
+        self._mark_as_researched(
+            term_to_learn
+        )  # Mark as researched to avoid retrying forever
         return False
 
     def _consolidate_pending_knowledge(self, newly_learned_words: list[str]) -> None:
@@ -328,9 +292,7 @@ class KnowledgeHarvester:
     def study_cycle(self) -> None:
         """
         Run one full study cycle with a two-tiered priority system.
-        1. First, resolve all high-priority, blocking tasks (e.g., unknown words).
-        2. Then, if the high-priority queue is clear, work on the next long-term
-           learning goal from the curriculum.
+        The study cycle is the SOLE manager of the learning queues.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
@@ -339,83 +301,65 @@ class KnowledgeHarvester:
         )
 
         newly_learned_words: list[str] = []
-        work_done_this_cycle = False
 
-        # 1. Process the entire high-priority queue first.
-        max_priority_tasks = 10
-        tasks_processed = 0
-        while self.agent.high_priority_tasks and tasks_processed < max_priority_tasks:
-            tasks_processed += 1
-            with self.lock:
-                priority_task = self.agent.high_priority_tasks.pop(0)
+        task_to_process: Goal | str | None = None
+        task_source_is_priority = False
 
-            task_topic = priority_task.get("topic", "")
-            logger.info("   - Attempting HIGH-PRIORITY task: '%s'", task_topic)
+        # 1. Decide which task to work on based on priority.
+        with self.lock:
+            if self.agent.high_priority_tasks:
+                task_to_process = self.agent.high_priority_tasks.pop(0)
+                task_source_is_priority = True
+            elif self.agent.learning_goals:
+                task_to_process = self.agent.learning_goals.pop(0)
+                task_source_is_priority = False
 
-            resolved = self._resolve_investigation_goal(priority_task)
-            if resolved:
-                logger.info(
-                    "   - High-priority task '%s' successfully resolved.", task_topic
-                )
-                newly_learned_words.append(task_topic)
-                work_done_this_cycle = True
-            else:
-                logger.warning(
-                    "   - Failed to resolve high-priority task '%s'. Deprioritizing.",
-                    task_topic,
-                )
-                with self.lock:
-                    self.agent.high_priority_tasks.append(priority_task)
-
-        # 2. If the high-priority queue is clear, process exactly ONE long-term goal.
-        if not self.agent.high_priority_tasks and self.agent.learning_goals:
-            with self.lock:
-                raw_curriculum_task = self.agent.learning_goals.pop(0)
-
-            curriculum_goal: Goal
+        # 2. If a task was selected, process it.
+        if task_to_process:
             task_topic = ""
-            if isinstance(raw_curriculum_task, str):
-                task_topic = raw_curriculum_task.replace("INVESTIGATE:", "").strip()
-                curriculum_goal = Goal(task="INVESTIGATE", topic=task_topic)
-            else:
-                curriculum_goal = raw_curriculum_task
-                task_topic = curriculum_goal.get("topic", "")
+            task_type = "HIGH-PRIORITY" if task_source_is_priority else "CURRICULUM"
+
+            if isinstance(task_to_process, str):
+                task_topic = task_to_process.replace("INVESTIGATE:", "").strip()
+            else:  # It's a Goal dict
+                task_topic = task_to_process.get("topic", "")
 
             if task_topic:
-                logger.info("   - Attempting CURRICULUM task: '%s'", task_topic)
-                resolved = self._resolve_investigation_goal(curriculum_goal)
+                logger.info("   - Attempting %s task: '%s'", task_type, task_topic)
+                resolved = self._resolve_investigation_goal(task_to_process)
 
                 if resolved:
                     logger.info(
-                        "   - Curriculum task '%s' successfully resolved.", task_topic
-                    )
-                    newly_learned_words.append(task_topic)
-                    work_done_this_cycle = True
-                else:
-                    logger.warning(
-                        "   - Failed to resolve curriculum task '%s'. Placing at end of queue.",
+                        "   - ✅ %s task '%s' successfully resolved.",
+                        task_type,
                         task_topic,
                     )
+                    newly_learned_words.append(task_topic)
+                else:
+                    logger.warning(
+                        "   - ❌ Failed to resolve %s task '%s'. Deprioritizing.",
+                        task_type,
+                        task_topic,
+                    )
+                    # --- FIX: Use the boolean flag to append to the correct list ---
                     with self.lock:
-                        self.agent.learning_goals.append(curriculum_goal)
+                        if task_source_is_priority:
+                            # We know task_to_process must be a Goal here, as high_priority_tasks is list[Goal]
+                            if isinstance(task_to_process, dict):
+                                self.agent.high_priority_tasks.append(task_to_process)
+                        else:
+                            self.agent.learning_goals.append(task_to_process)
             else:
-                logger.warning(
-                    "Found malformed curriculum task: %s. Discarding.",
-                    raw_curriculum_task,
-                )
+                logger.warning("Found malformed task: %s. Discarding.", task_to_process)
 
-        # 3. Fallback behavior if both queues are empty.
-        if (
-            not work_done_this_cycle
-            and not self.agent.learning_goals
-            and not self.agent.high_priority_tasks
-        ):
+        # 3. If no tasks were processed, consider deepening knowledge.
+        else:
             logger.info(
                 "All learning queues are empty. Attempting to deepen existing knowledge."
             )
             self._deepen_knowledge_of_random_concept()
 
-        # 4. Consolidate knowledge if any learning was successful.
+        # 4. Consolidate knowledge if any new words were learned.
         if newly_learned_words:
             with self.lock:
                 self._consolidate_pending_knowledge(newly_learned_words)
@@ -799,7 +743,8 @@ class KnowledgeHarvester:
         self, word: str, context: str | None = None
     ) -> tuple[str, str] | None:
         """
-        Retrieve a definition and POS, using context to resolve ambiguity if provided.
+        Retrieve a definition and POS, using a heavily constrained "fill-in-the-blanks"
+        prompt to guarantee valid JSON output from the LLM.
         """
         logger.info("[yellow]   - Querying for definition of[/yellow] '%s'...", word)
 
@@ -814,7 +759,7 @@ class KnowledgeHarvester:
                 )
             else:
                 logger.info("     - Using context: '%s'", context)
-                llm_succeeded = False
+
                 for attempt in range(2):
                     error_feedback = ""
                     if attempt > 0:
@@ -822,57 +767,55 @@ class KnowledgeHarvester:
                             "     - Retrying context-aware definition query (Attempt %d/2)...",
                             attempt + 1,
                         )
-                        error_feedback = "\n**SELF-CORRECTION:** Your previous response was not valid JSON. You MUST adhere strictly to the JSON SCHEMA and RULES."
+                        error_feedback = "\n**SELF-CORRECTION:** Your previous response was invalid. You MUST complete the JSON object provided. Do not generate a new one."
 
+                    # --- FIX: The ultimate "fill-in-the-blanks" prompt ---
                     prompt = f"""
-                    **ROLE:** You are a precise linguistic analysis engine.
-                    **TASK:** Analyze the WORD within the given CONTEXT and return its part of speech and definition as a valid JSON object.
+                    **ROLE:** You are a JSON completion engine. Your only task is to fill in the empty values in the provided JSON object.
 
                     **WORD:** "{word}"
                     **CONTEXT:** "{context}"
 
-                    **JSON SCHEMA:**
-                    {{
-                      "part_of_speech": "string (e.g., 'noun', 'verb', 'adjective')",
-                      "definition": "string (a concise and clear definition)"
-                    }}
+                    **TASK:** Complete the following JSON object.
+                    1.  Fill in the `part_of_speech` with the most relevant grammatical role (e.g., "noun", "verb").
+                    2.  Fill in the `definition` with a concise and clear definition based on the context.
+                    3.  Your final output MUST be ONLY the completed JSON object.{error_feedback}
 
-                    **RULES:**
-                    1. Your output MUST be ONLY the JSON object described by the schema.
-                    2. Use double quotes for all keys and string values.
-                    3. Do not include any commentary, markdown, or other text.{error_feedback}
-                    **OUTPUT:**
+                    **JSON TO COMPLETE:**
+                    ```json
+                    {{
+                      "part_of_speech": "",
+                      "definition": ""
+                    }}
+                    ```
                     """
                     try:
+                        # We prime the response by starting it with the opening brace.
+                        # This forces the model to start completing the JSON immediately.
+                        full_prompt = f"[INST]{prompt}[/INST]\n```json\n{{\n"
+
                         response_text = (
                             self.agent.interpreter._run_llm_completion_with_retries(
-                                f"[INST]{prompt}[/INST]",
-                                max_tokens=256,
-                                temperature=0.0,
+                                full_prompt, max_tokens=256, temperature=0.0
                             )
                         )
 
-                        json_str = self.agent.interpreter._clean_llm_json_output(
+                        # We prepend the brace we used for priming to the response.
+                        json_str = "{ " + self.agent.interpreter._clean_llm_json_output(
                             response_text
                         )
-                        if json_str:
-                            data = json.loads(json_str)
-                            part_of_speech = data.get("part_of_speech")
-                            definition = data.get("definition")
 
-                            if part_of_speech and definition:
-                                logger.info(
-                                    "   - Found context-aware definition: '%s'",
-                                    definition,
-                                )
-                                logger.info(
-                                    "   - Found context-aware part of speech: '%s'",
-                                    part_of_speech,
-                                )
-                                self.llm_definition_failures = 0
-                                self.llm_circuit_breaker_tripped = False
-                                llm_succeeded = True
-                                return (part_of_speech, definition)
+                        data = json.loads(json_str)
+                        part_of_speech = data.get("part_of_speech")
+                        definition = data.get("definition")
+
+                        if part_of_speech and definition:
+                            logger.info(
+                                "   - ✅ Found context-aware definition: '%s'",
+                                definition,
+                            )
+                            self.llm_definition_failures = 0
+                            return (part_of_speech, definition)
                     except Exception as e:
                         if attempt == 0:
                             logger.error(
@@ -881,19 +824,18 @@ class KnowledgeHarvester:
                             )
                         else:
                             logger.critical(
-                                "   - FINAL ATTEMPT FAILED for context-aware definition: %s",
+                                "   - ❌ FINAL ATTEMPT FAILED for context-aware definition: %s",
                                 e,
                             )
 
                     time.sleep(1)
 
-                if not llm_succeeded:
-                    self.llm_definition_failures += 1
-                    if self.llm_definition_failures >= 3:
-                        logger.critical(
-                            "[bold red]LLM definition API has failed 3 consecutive times. Tripping circuit breaker.[/bold red]"
-                        )
-                        self.llm_circuit_breaker_tripped = True
+                self.llm_definition_failures += 1
+                if self.llm_definition_failures >= 3:
+                    logger.critical(
+                        "[bold red]LLM definition API has failed 3 consecutive times. Tripping circuit breaker.[/bold red]"
+                    )
+                    self.llm_circuit_breaker_tripped = True
 
         # Fallback to the general, context-free dictionary API.
         try:
