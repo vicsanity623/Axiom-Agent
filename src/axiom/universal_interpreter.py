@@ -8,7 +8,6 @@ import time
 from contextlib import redirect_stderr
 from pathlib import Path
 from typing import (
-    TYPE_CHECKING,
     Any,
     Final,
     Literal,
@@ -21,9 +20,6 @@ from typing import (
 from llama_cpp import Llama
 
 from .config import DEFAULT_CACHE_FILE, DEFAULT_LLM_PATH
-
-if TYPE_CHECKING:
-    from .graph_core import ConceptNode
 
 logger = logging.getLogger(__name__)
 
@@ -143,17 +139,12 @@ class UniversalInterpreter:
 
     def __init__(
         self,
-        model_path: str | Path = DEFAULT_LLM_PATH,
+        model_path: str
+        | Path = DEFAULT_LLM_PATH,  # No longer needs a default, it will always be provided
         cache_file: str | Path = DEFAULT_CACHE_FILE,
         load_llm: bool = True,
     ) -> None:
-        """Initialize the UniversalInterpreter and load the LLM into memory.
-
-        Args:
-            model_path: The file path to the GGUF-formatted LLM model.
-            cache_file: The file path for the interpretation and synthesis
-                caches.
-        """
+        """Initialize the UniversalInterpreter and load the LLM into memory."""
         logger.info(
             "[yellow]Initializing Universal Interpreter (loading Mini LLM if enabled)...[/yellow]"
         )
@@ -161,22 +152,30 @@ class UniversalInterpreter:
 
         if load_llm:
             logger.info(
-                "[yellow]Initializing Universal Interpreter (loading Mini LLM)...[/yellow]"
+                "[bold cyan]   - Attempting to load LLM from path: %s[/bold cyan]",
+                model_path,
             )
+
             if not Path(model_path).exists():
-                raise FileNotFoundError(
-                    f"[error]Interpreter model not found at {model_path}.[/error] [yellow]Please download using axiom-llm .[/yelow]",
+                logger.error(
+                    "[bold red]   - ❌ LLM model file not found at path: %s[/bold red]",
+                    model_path,
                 )
+                raise FileNotFoundError(f"Interpreter model not found at {model_path}.")
 
             with open(os.devnull, "w") as f, redirect_stderr(f):
                 self.llm = Llama(
                     model_path=str(model_path),
                     n_gpu_layers=0,
                     n_ctx=16384,
-                    n_threads=0,
+                    n_threads=os.cpu_count(),
                     n_batch=1024,
                     verbose=False,
                 )
+            logger.info(
+                "[bold green]   - ✅ Successfully loaded LLM: %s[/bold green]",
+                Path(model_path).name,
+            )
         else:
             logger.info("Initializing Universal Interpreter in SYMBOLIC-ONLY mode.")
 
@@ -775,18 +774,22 @@ class UniversalInterpreter:
 
     def synthesize(
         self,
-        structured_facts: str | list[RelationData] | list[str] | list[ConceptNode],
+        structured_facts: str | list[Any],  # Simplified the union for clarity
         original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
         """Convert a structured, internal representation into natural language."""
         facts_str: str
+        # --- FIX: Correct the isinstance check and ensure facts_str is always a string ---
         if isinstance(structured_facts, list):
             try:
+                # Attempt to serialize complex objects into a JSON string
                 facts_str = json.dumps([str(f) for f in structured_facts])
             except Exception:
+                # Fallback to a simple string representation
                 facts_str = str(structured_facts)
         else:
+            # If it's already a string, just use it
             facts_str = structured_facts
 
         cache_key = f"{mode}|{original_question}|{facts_str}"
@@ -795,6 +798,7 @@ class UniversalInterpreter:
             return self.synthesis_cache[cache_key]
 
         if self.llm is None:
+            # The return here is now safe because facts_str is guaranteed to be a string
             return facts_str
 
         logger.info(
@@ -812,7 +816,7 @@ class UniversalInterpreter:
                 "Do not state the facts directly. Your output must be ONLY the question."
             )
             task_prompt = f"Conflicting Facts: '{facts_str}'"
-        else:
+        else:  # This handles "statement" and "creative_writing"
             system_prompt = REPHRASING_PROMPT
             task_prompt = f"Facts to rephrase: '{facts_str}'"
             if original_question:
@@ -820,13 +824,16 @@ class UniversalInterpreter:
 
         full_prompt = f"[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
-            temperature = 0.7 if mode == "clarification_question" else 0.1
+            temperature = (
+                0.7 if mode in ("clarification_question", "creative_writing") else 0.1
+            )
             synthesized_text = self._run_llm_completion_with_retries(
-                full_prompt, max_tokens=256, temperature=temperature
+                full_prompt, max_tokens=1024, temperature=temperature
             )
             if not synthesized_text:
                 raise ValueError("LLM returned an empty string during synthesis.")
 
+            # Your robust cleanup logic is preserved
             phrases_to_remove = [
                 "rephrased sentence:",
                 "based on the provided facts,",

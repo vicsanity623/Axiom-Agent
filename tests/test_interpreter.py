@@ -27,29 +27,46 @@ def test_interpreter_graceful_failure_without_llm(tmp_path: Path):
     Tests that the UniversalInterpreter behaves correctly and does not crash
     when initialized with the LLM disabled, ensuring test isolation.
     """
+    # Arrange
     isolated_cache_file = tmp_path / "isolated_cache.json"
-    interpreter = UniversalInterpreter(load_llm=False, cache_file=isolated_cache_file)
+
+    # The __init__ signature now requires this. We can pass a dummy path.
+    interpreter = UniversalInterpreter(
+        model_path="dummy/path/model.gguf",
+        load_llm=False,
+        cache_file=isolated_cache_file,
+    )
     assert interpreter.llm is None
 
+    # Act & Assert for interpret
     interpret_result = interpreter.interpret("what is a cat?")
     assert interpret_result["intent"] == "unknown"
     assert "(LLM disabled)" in interpret_result["full_text_rephrased"]
 
+    # Act & Assert for resolve_context
     original_input = "what about it?"
     context_result = interpreter.resolve_context(["User: a raven"], original_input)
     assert context_result == original_input
 
+    # Act & Assert for break_down_definition
     breakdown_result = interpreter.break_down_definition("bird", "a feathered animal")
     assert breakdown_result == []
 
+    # Act & Assert for generate_curious_questions
     questions_result = interpreter.generate_curious_questions(
         "bird",
         "a bird has wings",
     )
     assert questions_result == []
 
-    synthesis_result = interpreter.synthesize("a bird is an animal")
-    assert str(synthesis_result) == "a bird is an animal"
+    # Act & Assert for synthesize
+    structured_fact = "a bird is an animal"
+    question = "what is a bird?"
+    synthesis_result = interpreter.synthesize(
+        structured_facts=structured_fact, original_question=question
+    )
+    # The graceful failure mode is to return the structured data.
+    assert synthesis_result == structured_fact
 
 
 def test_interpreter_json_cleaning_and_caching(tmp_path: Path):

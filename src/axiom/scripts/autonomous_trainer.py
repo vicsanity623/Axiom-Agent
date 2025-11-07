@@ -44,8 +44,7 @@ def _generate_or_set_initial_goal(
     agent: CognitiveAgent, custom_goal: str | None
 ) -> None:
     """
-    Sets a custom initial goal or generates a new, state-aware curriculum,
-    verifying that the generated tasks are not already known.
+    Sets a custom initial goal or generates a new, state-aware curriculum.
     """
     if agent.goal_manager.get_active_goal() or agent.learning_goals:
         logger.info(
@@ -88,9 +87,13 @@ def _generate_or_set_initial_goal(
         creative_seed=selected_seed, known_concepts=known_concepts_str
     )
 
+    # --- FIX: Removed the unreachable 'if agent.interpreter is None:' block ---
+    # The CognitiveAgent always has an interpreter. The interpreter's methods
+    # are responsible for checking if their internal LLM is loaded.
     new_curriculum_goal = agent.interpreter.synthesize(
         structured_facts=prompt, mode="creative_writing"
     )
+    # --- END FIX ---
 
     if not new_curriculum_goal or "[Stage 1:" not in new_curriculum_goal:
         logger.error(
@@ -104,7 +107,6 @@ def _generate_or_set_initial_goal(
     if active_goal and active_goal.get("sub_goals"):
         original_sub_goals = active_goal["sub_goals"]
 
-        # --- FIX: Add type checking to correctly handle the str | Goal union type ---
         filtered_sub_goals = []
         for sg in original_sub_goals:
             topic = ""

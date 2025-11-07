@@ -21,6 +21,18 @@ Axiom’s design is a hybrid model that combines the strengths of classical, sym
 
 ---
 
+### The Axiom Expert LLM: A Fine-Tuned, Local Brain
+
+To ensure reliability and performance, Axiom does not use a generic, off-the-shelf language model. Instead, it employs a custom-trained version of Mistral 7B, specifically fine-tuned for the agent's core tasks.
+
+*   **Base Model:** `mistralai/Mistral-7B-Instruct-v0.2`
+*   **Fine-Tuning:** The base model is fine-tuned using a multi-task dataset that teaches it to be an expert at the specific, structured outputs Axiom requires (e.g., generating valid JSON for sentence decomposition and contextual definitions).
+*   **Quantization:** The final, fine-tuned model is quantized to the `Q4_K_M` GGUF format. This dramatically reduces its size and memory footprint, allowing it to run efficiently on a local CPU without a dedicated GPU.
+
+This process creates a specialized, lightweight, and reliable "Axiom Expert" model that is perfectly aligned with the agent's architectural needs.
+
+---
+
 ## 🧬 The Cognitive Cycles: How the Agent Thinks and Grows
 
 The Axiom Agent operates in a continuous, multi-layered loop of self-improvement. These cycles allow it to discover new topics, research them, decompose complex information, and even analyze its own performance to suggest code improvements.

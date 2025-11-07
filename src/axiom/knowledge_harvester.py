@@ -740,132 +740,42 @@ class KnowledgeHarvester:
         return None
 
     def get_definition_from_api(
-        self, word: str, context: str | None = None
+        self, word: str, context: str | None = None # Keep context for future use
     ) -> tuple[str, str] | None:
         """
-        Retrieve a definition and POS, using a heavily constrained "fill-in-the-blanks"
-        prompt to guarantee valid JSON output from the LLM.
+        Retrieve a precise definition and part of speech from the reliable
+        dictionaryapi.dev. The LLM-based context-aware feature has been
+        disabled due to unreliability.
         """
         logger.info("[yellow]   - Querying for definition of[/yellow] '%s'...", word)
 
-        if (
-            context
-            and self.agent.interpreter is not None
-            and self.agent.interpreter.llm is not None
-        ):
-            if self.llm_circuit_breaker_tripped:
-                logger.warning(
-                    "     - LLM circuit breaker is tripped. Using fallback API directly."
-                )
-            else:
-                logger.info("     - Using context: '%s'", context)
+        # --- FIX: The LLM call and all related logic has been completely removed. ---
+        # We now go directly to the reliable fallback.
 
-                for attempt in range(2):
-                    error_feedback = ""
-                    if attempt > 0:
-                        logger.warning(
-                            "     - Retrying context-aware definition query (Attempt %d/2)...",
-                            attempt + 1,
-                        )
-                        error_feedback = "\n**SELF-CORRECTION:** Your previous response was invalid. You MUST complete the JSON object provided. Do not generate a new one."
-
-                    # --- FIX: The ultimate "fill-in-the-blanks" prompt ---
-                    prompt = f"""
-                    **ROLE:** You are a JSON completion engine. Your only task is to fill in the empty values in the provided JSON object.
-
-                    **WORD:** "{word}"
-                    **CONTEXT:** "{context}"
-
-                    **TASK:** Complete the following JSON object.
-                    1.  Fill in the `part_of_speech` with the most relevant grammatical role (e.g., "noun", "verb").
-                    2.  Fill in the `definition` with a concise and clear definition based on the context.
-                    3.  Your final output MUST be ONLY the completed JSON object.{error_feedback}
-
-                    **JSON TO COMPLETE:**
-                    ```json
-                    {{
-                      "part_of_speech": "",
-                      "definition": ""
-                    }}
-                    ```
-                    """
-                    try:
-                        # We prime the response by starting it with the opening brace.
-                        # This forces the model to start completing the JSON immediately.
-                        full_prompt = f"[INST]{prompt}[/INST]\n```json\n{{\n"
-
-                        response_text = (
-                            self.agent.interpreter._run_llm_completion_with_retries(
-                                full_prompt, max_tokens=256, temperature=0.0
-                            )
-                        )
-
-                        # We prepend the brace we used for priming to the response.
-                        json_str = "{ " + self.agent.interpreter._clean_llm_json_output(
-                            response_text
-                        )
-
-                        data = json.loads(json_str)
-                        part_of_speech = data.get("part_of_speech")
-                        definition = data.get("definition")
-
-                        if part_of_speech and definition:
-                            logger.info(
-                                "   - ✅ Found context-aware definition: '%s'",
-                                definition,
-                            )
-                            self.llm_definition_failures = 0
-                            return (part_of_speech, definition)
-                    except Exception as e:
-                        if attempt == 0:
-                            logger.error(
-                                "   - Context-aware definition query failed on first attempt: %s",
-                                e,
-                            )
-                        else:
-                            logger.critical(
-                                "   - ❌ FINAL ATTEMPT FAILED for context-aware definition: %s",
-                                e,
-                            )
-
-                    time.sleep(1)
-
-                self.llm_definition_failures += 1
-                if self.llm_definition_failures >= 3:
-                    logger.critical(
-                        "[bold red]LLM definition API has failed 3 consecutive times. Tripping circuit breaker.[/bold red]"
-                    )
-                    self.llm_circuit_breaker_tripped = True
-
-        # Fallback to the general, context-free dictionary API.
         try:
             url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
             response = requests.get(url, timeout=5)
             if response.status_code != 200:
+                logger.warning("     - Word not found in Dictionary API.")
                 return None
 
             data = response.json()
-            if not data or not isinstance(data, list):
-                return None
-
-            word_entry = data[0]
-            if "meanings" in word_entry and word_entry["meanings"]:
-                first_meaning = word_entry["meanings"][0]
-                part_of_speech = first_meaning.get("partOfSpeech")
-                if "definitions" in first_meaning and first_meaning["definitions"]:
-                    first_definition = first_meaning["definitions"][0].get("definition")
-                    if part_of_speech and first_definition:
-                        logger.info("   - Found definition: '%s'", first_definition)
-                        logger.info("   - Found part of speech: '%s'", part_of_speech)
-                        return (part_of_speech, first_definition)
-
+            if data and isinstance(data, list):
+                word_entry = data[0]
+                if "meanings" in word_entry and word_entry["meanings"]:
+                    first_meaning = word_entry["meanings"][0]
+                    part_of_speech = first_meaning.get("partOfSpeech")
+                    if "definitions" in first_meaning and first_meaning["definitions"]:
+                        definition = first_meaning["definitions"][0].get("definition")
+                        if part_of_speech and definition:
+                            logger.info("   - ✅ Found definition via Dictionary API: '%s'", definition)
+                            return (part_of_speech, definition)
         except requests.RequestException as e:
-            logger.warning("[error][Dictionary API]: An error occurred: %s[/error]", e)
+            logger.error("[error][Dictionary API]: A network error occurred: %s[/error]", e)
         except (json.JSONDecodeError, KeyError, IndexError) as e:
-            logger.warning(
-                "  [Dictionary API]: Failed to parse response for '%s': %s", word, e
-            )
+            logger.error("[error][Dictionary API]: Failed to parse response for '%s': %s[/error]", word, e)
 
+        logger.warning("     - All attempts to find a definition for '%s' failed.", word)
         return None
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 from nltk.stem import WordNetLemmatizer
 from thefuzz import process
 
-from .config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE
+from .config import DEFAULT_BRAIN_FILE, DEFAULT_LLM_PATH, DEFAULT_STATE_FILE
 from .dictionary_utils import get_word_info_from_wordnet
 from .goal_manager import GoalManager
 from .graph_core import ConceptGraph, ConceptNode, RelationshipEdge
@@ -164,7 +164,9 @@ class CognitiveAgent:
         # Initialize core components
         self.brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_lock = threading.Lock()
-        self.interpreter = UniversalInterpreter(load_llm=enable_llm)
+        self.interpreter = UniversalInterpreter(
+            model_path=DEFAULT_LLM_PATH, load_llm=enable_llm
+        )
         self.lexicon: LexiconManager = LexiconManager(self)
         self.parser: SymbolicParser = SymbolicParser(self)
         self.lemmatizer = WordNetLemmatizer()
