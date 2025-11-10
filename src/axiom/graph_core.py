@@ -9,7 +9,6 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, TypedDict
 
 import networkx as nx
-from networkx.readwrite import json_graph
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -41,16 +40,6 @@ class ConceptNode:
         activation: float = 0.0,
         id_: str | None = None,
     ) -> None:
-        """Initialize a new ConceptNode.
-
-        Args:
-            name: The primary name of the concept (e.g., "dog", "Paris").
-            node_type: The classification of the node (e.g., "noun", "city").
-            properties: A dictionary of additional, arbitrary metadata.
-            value: A numerical value, reserved for future weighting or logic.
-            activation: The current activation level of the node in memory.
-            id_: A specific UUID to assign. If None, a new one is generated.
-        """
         self.id = id_ or str(uuid.uuid4())
         self.name = name.lower()
         self.type = node_type
@@ -59,33 +48,19 @@ class ConceptNode:
         self.properties: PropertyData = properties or {}
 
     def to_dict(self) -> ConceptNodeData:
-        """Serialize the ConceptNode instance to a dictionary.
-
-        Returns:
-            A dictionary representation of the node, suitable for JSON
-            serialization.
-        """
-        return ConceptNodeData(
-            {
-                "id": self.id,
-                "name": self.name,
-                "type": self.type,
-                "properties": self.properties,
-                "value": self.value,
-                "activation": self.activation,
-            },
-        )
+        """Serialize the ConceptNode instance to a dictionary."""
+        return {
+            "id": self.id,
+            "name": self.name,
+            "type": self.type,
+            "properties": self.properties,
+            "value": self.value,
+            "activation": self.activation,
+        }
 
     @classmethod
     def from_dict(cls, data: ConceptNodeData) -> Self:
-        """Create a new ConceptNode instance from a dictionary.
-
-        Args:
-            data: A dictionary containing the node's data.
-
-        Returns:
-            A new instance of the ConceptNode class.
-        """
+        """Create a new ConceptNode instance from a dictionary."""
         return cls(
             id_=data.get("id"),
             name=data["name"],
@@ -129,18 +104,6 @@ class RelationshipEdge:
         properties: PropertyData | None = None,
         access_count: int = 0,
     ) -> None:
-        """Initialize a new RelationshipEdge.
-
-        Args:
-            source: The UUID of the source (origin) ConceptNode.
-            target: The UUID of the target (destination) ConceptNode.
-            type: The semantic type of the relationship (e.g., "is_a").
-            weight: The confidence or strength of this fact (0.0 to 1.0).
-            id: A specific UUID to assign. If None, a new one is generated.
-            properties: A dictionary of additional, arbitrary metadata.
-            access_count: A counter for how many times this fact has been
-                accessed, used for salience calculations.
-        """
         self.id = id or str(uuid.uuid4())
         self.source = source
         self.target = target
@@ -150,34 +113,20 @@ class RelationshipEdge:
         self.access_count = access_count
 
     def to_dict(self) -> RelationshipEdgeData:
-        """Serialize the RelationshipEdge instance to a dictionary.
-
-        Returns:
-            A dictionary representation of the edge, suitable for JSON
-            serialization.
-        """
-        return RelationshipEdgeData(
-            {
-                "id": self.id,
-                "source": self.source,
-                "target": self.target,
-                "type": self.type,
-                "weight": self.weight,
-                "properties": self.properties,
-                "access_count": self.access_count,
-            },
-        )
+        """Serialize the RelationshipEdge instance to a dictionary."""
+        return {
+            "id": self.id,
+            "source": self.source,
+            "target": self.target,
+            "type": self.type,
+            "weight": self.weight,
+            "properties": self.properties,
+            "access_count": self.access_count,
+        }
 
     @classmethod
     def from_dict(cls, data: RelationshipEdgeData) -> Self:
-        """Create a new RelationshipEdge instance from a dictionary.
-
-        Args:
-            data: A dictionary containing the edge's data.
-
-        Returns:
-            A new instance of the RelationshipEdge class.
-        """
+        """Create a new RelationshipEdge instance from a dictionary."""
         return cls(
             id=data.get("id"),
             source=data["source"],
@@ -190,14 +139,7 @@ class RelationshipEdge:
 
 
 class ConceptGraph:
-    """A manager for the agent's knowledge graph, built on NetworkX.
-
-    This class provides a high-level API for interacting with the agent's
-    brain. It handles the creation, retrieval, and connection of nodes and
-    edges, abstracting away the underlying `networkx.MultiDiGraph`
-    implementation. It also maintains fast lookup tables for finding
-    nodes by name and type.
-    """
+    """A manager for the agent's knowledge graph, built on NetworkX."""
 
     __slots__ = ("graph", "name_to_id", "_type_index")
 
@@ -208,20 +150,10 @@ class ConceptGraph:
         self._type_index: dict[str, set[str]] = defaultdict(set)
 
     def add_node(self, node: ConceptNode) -> ConceptNode:
-        """Add a new concept node to the graph if it doesn't already exist.
-
-        This method is idempotent: if a node with the same name already
-        exists, it will return the existing node instead of creating a
-        duplicate.
-
-        Args:
-            node: The `ConceptNode` instance to add to the graph.
-
-        Returns:
-            The newly added or pre-existing `ConceptNode`.
-        """
-        if existing_node := self.get_node_by_name(node.name):
-            return existing_node
+        """Add or update a concept node in the graph."""
+        if existing_id := self.name_to_id.get(node.name):
+            self.graph.nodes[existing_id].update(node.to_dict())
+            return self.get_node_by_id(existing_id) or node
 
         self.graph.add_node(node.id, **node.to_dict())
         self.name_to_id[node.name] = node.id
@@ -229,35 +161,16 @@ class ConceptGraph:
         return node
 
     def get_node_by_name(self, name: str) -> ConceptNode | None:
-        """Find and retrieve a concept node from the graph by its name.
-
-        Uses a fast in-memory dictionary for the name-to-ID lookup before
-        retrieving the full node data from the graph.
-
-        Args:
-            name: The case-insensitive name of the node to find.
-
-        Returns:
-            The corresponding `ConceptNode` instance, or None if not found.
-        """
+        """Find and retrieve a concept node from the graph by its name."""
         node_id = self.name_to_id.get(name.lower())
-        if node_id and self.graph.has_node(node_id):
-            node_data = self.graph.nodes[node_id]
-            node_data["id"] = node_id
-            return ConceptNode.from_dict(node_data)
+        if node_id:
+            return self.get_node_by_id(node_id)
         return None
 
     def get_node_by_id(self, node_id: str) -> ConceptNode | None:
-        """Retrieve a single ConceptNode object from the graph by its ID.
-
-        Args:
-            node_id: The unique identifier of the node to retrieve.
-
-        Returns:
-            The corresponding `ConceptNode` instance, or None if not found.
-        """
+        """Retrieve a single ConceptNode object from the graph by its ID."""
         if self.graph.has_node(node_id):
-            node_data = self.graph.nodes[node_id]
+            node_data = self.graph.nodes[node_id].copy()
             node_data["id"] = node_id
             return ConceptNode.from_dict(node_data)
         return None
@@ -265,21 +178,18 @@ class ConceptGraph:
     def get_nodes_by_type(self, node_type: str) -> list[ConceptNode]:
         """Efficiently retrieves all nodes of a specific type using the index."""
         node_ids = self._type_index.get(node_type, set())
-        nodes = []
-        for node_id in node_ids:
-            if node := self.get_node_by_id(node_id):
-                nodes.append(node)
-        return nodes
+        return [node for node_id in node_ids if (node := self.get_node_by_id(node_id))]
+
+    def get_all_nodes(self) -> list[ConceptNode]:
+        """Retrieve all nodes in the graph as ConceptNode objects."""
+        return [
+            node
+            for node_id in self.graph.nodes
+            if (node := self.get_node_by_id(node_id))
+        ]
 
     def get_all_node_names(self) -> list[str]:
-        """Retrieve a list of all concept names in the graph.
-
-        This is useful for fuzzy matching, as it provides a complete
-        "vocabulary" of known entities to match against.
-
-        Returns:
-            A list of strings, where each string is the name of a node.
-        """
+        """Retrieve a list of all concept names in the graph."""
         return list(self.name_to_id.keys())
 
     def add_edge(
@@ -290,39 +200,22 @@ class ConceptGraph:
         weight: float = 0.5,
         properties: PropertyData | None = None,
     ) -> RelationshipEdge | None:
-        """Add a directed edge (relationship) between two nodes.
-
-        If an edge with the same source, target, and type already exists,
-        this method will update the existing edge's weight (taking the
-        maximum of the old and new weights) and merge properties rather
-        than creating a duplicate.
-
-        Args:
-            source_node: The `ConceptNode` where the relationship originates.
-            target_node: The `ConceptNode` where the relationship ends.
-            relation_type: The semantic type of the relationship (e.g., "is_a").
-            weight: The confidence score for this relationship.
-            properties: Additional metadata for the relationship.
-
-        Returns:
-            The newly created or updated `RelationshipEdge` instance, or
-            None if the source or target node is invalid.
-        """
+        """Add a directed edge (relationship) between two nodes."""
         if not all([source_node, target_node]):
             raise ValueError("Source or target node missing")
 
+        self.add_node(source_node)
+        self.add_node(target_node)
+
         if self.graph.has_edge(source_node.id, target_node.id):
-            for key, data in self.graph.get_edge_data(
-                source_node.id,
-                target_node.id,
-            ).items():
+            for data in self.graph.get_edge_data(
+                source_node.id, target_node.id
+            ).values():
                 if data.get("type") == relation_type:
                     data["weight"] = max(data["weight"], weight)
                     if properties:
                         data["properties"].update(properties)
                     full_edge_data = data.copy()
-                    full_edge_data["source"] = source_node.id
-                    full_edge_data["target"] = target_node.id
                     return RelationshipEdge.from_dict(full_edge_data)
 
         new_edge = RelationshipEdge(
@@ -341,112 +234,76 @@ class ConceptGraph:
         return new_edge
 
     def get_edges_from_node(self, node_id: str) -> list[RelationshipEdge]:
-        """Retrieve all outgoing edges (relationships) from a specific node.
-
-        Args:
-            node_id: The unique identifier of the source node.
-
-        Returns:
-            A list of `RelationshipEdge` instances originating from the node.
-        """
+        """Retrieve all outgoing edges (relationships) from a specific node."""
         if not self.graph.has_node(node_id):
             return []
         edges = []
-        for u, v, key, data in self.graph.out_edges(node_id, keys=True, data=True):
+        for u, v, data in self.graph.out_edges(node_id, data=True):
             full_data = data.copy()
-            full_data["source"] = u
-            full_data["target"] = v
             edges.append(RelationshipEdge.from_dict(full_data))
         return edges
 
     def get_edges_to_node(self, node_id: str) -> list[RelationshipEdge]:
-        """Retrieve all incoming edges (relationships) to a specific node.
-
-        Args:
-            node_id: The unique identifier of the target node.
-
-        Returns:
-            A list of `RelationshipEdge` instances pointing to the node.
-        """
+        """Retrieve all incoming edges (relationships) to a specific node."""
         if not self.graph.has_node(node_id):
             return []
         edges = []
         for u, v, data in self.graph.in_edges(node_id, data=True):
-            full_edge_data = data.copy()
-            full_edge_data["source"] = u
-            full_edge_data["target"] = v
-            edges.append(RelationshipEdge.from_dict(full_edge_data))
+            full_data = data.copy()
+            edges.append(RelationshipEdge.from_dict(full_data))
         return edges
 
     def get_all_edges(self) -> list[RelationshipEdge]:
-        """Retrieve all edges in the graph as RelationshipEdge objects.
-
-        Returns:
-            A list of all RelationshipEdge objects in the graph.
-        """
-        reconstructed_edges = []
-        for u, v, data in self.graph.edges(data=True):
-            full_data = data.copy()
-            full_data["source"] = u
-            full_data["target"] = v
-            reconstructed_edges.append(RelationshipEdge.from_dict(full_data))
-        return reconstructed_edges
+        """Retrieve all edges in the graph as RelationshipEdge objects."""
+        return [
+            RelationshipEdge.from_dict(data)
+            for _, _, data in self.graph.edges(data=True)
+        ]
 
     def decay_activations(self, decay_rate: float = 0.1) -> None:
-        """Apply a decay function to the activation level of all nodes.
-
-        This method simulates the process of forgetting or reducing the
-        short-term "focus" on concepts over time. It is called at the
-        beginning of each chat turn.
-
-        Args:
-            decay_rate: The amount to subtract from each node's activation.
-        """
+        """Apply a decay function to the activation level of all nodes."""
         for node_id in self.graph.nodes:
             current_activation = self.graph.nodes[node_id].get("activation", 0.0)
             self.graph.nodes[node_id]["activation"] = max(
-                0.0,
-                current_activation - decay_rate,
+                0.0, current_activation - decay_rate
             )
 
     def save_to_file(self, filename: Path | str) -> None:
-        """Serialize the entire knowledge graph to a JSON file.
-
-        Uses the NetworkX `node_link_data` format for robust serialization.
-
-        Args:
-            filename: The path to the file where the graph will be saved.
-        """
-        graph_data = json_graph.node_link_data(self.graph, edges="links")
+        """Serialize the entire knowledge graph to a JSON file."""
+        graph_data = {
+            "nodes": [data for _, data in self.graph.nodes(data=True)],
+            "links": [data for _, _, data in self.graph.edges(data=True)],
+        }
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(graph_data, f, indent=4)
 
     @classmethod
     def load_from_dict(cls, data: dict[str, Any]) -> Self:
-        """Create a new ConceptGraph instance from a dictionary.
-
-        This method de-serializes a graph from the NetworkX node-link
-        format. It also rebuilds the fast name-to-ID lookup table after
-        loading. This is the primary method for loading unpacked .axm models.
-
-        Args:
-            data: A dictionary containing the node-link graph data.
-
-        Returns:
-            A new instance of the ConceptGraph class populated with data.
-        """
+        """Create a new ConceptGraph instance from a dictionary."""
         instance = cls()
+        nodes = data.get("nodes", [])
+        links = data.get("links", [])
 
-        instance.graph = json_graph.node_link_graph(data, edges="links")
-
-        for node_id, node_data in instance.graph.nodes(data=True):
+        for node_data in nodes:
+            node_id = node_data.get("id")
+            if not node_id:
+                continue
+            instance.graph.add_node(node_id, **node_data)
             if "name" in node_data:
                 instance.name_to_id[node_data["name"].lower()] = node_id
             if "type" in node_data:
                 instance._type_index[node_data["type"]].add(node_id)
 
+        for link_data in links:
+            source = link_data.get("source")
+            target = link_data.get("target")
+            key = link_data.get("id")
+            if not all([source, target, key]):
+                continue
+            instance.graph.add_edge(source, target, key=key, **link_data)
+
         logger.info(
-            "[green]   - Nodes: %d, Edges: %d[/green]",
+            "[green]   - Brain loaded from dictionary. Nodes: %d, Edges: %d[/green]",
             len(instance.graph.nodes),
             len(instance.graph.edges),
         )
@@ -454,19 +311,7 @@ class ConceptGraph:
 
     @classmethod
     def load_from_file(cls, filename: Path | str) -> Self:
-        """Create a new ConceptGraph instance from a JSON file.
-
-        This is a convenience wrapper around `load_from_dict`. It handles
-        the file I/O and JSON parsing, including error handling for missing
-        or corrupt files. It is the primary method used by training scripts.
-
-        Args:
-            filename: The path to the JSON file containing the graph data.
-
-        Returns:
-            A new instance of the ConceptGraph class, which will be empty
-            if the file could not be loaded.
-        """
+        """Create a new ConceptGraph instance from a JSON file."""
         if os.path.exists(filename):
             try:
                 with open(filename, encoding="utf-8") as f:

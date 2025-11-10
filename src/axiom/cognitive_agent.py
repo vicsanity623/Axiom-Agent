@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import threading
+from collections import defaultdict
 from datetime import date, datetime
 from functools import lru_cache
 from typing import (
@@ -118,42 +118,18 @@ class CognitiveAgent:
         ],
     )
 
-    # metacognitive_engine.py analyzed axiom.log and suggested this entire `def __init__`, the agent succesfully created the first real introspect on its own source code!!!
-    def __init__(  # <--- This entire def __init__ was generated using the metacognitiveEngine as proof of proper and actual enhancements after human review of course.
+    def __init__(
         self,
         brain_file: Path = DEFAULT_BRAIN_FILE,
         state_file: Path = DEFAULT_STATE_FILE,
         *,
         load_from_file: bool = True,
-        brain_data: dict[str, object] | None = None,
-        cache_data: dict[str, object] | None = None,
+        brain_data: dict[str, Any] | None = None,
+        cache_data: dict[str, Any] | None = None,
         inference_mode: bool = False,
         enable_llm: bool = True,
     ) -> None:
-        """Initialize a new instance of the CognitiveAgent.
-
-        This constructor sets up the agent's core components and loads its cognitive
-        state (the "brain") from either a file or provided data dictionaries. It
-        also performs an integrity check on the loaded brain, re-seeding it with
-        foundational knowledge if core identity information is missing.
-
-        Args:
-            brain_file: Path to the file for storing the concept graph.
-            state_file: Path to the file for storing the agent's operational state.
-            load_from_file: If True, loads the brain and state from the specified
-                files. If False, `brain_data` and `cache_data` must be provided.
-            brain_data: A dictionary containing the serialized concept graph and
-                metadata. Used when `load_from_file` is False.
-            cache_data: A dictionary containing serialized interpretation and
-                synthesis caches. Used when `load_from_file` is False.
-            inference_mode: If True, disables learning and knowledge harvesting.
-            enable_llm: If True, enables the Large Language Model backend for the
-                UniversalInterpreter.
-
-        Raises:
-            ValueError: If the agent is not initialized with either files or data.
-            TypeError: If `brain_data` or `cache_data` have malformed contents.
-        """
+        """Initialize a new instance of the CognitiveAgent."""
         logger.info("[yellow]Initializing Cognitive Agent...[/yellow]")
         self.brain_file = brain_file
         self.state_file = state_file
@@ -161,7 +137,6 @@ class CognitiveAgent:
         if self.inference_mode:
             logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
 
-        # Initialize core components
         self.brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_lock = threading.Lock()
         self.interpreter = UniversalInterpreter(
@@ -173,64 +148,53 @@ class CognitiveAgent:
         self.goal_manager: GoalManager = GoalManager(self)
         self.learning_goals: list[str | Goal] = []
         self.high_priority_tasks: list[Goal] = []
-
-        self.pending_relations: dict[str, list[tuple[RelationData, PropertyData]]] = {}
-
+        self.pending_relations: dict[str, list[tuple[RelationData, PropertyData]]] = (
+            defaultdict(list)
+        )
         self.recently_researched: dict[str, float] = {}
+        self.learning_iterations: int = 0
+
         self.harvester: KnowledgeHarvester | None = None
         if not self.inference_mode:
             self.harvester = KnowledgeHarvester(agent=self, lock=self.interaction_lock)
 
-        # Load and verify brain based on initialization mode
         if load_from_file:
             logger.info(
                 "[green]   - Loading brain from file: %s[/green]", self.brain_file
             )
             self.graph = ConceptGraph.load_from_file(self.brain_file)
-            self._load_agent_state()
 
-            # Ensure brain integrity by checking for core agent identity
-            agent_node = self.graph.get_node_by_name("agent")
-            has_name_edge = False
-            if agent_node:
-                has_name_edge = any(
-                    edge.type == "has_name"
-                    for edge in self.graph.get_edges_from_node(agent_node.id)
-                )
-
-            if not has_name_edge:
-                logger.critical(
-                    "[red]   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity.[/red]"
-                )
-                self.graph = ConceptGraph()
-                seed_domain_knowledge(self)
-                seed_core_vocabulary(self)
-                self.save_brain()
-                self.save_state()
-
-        elif brain_data is not None and cache_data is not None:
-            logger.info("   - Initializing brain from loaded .axm model data.")
+        elif brain_data is not None:
+            logger.info("   - Initializing brain from provided data dictionary.")
             self.graph = ConceptGraph.load_from_dict(brain_data)
-
-            interpretations_raw = cache_data.get("interpretations", [])
-            synthesis_raw = cache_data.get("synthesis", [])
-            if not isinstance(interpretations_raw, list) or not isinstance(
-                synthesis_raw, list
-            ):
-                raise TypeError(
-                    "Cache data for 'interpretations' and 'synthesis' must be lists."
+            if cache_data:
+                self.interpreter.interpretation_cache = dict(
+                    cache_data.get("interpretations", [])
                 )
-            self.interpreter.interpretation_cache = dict(interpretations_raw)
-            self.interpreter.synthesis_cache = dict(synthesis_raw)
-
-            learning_iterations_raw = brain_data.get("learning_iterations", 0)
-            if not isinstance(learning_iterations_raw, int):
-                raise TypeError("'learning_iterations' must be an integer.")
-            self.learning_iterations = learning_iterations_raw
+                self.interpreter.synthesis_cache = dict(cache_data.get("synthesis", []))
         else:
-            raise ValueError("Agent must be initialized with either files or data.")
+            raise ValueError(
+                "Agent must be initialized with either files or data if load_from_file is False."
+            )
 
-        # Initialize operational state
+        agent_node = self.graph.get_node_by_name("agent")
+        has_name_edge = False
+        if agent_node:
+            has_name_edge = any(
+                edge.type == "has_name"
+                for edge in self.graph.get_edges_from_node(agent_node.id)
+            )
+
+        if not has_name_edge:
+            logger.critical(
+                "[red]   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity.[/red]"
+            )
+            self.graph = ConceptGraph()
+            seed_domain_knowledge(self)
+            seed_core_vocabulary(self)
+            self.save_brain()
+            self.save_state()
+
         self.is_awaiting_clarification = False
         self.clarification_context: ClarificationContext = ClarificationContext({})
         self.structured_history: list[tuple[str, list[InterpretData]]] = []
@@ -303,13 +267,10 @@ class CognitiveAgent:
         if not unknown_words:
             return None
 
-        # --- FIX: Modernize the entire reflex logic ---
         word_to_learn = sorted(set(unknown_words))[0]
 
-        # 1. Create a structured, high-priority goal.
         goal = Goal(task="INVESTIGATE", topic=word_to_learn)
 
-        # 2. Add it to the correct queue.
         if goal not in self.high_priority_tasks:
             self.high_priority_tasks.insert(0, goal)
             logger.info(
@@ -317,7 +278,6 @@ class CognitiveAgent:
                 word_to_learn,
             )
 
-        # 3. Return a consistent, informative response. Do NOT learn synchronously.
         return f"I'm not familiar with the word '{word_to_learn}'. I will add it to my study queue and research it later."
 
     def _update_history(self, interpretations: list[InterpretData]) -> None:
@@ -387,7 +347,6 @@ class CognitiveAgent:
                 pronoun_found_at_index = i
                 break
 
-        # If no pronouns are in the text, return it unchanged.
         if pronoun_found_at_index is None:
             return text
 
@@ -402,7 +361,6 @@ class CognitiveAgent:
                 if self.lexicon.is_part_of_speech(word, "noun")
             ]
             if local_candidates:
-                # The first noun found when searching backwards is the most likely antecedent.
                 antecedent = local_candidates[0]
                 logger.debug("[Coreference]: Found local antecedent: '%s'", antecedent)
 
@@ -427,7 +385,6 @@ class CognitiveAgent:
             elif isinstance(antecedent_raw, dict):
                 antecedent = antecedent_raw.get("name")
 
-        # --- Apply the resolution using the found antecedent ---
         if antecedent:
             clean_antecedent = self._clean_phrase(antecedent)
             if not clean_antecedent:
@@ -982,26 +939,35 @@ class CognitiveAgent:
             self._reboot_interpreter()
             self.autonomous_cycle_count = 0
 
-    def _load_agent_state(self) -> None:
-        """Load the agent's operational state from its state file."""
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, encoding="utf-8") as f:
-                    state_data = json.load(f)
-                    self.learning_iterations = state_data.get("learning_iterations", 0)
-                logger.info(
-                    "[success]   - Agent state loaded from '%s'. [/success]",
-                    self.state_file,
+    def load_state(self) -> None:
+        """Load the agent's operational state from the state file."""
+        if not self.state_file.exists():
+            logger.info("   - No agent state file found. Starting with a fresh state.")
+            return
+
+        try:
+            with self.state_file.open("r", encoding="utf-8") as f:
+                state_data = json.load(f)
+
+            self.learning_goals = state_data.get("learning_goals", [])
+            self.high_priority_tasks = state_data.get("high_priority_tasks", [])
+            self.autonomous_cycle_count = state_data.get("autonomous_cycle_count", 0)
+
+            if self.harvester:
+                self.harvester.researched_terms = set(
+                    state_data.get("researched_terms", [])
                 )
-            except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(
-                    "Could not load or parse agent state file '%s'. Resetting state. Error: %s",
-                    self.state_file,
-                    e,
-                )
-                self.learning_iterations = 0
-        else:
-            self.learning_iterations = 0
+
+            logger.info("   - Agent state loaded from '%s'.", self.state_file)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.error(
+                "   - Error loading agent state from %s: %s. Starting fresh.",
+                self.state_file,
+                e,
+            )
+            self.learning_goals = []
+            self.high_priority_tasks = []
+            self.autonomous_cycle_count = 0
 
     def _save_agent_state(self) -> None:
         """Save the agent's current operational state to its state file."""
@@ -1264,7 +1230,13 @@ class CognitiveAgent:
             object_name,
         )
 
-        sub_node = self._add_or_update_concept(subject_name)
+        relation_type = self.get_relation_type(verb_name, subject_name, object_name)
+
+        sub_node = self._add_or_update_concept(
+            subject_name,
+            context_relation_type=relation_type,
+            context_object_name=object_name,
+        )
         obj_node = self._add_or_update_concept(object_name)
 
         if not (sub_node and obj_node):
@@ -1272,8 +1244,6 @@ class CognitiveAgent:
                 False,
                 f"Failed to create concepts for '{subject_name}' or '{object_name}'.",
             )
-
-        relation_type = self.get_relation_type(verb_name, subject_name, object_name)
 
         if relation_type in self._EXCLUSIVE_RELATIONS:
             was_learned, message = self._resolve_exclusive_conflict(
@@ -1332,7 +1302,6 @@ class CognitiveAgent:
         if candidate_strength < existing_strength:
             return False, "existing_fact_stronger"
 
-        # Stalemate case
         return False, "exclusive_conflict"
 
     def _add_new_fact(
@@ -1429,7 +1398,13 @@ class CognitiveAgent:
         self,
         name: str,
         node_type: str = "concept",
+        context_relation_type: str | None = None,
+        context_object_name: str | None = None,
     ) -> ConceptNode | None:
+        """
+        Finds a concept by name or creates it, integrating WordNet for type
+        detection and now handling autonomous lexical promotion.
+        """
         clean_name = self._clean_phrase(name)
         if not clean_name:
             return None
@@ -1455,6 +1430,19 @@ class CognitiveAgent:
                 clean_name,
                 node.type,
             )
+
+        if context_relation_type == "is_a" and context_object_name in (
+            "noun",
+            "verb",
+            "adjective",
+        ):
+            logger.info(
+                "    [Lexicon]: Autonomously promoting '%s' as a '%s'.",
+                clean_name,
+                context_object_name,
+            )
+            self.lexicon.promote_word(clean_name, context_object_name, confidence=0.8)
+
         return node
 
     def _add_or_update_concept_quietly(

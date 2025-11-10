@@ -7,14 +7,15 @@ import re
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, cast
+from typing import TYPE_CHECKING, Final
 from urllib.parse import quote
 
 import requests
 import wikipedia
 from nltk.stem import WordNetLemmatizer
 
-from axiom.universal_interpreter import Goal, PropertyData, RelationData
+from axiom.dictionary_utils import get_word_info_from_wordnet
+from axiom.universal_interpreter import Goal, RelationData
 
 from .knowledge_base import validate_and_add_relation
 from .logging_config import console
@@ -24,19 +25,16 @@ if TYPE_CHECKING:
 
     from axiom.cognitive_agent import CognitiveAgent
     from axiom.graph_core import ConceptNode, RelationshipEdge
-
-
 logger = logging.getLogger(__name__)
-
 wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
 RESEARCH_CACHE_PATH: Final = Path("data/research_cache.json")
 
 
 class LogColors:
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    WHITE = "\033[97m"
-    RESET = "\033[0m"
+    GREEN = "\x1b[92m"
+    YELLOW = "\x1b[93m"
+    WHITE = "\x1b[97m"
+    RESET = "\x1b[0m"
 
 
 class KnowledgeHarvester:
@@ -120,9 +118,7 @@ class KnowledgeHarvester:
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("\n--- [Discovery Cycle Started at %s] ---", timestamp)
-
         new_topic = self._find_new_topic()
-
         if new_topic:
             goal = Goal(task="INVESTIGATE", topic=new_topic)
             with self.lock:
@@ -134,97 +130,77 @@ class KnowledgeHarvester:
                     )
         else:
             logger.warning(
-                "[Discovery Cycle]: Could not find any new topics to learn about this cycle.",
+                "[Discovery Cycle]: Could not find any new topics to learn about this cycle."
             )
-
         logger.info("--- [Discovery Cycle Finished] ---\n")
         self.agent.log_autonomous_cycle_completion()
 
     def _resolve_investigation_goal(self, goal: Goal | str) -> bool:
         """
-        Attempts to resolve an "INVESTIGATE" goal.
+        Attempts to resolve an "INVESTIGATE" goal using a focused, multi-step strategy.
         Returns True on success, False on failure.
-        This method NO LONGER MODIFIES THE GOAL QUEUES.
         """
+        caller_name = f"{self.__class__.__name__}._resolve_investigation_goal"
         term_to_learn: str
-        context: str | None = None
-
         if isinstance(goal, str):
-            match = re.match(r"INVESTIGATE: (.*)", goal)
+            match = re.match("INVESTIGATE: (.*)", goal)
             if not match:
                 return False
             term_to_learn = match.group(1).lower()
         else:
             term_to_learn = goal.get("topic", "").lower()
-            context = goal.get("context")
-
         if not term_to_learn:
             return False
 
         if self.agent.lexicon.is_known_word(term_to_learn):
             logger.info(
-                "[purple][Study Cycle]: Skipping '%s' — already known.[/purple]",
+                "[Study Cycle]: Skipping '%s' — already known.",
                 term_to_learn,
             )
-            return (
-                True  # The goal is considered "resolved" if the word is already known.
-            )
+            return True
 
         logger.info(
-            "[purple][Study Cycle]: Prioritizing learning goal: To define '%s'.[/purple]",
-            term_to_learn,
+            "[Study Cycle]: Prioritizing learning goal: To define '%s'.", term_to_learn
         )
-
-        # --- Primary Learning Path: Dictionary API (for single words) ---
-        if " " not in term_to_learn:
-            api_result = self.get_definition_from_api(term_to_learn, context=context)
+        is_single_word = " " not in term_to_learn
+        if is_single_word:
+            logger.info("   - Term is a single word. Using Dictionary API.")
+            api_result = self.get_definition_from_api(term_to_learn)
             if api_result:
                 part_of_speech, definition = api_result
                 was_learned = False
                 with self.lock:
-                    # Learn the part of speech
-                    pos_relation = cast(
-                        "RelationData",
-                        {
-                            "subject": term_to_learn,
-                            "verb": "is_a",
-                            "object": part_of_speech,
+                    pos_relation: RelationData = {
+                        "subject": term_to_learn,
+                        "verb": "is_a",
+                        "object": part_of_speech,
+                        "properties": {
+                            "provenance": "dictionary_api",
+                            "confidence": 0.95,
                         },
+                    }
+                    pos_learned, _ = self.agent._process_statement_for_learning(
+                        pos_relation
                     )
-                    pos_properties = cast(
-                        "PropertyData",
-                        {"provenance": "dictionary_api", "confidence": 0.95},
-                    )
-                    status_pos = validate_and_add_relation(
-                        self.agent,
-                        pos_relation,
-                        pos_properties,
-                        "_resolve_investigation_goal",
-                        term_to_learn,
-                    )
-
-                    if status_pos == "inserted":
+                    if pos_learned:
                         was_learned = True
-
-                    # Learn the definition
-                    if definition:
-                        if self.agent.learn_new_fact_autonomously(
-                            definition, term_to_learn
-                        ):
-                            was_learned = True
-
+                    if definition and self.agent.learn_new_fact_autonomously(
+                        definition, term_to_learn
+                    ):
+                        was_learned = True
                 if was_learned:
                     logger.info(
-                        "[success]  [Study Cycle]: Successfully learned from Dictionary API.[/success]"
+                        "[green]   - Successfully learned from Dictionary API.[/green]"
                     )
                     return True
-
-        # --- Fallback Learning Path: Web Search ---
-        logger.info(
-            "[yellow]   - Dictionary API failed for '%s'. Falling back to web search.[/yellow]",
-            term_to_learn,
-        )
-        queries = [f"what is {term_to_learn}", f"define {term_to_learn}", term_to_learn]
+            logger.warning(
+                "   - Dictionary API failed for single word '%s'. Marking as unresolvable.",
+                term_to_learn,
+            )
+            self._mark_as_researched(term_to_learn)
+            return False
+        logger.info("   - Term is a multi-word concept. Using web search.")
+        queries = [f"what is {term_to_learn}", f"define {term_to_learn}"]
         for query in queries:
             result = self.get_fact_from_wikipedia(
                 query
@@ -234,54 +210,64 @@ class KnowledgeHarvester:
                 with self.lock:
                     if self.agent.learn_new_fact_autonomously(web_fact, term_to_learn):
                         logger.info(
-                            "[success]   - Agent successfully learned the new fact from web.[/success]"
+                            "[green]   - Agent successfully learned the new fact from web.[/green]"
                         )
                         return True
-                break  # Stop searching if we found a result but failed to learn
+                break
             time.sleep(1)
-
         logger.warning(
             "[yellow]   - All learning attempts failed for '%s'.[/yellow]",
             term_to_learn,
+            caller_name,
         )
-        self._mark_as_researched(
-            term_to_learn
-        )  # Mark as researched to avoid retrying forever
+        self._mark_as_researched(term_to_learn)
         return False
 
-    def _consolidate_pending_knowledge(self, newly_learned_words: list[str]) -> None:
+    def _consolidate_pending_knowledge(self, newly_learned_words: list[str]) -> bool:
         """
-        Performs a targeted re-evaluation of deferred facts that were blocked
-        by the words that were just learned.
+        Performs a targeted re-evaluation of deferred facts.
+        Returns True if all relevant facts were consolidated, False otherwise.
         """
+        caller_name = f"{self.__class__.__name__}._consolidate_pending_knowledge"
         if not self.agent.pending_relations or not newly_learned_words:
-            return
+            return True
+
+        newly_learned_set = set(newly_learned_words)
+        relevant_words = newly_learned_set.intersection(
+            self.agent.pending_relations.keys()
+        )
+        if not relevant_words:
+            return True
 
         logger.info(
-            "   - Consolidating deferred facts related to newly learned words: %s",
-            newly_learned_words,
+            "   - Consolidating deferred facts for newly learned words: %s",
+            sorted(relevant_words),
         )
-
-        processed_count = 0
-
-        for word in newly_learned_words:
-            if word in self.agent.pending_relations:
-                facts_to_reprocess = self.agent.pending_relations.pop(word)
+        facts_to_reprocess = []
+        for word in relevant_words:
+            facts_for_word = self.agent.pending_relations.pop(word, [])
+            if facts_for_word:
                 logger.info(
-                    "     - Re-evaluating %d fact(s) blocked by '%s'...",
-                    len(facts_to_reprocess),
+                    "     - Re-evaluating %d fact(s) blocked by '%s'",
+                    len(facts_for_word),
                     word,
                 )
+                facts_to_reprocess.extend(facts_for_word)
 
-                for relation, properties in facts_to_reprocess:
-                    status = validate_and_add_relation(
-                        agent=self.agent,
-                        relation=relation,
-                        properties=properties,
-                        caller_name="Consolidation",
-                    )
-                    if status != "deferred":
-                        processed_count += 1
+        if not facts_to_reprocess:
+            return True
+
+        processed_count = 0
+        caller_name = f"{self.__class__.__name__}._consolidate_pending_knowledge"
+        for relation, properties in facts_to_reprocess:
+            status = validate_and_add_relation(
+                agent=self.agent,
+                relation=relation,
+                properties=properties,
+                caller_name=caller_name,
+            )
+            if status != "deferred":
+                processed_count += 1
 
         if processed_count > 0:
             logger.info(
@@ -289,23 +275,28 @@ class KnowledgeHarvester:
                 processed_count,
             )
 
+        if processed_count < len(facts_to_reprocess):
+            logger.warning(
+                "   - Consolidation incomplete. %d facts remain deferred.",
+                len(facts_to_reprocess) - processed_count,
+                caller_name,
+            )
+            return False
+
+        return True
+
     def study_cycle(self) -> None:
         """
-        Run one full study cycle with a two-tiered priority system.
-        The study cycle is the SOLE manager of the learning queues.
+        Run one full study cycle with a two-tiered priority system and loop detection.
         """
+        caller_name = f"{self.__class__.__name__}.study_cycle"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
-            f"[bold cyan]Study Cycle Started at {timestamp}[/bold cyan]",
-            style="cyan",
+            f"[bold cyan]Study Cycle Started at {timestamp}[/bold cyan]", style="cyan"
         )
-
-        newly_learned_words: list[str] = []
 
         task_to_process: Goal | str | None = None
         task_source_is_priority = False
-
-        # 1. Decide which task to work on based on priority.
         with self.lock:
             if self.agent.high_priority_tasks:
                 task_to_process = self.agent.high_priority_tasks.pop(0)
@@ -314,73 +305,74 @@ class KnowledgeHarvester:
                 task_to_process = self.agent.learning_goals.pop(0)
                 task_source_is_priority = False
 
-        # 2. If a task was selected, process it.
         if task_to_process:
             task_topic = ""
             task_type = "HIGH-PRIORITY" if task_source_is_priority else "CURRICULUM"
-
             if isinstance(task_to_process, str):
                 task_topic = task_to_process.replace("INVESTIGATE:", "").strip()
-            else:  # It's a Goal dict
+            else:
                 task_topic = task_to_process.get("topic", "")
 
             if task_topic:
                 logger.info("   - Attempting %s task: '%s'", task_type, task_topic)
                 resolved = self._resolve_investigation_goal(task_to_process)
 
+                consolidation_succeeded = True
                 if resolved:
+                    with self.lock:
+                        consolidation_succeeded = self._consolidate_pending_knowledge(
+                            [task_topic]
+                        )
+
+                if resolved and consolidation_succeeded:
                     logger.info(
-                        "   - ✅ %s task '%s' successfully resolved.",
+                        "   - ✅ %s task '%s' successfully resolved and consolidated.",
                         task_type,
                         task_topic,
                     )
-                    newly_learned_words.append(task_topic)
                 else:
                     logger.warning(
-                        "   - ❌ Failed to resolve %s task '%s'. Deprioritizing.",
+                        "   - ❌ Failed to fully resolve %s task '%s'. Deprioritizing.",
                         task_type,
                         task_topic,
+                        caller_name,
                     )
-                    # --- FIX: Use the boolean flag to append to the correct list ---
                     with self.lock:
                         if task_source_is_priority:
-                            # We know task_to_process must be a Goal here, as high_priority_tasks is list[Goal]
                             if isinstance(task_to_process, dict):
                                 self.agent.high_priority_tasks.append(task_to_process)
                         else:
                             self.agent.learning_goals.append(task_to_process)
             else:
                 logger.warning("Found malformed task: %s. Discarding.", task_to_process)
-
-        # 3. If no tasks were processed, consider deepening knowledge.
         else:
             logger.info(
                 "All learning queues are empty. Attempting to deepen existing knowledge."
             )
             self._deepen_knowledge_of_random_concept()
 
-        # 4. Consolidate knowledge if any new words were learned.
-        if newly_learned_words:
-            with self.lock:
-                self._consolidate_pending_knowledge(newly_learned_words)
-
         self.console.rule("[bold cyan]Study Cycle Complete.[/bold cyan]", style="cyan")
         self.agent.log_autonomous_cycle_completion()
 
     def refinement_cycle(self) -> None:
         """
-        Run one full introspection and refinement cycle with transactional logic.
+        Run one full introspection and refinement cycle, now including a
+        dedicated lexical promotion stage for newly learned concepts.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
+        self.console.rule(
+            f"[bold magenta]Refinement Cycle Started at {timestamp}[/bold magenta]",
+            style="magenta",
+        )
 
+        chunky_fact = None
         with self.lock:
             chunky_fact = self._find_chunky_fact()
 
         if chunky_fact:
             source_node, target_node, edge = chunky_fact
             logger.info(
-                "[info]  [Refinement]: Found a chunky fact to refine: '%s' --[%s]--> '%s'[/info]",
+                "  [Refinement]: Found a chunky fact to refine: '%s' --[%s]--> '%s'",
                 source_node.name,
                 edge.type,
                 target_node.name,
@@ -400,12 +392,38 @@ class KnowledgeHarvester:
                 )
 
                 facts_learned_count = 0
+                newly_learned_concepts = set()
+
                 for sentence in atomic_sentences:
                     with self.lock:
                         if self.agent.learn_new_fact_autonomously(sentence):
                             facts_learned_count += 1
+                            for word in sentence.split():
+                                clean_word = self.agent._clean_phrase(word)
+                                if (
+                                    clean_word
+                                    and not self.agent.lexicon.is_promoted_word(
+                                        clean_word
+                                    )
+                                ):
+                                    newly_learned_concepts.add(clean_word)
 
                 if facts_learned_count > 0:
+                    if newly_learned_concepts:
+                        logger.info(
+                            "  [Refinement]: Promoting %d new concepts to the lexicon...",
+                            len(newly_learned_concepts),
+                        )
+                        for concept in newly_learned_concepts:
+                            word_info = get_word_info_from_wordnet(concept)
+                            if word_info and isinstance(word_info[0], dict):
+                                pos = word_info[0].get("type")
+                                if pos in ("noun", "verb", "adjective"):
+                                    with self.lock:
+                                        self.agent.lexicon.promote_word(
+                                            concept, pos, confidence=0.75
+                                        )
+
                     with self.lock:
                         graph_edge_data = self.agent.graph.graph.get_edge_data(
                             edge.source, edge.target
@@ -440,10 +458,8 @@ class KnowledgeHarvester:
 
         self._prune_research_cache()
 
-        logger.info(
-            "%s--- [Refinement Cycle Finished] ---\n%s",
-            LogColors.GREEN,
-            LogColors.RESET,
+        self.console.rule(
+            "[bold magenta]Refinement Cycle Complete.[/bold magenta]", style="magenta"
         )
         self.agent.log_autonomous_cycle_completion()
 
@@ -455,17 +471,14 @@ class KnowledgeHarvester:
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info("\n--- [Refinement Cycle Started at %s] ---", timestamp)
-
         with self.lock:
             if not self.researched_terms:
                 return
-
             prunable_terms = {
                 term
                 for term in self.researched_terms
                 if self.agent.lexicon.is_known_word(term)
             }
-
             if prunable_terms:
                 logger.info(
                     "  [Cache Pruning]: Removing %d fully learned term(s) from the research cache.",
@@ -510,10 +523,8 @@ class KnowledgeHarvester:
                     source_node = self.agent.graph.get_node_by_id(edge.source)
                     if source_node:
                         potential_facts.append((source_node, target_node, edge))
-
         if potential_facts:
             return random.choice(potential_facts)
-
         logger.info(
             "[Refinement]: No chunky facts found with strict criteria, retrying with relaxed threshold..."
         )
@@ -524,7 +535,6 @@ class KnowledgeHarvester:
                     source_node = self.agent.graph.get_node_by_id(edge.source)
                     if source_node:
                         potential_facts.append((source_node, target_node, edge))
-
         return random.choice(potential_facts) if potential_facts else None
 
     def _deepen_knowledge_of_random_concept(self) -> None:
@@ -562,19 +572,16 @@ class KnowledgeHarvester:
             "concept",
             "property",
         }
-
         random_node_name = None
         with self.lock:
             all_nodes = list(self.agent.graph.graph.nodes(data=True))
             if len(all_nodes) < 2:
                 logger.info(
-                    "[Deepen Knowledge]: Not enough concepts in the brain to study yet.",
+                    "[Deepen Knowledge]: Not enough concepts in the brain to study yet."
                 )
                 return
-
             _, node_data = random.choice(all_nodes)
             random_node_name = node_data.get("name")
-
         if not random_node_name or random_node_name in stop_words:
             if random_node_name:
                 logger.info(
@@ -582,18 +589,14 @@ class KnowledgeHarvester:
                     random_node_name,
                 )
             return
-
         logger.info(
             "[Deepen Knowledge]: Chosen to study the concept: '%s'", random_node_name
         )
-
         result = self.get_fact_from_wikipedia(
-            random_node_name,
+            random_node_name
         ) or self.get_fact_from_duckduckgo(random_node_name)
-
         if result:
             _title, fact_sentence = result
-
             with self.lock:
                 logger.info(
                     "  [Deepen Knowledge]: %sAttempting to learn new fact: '%s'%s",
@@ -646,7 +649,6 @@ class KnowledgeHarvester:
             "Types of animals",
             "Types of plants",
         ]
-
         for i in range(max_attempts):
             logger.info(
                 "[Discovery]: Searching for a new topic (Attempt %d/%d)...",
@@ -656,13 +658,10 @@ class KnowledgeHarvester:
             try:
                 subject = random.choice(core_subjects)
                 logger.info("  [Discovery]: Exploring the core subject: '%s'", subject)
-
                 related_topics = wikipedia.search(subject, results=10)
                 if not related_topics:
                     continue
-
                 topic = random.choice(related_topics)
-
                 reject_keywords = ["list of", "timeline of", "index of", "outline of"]
                 if any(keyword in topic.lower() for keyword in reject_keywords):
                     logger.info(
@@ -670,10 +669,8 @@ class KnowledgeHarvester:
                         topic,
                     )
                     continue
-
                 search_popularity = self._get_search_result_count(topic)
                 minimum_popularity = 10000
-
                 if (
                     search_popularity is not None
                     and search_popularity < minimum_popularity
@@ -684,7 +681,6 @@ class KnowledgeHarvester:
                         search_popularity,
                     )
                     continue
-
                 clean_topic = self.agent._clean_phrase(topic)
                 if (
                     not self.agent.lexicon.is_known_word(clean_topic)
@@ -694,14 +690,12 @@ class KnowledgeHarvester:
                         "  [Discovery Success]: Found new, popular topic: '%s'", topic
                     )
                     return clean_topic
-
             except Exception as e:
                 logger.warning(
                     "  [Discovery Error]: An error occurred during topic finding. Error: %s",
                     e,
                 )
                 time.sleep(1)
-
         logger.warning(
             "[Discovery Warning]: Could not find a new, suitable topic after %d attempts.",
             max_attempts,
@@ -724,14 +718,12 @@ class KnowledgeHarvester:
         """
         try:
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36"
             }
             url = f"https://duckduckgo.com/html/?q={quote(query)}"
-
             response = requests.get(url, headers=headers, timeout=5)
             response.raise_for_status()
-
-            match = re.search(r"([0-9,]+) results", response.text)
+            match = re.search("([0-9,]+) results", response.text)
             if match:
                 count_str = match.group(1).replace(",", "")
                 return int(count_str)
@@ -740,7 +732,7 @@ class KnowledgeHarvester:
         return None
 
     def get_definition_from_api(
-        self, word: str, context: str | None = None # Keep context for future use
+        self, word: str, context: str | None = None
     ) -> tuple[str, str] | None:
         """
         Retrieve a precise definition and part of speech from the reliable
@@ -748,17 +740,12 @@ class KnowledgeHarvester:
         disabled due to unreliability.
         """
         logger.info("[yellow]   - Querying for definition of[/yellow] '%s'...", word)
-
-        # --- FIX: The LLM call and all related logic has been completely removed. ---
-        # We now go directly to the reliable fallback.
-
         try:
             url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
             response = requests.get(url, timeout=5)
             if response.status_code != 200:
                 logger.warning("     - Word not found in Dictionary API.")
                 return None
-
             data = response.json()
             if data and isinstance(data, list):
                 word_entry = data[0]
@@ -768,50 +755,54 @@ class KnowledgeHarvester:
                     if "definitions" in first_meaning and first_meaning["definitions"]:
                         definition = first_meaning["definitions"][0].get("definition")
                         if part_of_speech and definition:
-                            logger.info("   - ✅ Found definition via Dictionary API: '%s'", definition)
+                            logger.info(
+                                "   - ✅ Found definition via Dictionary API: '%s'",
+                                definition,
+                            )
                             return (part_of_speech, definition)
         except requests.RequestException as e:
-            logger.error("[error][Dictionary API]: A network error occurred: %s[/error]", e)
+            logger.error(
+                "[error][Dictionary API]: A network error occurred: %s[/error]", e
+            )
         except (json.JSONDecodeError, KeyError, IndexError) as e:
-            logger.error("[error][Dictionary API]: Failed to parse response for '%s': %s[/error]", word, e)
-
-        logger.warning("     - All attempts to find a definition for '%s' failed.", word)
+            logger.error(
+                "[error][Dictionary API]: Failed to parse response for '%s': %s[/error]",
+                word,
+                e,
+            )
+        logger.warning(
+            "     - All attempts to find a definition for '%s' failed.", word
+        )
         return None
 
     def get_fact_from_wikipedia(self, topic: str) -> tuple[str, str] | None:
         """Retrieve and verify a simple fact from a Wikipedia article."""
-        print(f"[Knowledge Source]: Searching Wikipedia for '{topic}'...")
+        logger.info("[Knowledge Source]: Searching Wikipedia for '{topic}'...")
         try:
             search_results = wikipedia.search(topic, results=1)
             if not search_results:
                 return None
-
             page = wikipedia.page(search_results[0], auto_suggest=False, redirect=True)
             if not (page and page.summary):
                 return None
-
             if page and page.summary:
                 first_sentence = page.summary.split(". ")[0].strip()
                 if not first_sentence.endswith("."):
                     first_sentence += "."
-
             if self.agent.interpreter.llm is not None:
                 reframed_fact = self.agent.interpreter.verify_and_reframe_fact(
-                    original_topic=topic,
-                    raw_sentence=first_sentence,
+                    original_topic=topic, raw_sentence=first_sentence
                 )
             else:
                 logger.warning(
                     "  [Fact Verifier Error]: LLM is disabled. Cannot verify/reframe. Skipping reframing."
                 )
                 reframed_fact = first_sentence
-
             if reframed_fact:
-                print(
-                    f"  [Knowledge Source]: Extracted and verified fact: '{reframed_fact}'",
+                logger.info(
+                    "  [Knowledge Source]: Extracted and verified fact: '{reframed_fact}'"
                 )
-                return page.title, reframed_fact
-
+                return (page.title, reframed_fact)
         except Exception:
             pass
         return None
@@ -824,25 +815,20 @@ class KnowledgeHarvester:
             response = requests.get(url, timeout=5)
             response.raise_for_status()
             data = response.json()
-
             definition = data.get("AbstractText") or data.get("Definition")
             if definition:
                 first_sentence = definition.split(". ")[0].strip()
                 if not first_sentence.endswith("."):
                     first_sentence += "."
-
                 reframed_fact = self.agent.interpreter.verify_and_reframe_fact(
-                    original_topic=topic,
-                    raw_sentence=first_sentence,
+                    original_topic=topic, raw_sentence=first_sentence
                 )
-
                 if reframed_fact:
                     logger.info(
                         "  [Knowledge Source]: Extracted and verified fact from DuckDuckGo: '%s'",
                         reframed_fact,
                     )
-                    return topic, reframed_fact
-
+                    return (topic, reframed_fact)
         except Exception as e:
             logger.debug(
                 "  [Knowledge Source]: DuckDuckGo search failed for '%s'. Error: %s",

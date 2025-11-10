@@ -26,10 +26,15 @@ DEFAULT_CACHE_FILE: Final = BRAIN_DIR / "interpreter_cache.json"
 MODEL_VERSION_FILE: Final = BRAIN_DIR / "model_version.txt"
 
 DEFAULT_MODEL_NAME: Final = os.getenv(
-    "AXIOM_MODEL_NAME", "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+    "AXIOM_MODEL_NAME", "mistral-7b-instruct-v0.1.Q5_K_M.gguf"
 )
 DEFAULT_LLM_PATH: Final = MODELS_DIR / DEFAULT_MODEL_NAME
 
 GEMINI_API_KEY: Final[str | None] = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN: Final[str | None] = os.getenv("GITHUB_TOKEN")
 NGROK_AUTHTOKEN: Final[str | None] = os.getenv("NGROK_AUTHTOKEN")
+
+# --- Neo4j Database Configuration ---
+NEO4J_URI: Final[str | None] = os.getenv("NEO4J_URI")
+NEO4J_USER: Final[str | None] = os.getenv("NEO4J_USER")
+NEO4J_PASSWORD: Final[str | None] = os.getenv("NEO4J_PASSWORD")

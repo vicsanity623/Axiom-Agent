@@ -87,13 +87,9 @@ def _generate_or_set_initial_goal(
         creative_seed=selected_seed, known_concepts=known_concepts_str
     )
 
-    # --- FIX: Removed the unreachable 'if agent.interpreter is None:' block ---
-    # The CognitiveAgent always has an interpreter. The interpreter's methods
-    # are responsible for checking if their internal LLM is loaded.
     new_curriculum_goal = agent.interpreter.synthesize(
         structured_facts=prompt, mode="creative_writing"
     )
-    # --- END FIX ---
 
     if not new_curriculum_goal or "[Stage 1:" not in new_curriculum_goal:
         logger.error(
@@ -147,12 +143,17 @@ def start_autonomous_training(
         style="border",
     )
 
+    axiom_agent: CognitiveAgent | None = None
+    scheduler: BackgroundScheduler | None = None
+
     try:
         axiom_agent = CognitiveAgent(
             brain_file=brain_file,
             state_file=state_file,
             inference_mode=False,
         )
+
+        axiom_agent.load_state()
 
         if axiom_agent.harvester is None:
             logger.critical(
@@ -184,8 +185,12 @@ def start_autonomous_training(
 
     except (KeyboardInterrupt, SystemExit):
         logger.info(
-            "[border]\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Exiting. ---[/border]",
+            "[border]\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Saving final state... ---[/border]",
         )
+        if axiom_agent:
+            axiom_agent.save_state()
+            logger.info("--- [AUTONOMOUS TRAINER]: Final state saved. Exiting. ---")
+
     except Exception as exc:
         logger.critical(
             "!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: %s !!!",
@@ -193,7 +198,15 @@ def start_autonomous_training(
             exc_info=True,
         )
         traceback.print_exc()
+        if axiom_agent:
+            logger.info(
+                "--- [AUTONOMOUS TRAINER]: Attempting to save state after critical error... ---"
+            )
+            axiom_agent.save_state()
+
     finally:
+        if scheduler and scheduler.running:
+            scheduler.shutdown()
         logger.info("--- [AUTONOMOUS TRAINER]: Process terminated. ---")
 
 

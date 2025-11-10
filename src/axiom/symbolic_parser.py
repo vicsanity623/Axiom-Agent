@@ -170,9 +170,6 @@ class SymbolicParser:
         including a refinement step to decompose complex objects.
         """
         logger.debug(f"  [Symbolic Parser]: Attempting to parse sentence: '{text}'")
-        # --- CHANGED: Removed hardcoded meta-question checks. ---
-        # This logic is now handled by the CognitiveAgent's pre-processing
-        # and standard intent routing, which is more robust.
         clean_text = text.lower().strip().rstrip("?")
         if clean_text == "show all facts":
             return [
@@ -432,7 +429,6 @@ class SymbolicParser:
                 full_text_rephrased=lemmatized_clause,
             )
         property_of_match = re.match(
-            # FIX: Make the subject non-greedy to stop it before the ' is '.
             r"(?i)^the\s+(?P<property>\w+)\s+of\s+(?P<subject>.+?)\s+is\s+(?P<value>.+)\.*$",
             lemmatized_clause,
         )

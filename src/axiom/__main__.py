@@ -12,12 +12,14 @@ from typing import Annotated
 
 import typer
 
-# Use relative imports as this is part of the axiom package
 from .cognitive_agent import CognitiveAgent
 from .config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, GEMINI_API_KEY
-from .metacognitive_engine import MetacognitiveEngine, PerformanceMonitor
+from .metacognitive_engine import (
+    CodeIntrospector,
+    MetacognitiveEngine,
+    PerformanceMonitor,
+)
 
-# Create a Typer app for a clean, self-documenting CLI experience
 app = typer.Typer(
     name="axiom-meta",
     help="Axiom Metacognitive Engine: Tools for self-analysis and improvement.",
@@ -42,8 +44,10 @@ def analyze_logs(
     Analyzes performance logs to find the highest-priority optimization target.
     """
     typer.echo(f"🔍 Analyzing logs from '{log_path}'...")
+
+    introspector = CodeIntrospector()
     monitor = PerformanceMonitor()
-    result = monitor.find_optimization_target(log_path)
+    result = monitor.find_optimization_target(log_path, introspector)
 
     if result:
         typer.secho("✅ Found an optimization target:", fg=typer.colors.GREEN)
@@ -85,11 +89,10 @@ def cycle_now(
 
     typer.echo("🚀 Initializing agent for a single metacognitive cycle...")
     try:
-        # We need a live agent instance for the engine to access its components
         agent = CognitiveAgent(
             brain_file=DEFAULT_BRAIN_FILE,
             state_file=DEFAULT_STATE_FILE,
-            inference_mode=True,  # No autonomous learning during this cycle
+            inference_mode=True,
         )
         engine = MetacognitiveEngine(agent=agent, gemini_api_key=GEMINI_API_KEY)
 

@@ -23,6 +23,21 @@ from .config import DEFAULT_CACHE_FILE, DEFAULT_LLM_PATH
 
 logger = logging.getLogger(__name__)
 
+LLM_INTERACTIONS_LOG = Path("llm_interactions.jsonl")
+
+
+def log_llm_interaction(prompt: str, ideal_response: str) -> None:
+    """Appends a prompt and its ideal response to the dataset log file."""
+    interaction = {
+        "messages": [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": ideal_response},
+        ]
+    }
+    with LLM_INTERACTIONS_LOG.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(interaction) + "\n")
+
+
 REPHRASING_PROMPT: Final = """
 You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
 1.  **ONLY use the information given in the 'Facts' string.**
@@ -139,8 +154,7 @@ class UniversalInterpreter:
 
     def __init__(
         self,
-        model_path: str
-        | Path = DEFAULT_LLM_PATH,  # No longer needs a default, it will always be provided
+        model_path: str | Path = DEFAULT_LLM_PATH,
         cache_file: str | Path = DEFAULT_CACHE_FILE,
         load_llm: bool = True,
     ) -> None:
@@ -234,27 +248,65 @@ class UniversalInterpreter:
                 exc,
             )
 
-    def _clean_llm_json_output(self, raw_text: str) -> str:
-        """Clean and extract a JSON object from the raw output of an LLM.
-
-        This utility handles common LLM output issues, such as extraneous
-        text before or after the JSON object and trailing commas that
-        would cause parsing errors.
-
-        Args:
-            raw_text: The raw string response from the LLM.
-
-        Returns:
-            A string containing only the cleaned JSON object, or an empty
-            string if no JSON object could be found.
+    def get_prompt_for_test(self, task_name: str, **kwargs: Any) -> str:
         """
+        A helper method for the data generation script. It returns the exact
+        prompt that would be sent to the LLM for a given task and inputs.
+        """
+        if task_name == "interpret":
+            system_prompt = "You are a strict, precise factual analysis engine..."
+            examples_list = [
+                "Input: 'show all facts'\nOutput: {...}",
+            ]
+            examples_prompt = "Here are some examples:\n" + "\n\n".join(examples_list)
+            sanitized_input = json.dumps(kwargs.get("user_input", ""))
+            return f"[INST] {system_prompt}\n\n{JSON_STRUCTURE_PROMPT}\n\n{examples_prompt}\n\nNow, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
+
+        if task_name == "decomposition":
+            text = kwargs.get("text", "")
+            main_topic = kwargs.get("main_topic")
+            topic_context = (
+                f"The primary topic of this sentence is '{main_topic}'. "
+                "Ensure the subject of at least one core relation is this topic or a direct synonym."
+                if main_topic
+                else ""
+            )
+            return f"""
+            **ROLE:** You are a knowledge engineering system...
+            **CONTEXT:** {topic_context}
+            **SENTENCE TO ANALYZE:**
+            "{text}"
+            ...
+            """
+
+        if task_name == "synthesis_statement":
+            facts_str = json.dumps(kwargs.get("facts_to_rephrase", []))
+            return (
+                f"[INST] {REPHRASING_PROMPT}\n\nFacts to rephrase: '{facts_str}'[/INST]"
+            )
+
+        if task_name == "question_generation":
+            topic = kwargs.get("topic", "")
+            known_fact = kwargs.get("known_fact", "")
+            system_prompt = "You are a creative, inquisitive assistant..."
+            examples_prompt = "Here are some examples:\n..."
+            return f"[INST] {system_prompt}\n\n{examples_prompt}\n\nTopic: {topic}\nKnown Fact: {known_fact}\nOutput:[/INST]"
+
+        return ""
+
+    def _clean_llm_json_output(self, raw_text: str) -> str:
+        """Clean and extract a JSON object from the raw output of an LLM."""
         start_brace = raw_text.find("{")
         end_brace = raw_text.rfind("}")
         if start_brace == -1 or end_brace == -1:
+            start_bracket = raw_text.find("[")
+            end_bracket = raw_text.rfind("]")
+            if start_bracket != -1 and end_bracket != -1:
+                json_str = raw_text[start_bracket : end_bracket + 1]
+                return re.sub(r",\s*(\}|\])", r"\1", json_str).replace("\n", "")
             return ""
         json_str = raw_text[start_brace : end_brace + 1]
-        json_str = re.sub(r",\s*(\}|\])", r"\1", json_str)
-        return json_str.replace("\n", ", ")
+        return re.sub(r",\s*(\}|\])", r"\1", json_str).replace("\n", "")
 
     def _run_llm_completion_with_retries(
         self, prompt: str, max_tokens: int, temperature: float = 0.0
@@ -490,9 +542,10 @@ class UniversalInterpreter:
         self, text: str, main_topic: str | None = None
     ) -> list[RelationData]:
         """
-        Uses the LLM to decompose a sentence into a list of atomic relations.
-        This is the primary method for learning from complex sentences.
+        Uses the LLM to decompose a sentence into a list of atomic relations,
+        now with robust validation to prevent malformed data.
         """
+        caller_name = f"{self.__class__.__name__}.decompose_sentence_to_relations"
         if self.llm is None:
             logger.warning("[Interpreter]: LLM is disabled. Cannot decompose text.")
             return []
@@ -559,7 +612,7 @@ class UniversalInterpreter:
 
             json_str = response_text[start_bracket : end_bracket + 1]
             try:
-                relations = json.loads(json_str)
+                relations_raw = json.loads(json_str)
             except json.JSONDecodeError as e:
                 logger.error(
                     "  [Interpreter Error]: Failed to decompose sentence. Error: %s", e
@@ -569,16 +622,45 @@ class UniversalInterpreter:
                 )
                 return []
 
-            if isinstance(relations, list):
-                logger.info(
-                    "[green]   - Decomposed sentence into %d atomic relations.[/green]",
-                    len(relations),
+            if not isinstance(relations_raw, list):
+                logger.warning(
+                    "  [Interpreter Warning]: LLM returned valid JSON, but it was not a list. Output: %s",
+                    json_str,
                 )
-                return cast("list[RelationData]", relations)
+                return []
+
+            validated_relations: list[RelationData] = []
+            for relation in relations_raw:
+                if not isinstance(relation, dict):
+                    continue
+
+                subject = relation.get("subject")
+                verb = relation.get("verb")
+                obj = relation.get("object")
+
+                if (
+                    isinstance(subject, str)
+                    and isinstance(verb, str)
+                    and isinstance(obj, str)
+                ):
+                    validated_relations.append(cast("RelationData", relation))
+                else:
+                    logger.warning(
+                        "  [Interpreter Validation]: Discarding malformed relation due to non-string components: %s",
+                        relation,
+                        caller_name,
+                    )
+
+            if validated_relations:
+                logger.info(
+                    "[green]   - Decomposed and validated %d atomic relations.[/green]",
+                    len(validated_relations),
+                )
+                return validated_relations
 
             logger.warning(
-                "  [Interpreter Warning]: LLM returned valid JSON, but it was not a list. Output: %s",
-                json_str,
+                "  [Interpreter Warning]: No valid atomic relations could be extracted after validation.",
+                caller_name,
             )
             return []
 
@@ -774,22 +856,18 @@ class UniversalInterpreter:
 
     def synthesize(
         self,
-        structured_facts: str | list[Any],  # Simplified the union for clarity
+        structured_facts: str | list[Any],
         original_question: str | None = None,
         mode: str = "statement",
     ) -> str:
         """Convert a structured, internal representation into natural language."""
         facts_str: str
-        # --- FIX: Correct the isinstance check and ensure facts_str is always a string ---
         if isinstance(structured_facts, list):
             try:
-                # Attempt to serialize complex objects into a JSON string
                 facts_str = json.dumps([str(f) for f in structured_facts])
             except Exception:
-                # Fallback to a simple string representation
                 facts_str = str(structured_facts)
         else:
-            # If it's already a string, just use it
             facts_str = structured_facts
 
         cache_key = f"{mode}|{original_question}|{facts_str}"
@@ -798,7 +876,6 @@ class UniversalInterpreter:
             return self.synthesis_cache[cache_key]
 
         if self.llm is None:
-            # The return here is now safe because facts_str is guaranteed to be a string
             return facts_str
 
         logger.info(
@@ -816,7 +893,7 @@ class UniversalInterpreter:
                 "Do not state the facts directly. Your output must be ONLY the question."
             )
             task_prompt = f"Conflicting Facts: '{facts_str}'"
-        else:  # This handles "statement" and "creative_writing"
+        else:
             system_prompt = REPHRASING_PROMPT
             task_prompt = f"Facts to rephrase: '{facts_str}'"
             if original_question:
@@ -833,7 +910,6 @@ class UniversalInterpreter:
             if not synthesized_text:
                 raise ValueError("LLM returned an empty string during synthesis.")
 
-            # Your robust cleanup logic is preserved
             phrases_to_remove = [
                 "rephrased sentence:",
                 "based on the provided facts,",

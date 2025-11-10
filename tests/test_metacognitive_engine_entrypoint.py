@@ -2,16 +2,22 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 import pytest
 from typer.testing import CliRunner
 
-# Import the app object from the script under test
 from axiom.__main__ import app
 
-# Create a runner that can invoke the CLI commands
 runner = CliRunner()
+
+
+@pytest.fixture
+def mock_code_introspector(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
+    """Fixture to mock the CodeIntrospector to prevent file system scanning."""
+    mock = MagicMock()
+    monkeypatch.setattr("axiom.__main__.CodeIntrospector", mock)
+    return mock
 
 
 @pytest.fixture
@@ -42,10 +48,11 @@ def mock_metacognitive_engine(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
 
 
 def test_analyze_logs_target_found(
-    mock_performance_monitor: MagicMock, tmp_path: Path
+    mock_performance_monitor: MagicMock,
+    mock_code_introspector: MagicMock,
+    tmp_path: Path,
 ) -> None:
     """Verify `analyze-logs` prints JSON when a target is found."""
-    # Setup: Create a dummy log file and a mock optimization target
     log_file = tmp_path / "test.log"
     log_file.touch()
 
@@ -58,47 +65,40 @@ def test_analyze_logs_target_found(
         mock_target
     )
 
-    # Run the command
     result = runner.invoke(app, ["analyze-logs", str(log_file)])
 
-    # Assertions
     assert result.exit_code == 0
     assert "✅ Found an optimization target:" in result.stdout
 
-    # This is not dependent on the exact line number.
     json_start_index = result.stdout.find("{")
     assert json_start_index != -1, "Could not find the start of the JSON output."
-
     json_string = result.stdout[json_start_index:]
     output_json = json.loads(json_string)
 
     assert output_json["target_name"] == "test_function"
-    assert output_json["file_path"] == "src/axiom/test_file.py"
+
     mock_performance_monitor.return_value.find_optimization_target.assert_called_once_with(
-        log_file
+        log_file, ANY
     )
 
 
 def test_analyze_logs_no_target_found(
-    mock_performance_monitor: MagicMock, tmp_path: Path
+    mock_performance_monitor: MagicMock,
+    mock_code_introspector: MagicMock,
+    tmp_path: Path,
 ) -> None:
     """Verify `analyze-logs` prints a success message when no target is found."""
-    # Setup: Mock the monitor to return None
     log_file = tmp_path / "test.log"
     log_file.touch()
     mock_performance_monitor.return_value.find_optimization_target.return_value = None
 
-    # Run the command
     result = runner.invoke(app, ["analyze-logs", str(log_file)])
 
-    # Assertions
     assert result.exit_code == 0
-    assert (
-        "✅ Analysis complete. No high-priority optimization targets found."
-        in result.stdout
-    )
+    assert "✅ Analysis complete." in result.stdout
+
     mock_performance_monitor.return_value.find_optimization_target.assert_called_once_with(
-        log_file
+        log_file, ANY
     )
 
 

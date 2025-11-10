@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple, cast
 
 import google.generativeai as genai
 
+from .config import SRC_ROOT
+
 if TYPE_CHECKING:
     from .cognitive_agent import CognitiveAgent
 
@@ -111,11 +113,14 @@ class PerformanceMonitor:
     """Analyzes logs to find performance bottlenecks, errors, and learning inefficiencies."""
 
     _LOG_PATTERN: ClassVar[re.Pattern] = re.compile(
-        r"\[(?P<module>[^\]]+)\]:\s*(?P<message>.+?)(?:\s*\(in\s*(?P<function>[\w\.]+)\))?$",
+        r"""^(?:(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\s+)?
+            (?:\[?(?P<level>DEBUG|INFO|WARNING|ERROR|CRITICAL)\]?\s+)?
+            \[?(?P<module>[^\]\:]+)\]?\s*[:\-]?\s*
+            (?P<message>.*)$""",
+        re.IGNORECASE | re.VERBOSE,
     )
     _TIMING_PATTERN: ClassVar[re.Pattern] = re.compile(
-        r"Execution time[:=]?\s*(?P<seconds>\d+\.\d+)s",
-        re.IGNORECASE,
+        r"Execution time[:=]?\s*(?P<seconds>\d+\.\d+)\s*s?", re.IGNORECASE
     )
     _TS_PATTERN: ClassVar[re.Pattern] = re.compile(
         r"^(?P<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})",
@@ -125,7 +130,7 @@ class PerformanceMonitor:
         re.IGNORECASE,
     )
     _LEARNING_LOG_RE: ClassVar[re.Pattern] = re.compile(
-        r"Learned new fact: (?P<sub>.+) --\[(?P<verb>.+)\]--> (?P<obj>.+) \(status=(?P<status>\w+)\)",
+        r"Learned new fact: (?P<sub>.+) --\[(?P<verb>.+)\]--> (?P<obj>.+) \(status=(?P<status>\w+)\)"
     )
     _SCORING_WEIGHTS: ClassVar[dict[str, float]] = {
         "error_recurrence": 1.5,
@@ -244,13 +249,17 @@ class PerformanceMonitor:
             if abs(int(c["timestamp"]) - anomaly_time) <= window_seconds
         ]
 
-    def find_optimization_target(self, log_file: Path) -> OptimizationTarget | None:
+    def find_optimization_target(
+        self, log_file: Path, introspector: CodeIntrospector
+    ) -> OptimizationTarget | None:
         if not log_file.exists():
             logger.warning("[Metacognition]: Log file not found at %s.", log_file)
             return None
         analysis_data = self._parse_log_file(log_file)
         scored_candidates = self._score_anomalies(analysis_data)
-        best_target = self._select_best_target(analysis_data, scored_candidates)
+        best_target = self._select_best_target(
+            analysis_data, scored_candidates, introspector
+        )
         self._save_baselines()
         if best_target:
             logger.info(
@@ -264,77 +273,61 @@ class PerformanceMonitor:
         return best_target
 
     def _parse_log_file(self, log_file: Path) -> _LogAnalysisData:
-        """
-        Parses a log file, using intelligent attribution to associate all events,
-        including tracebacks and learning events, with their true source function.
-        """
+        """Parses a log file using a more robust pattern and traceback extraction."""
         lines = log_file.read_text(encoding="utf-8").splitlines()
         analysis_data = _LogAnalysisData()
         i = 0
         while i < len(lines):
             line = lines[i]
-
-            match = PerformanceMonitor._LOG_PATTERN.search(line)
+            match = self._LOG_PATTERN.search(line)
             if not match:
                 i += 1
                 continue
 
             message = (match.group("message") or "").strip()
-            # Initial guess for the function name
-            func = (match.group("function") or "unknown_function").strip()
+            func = "unknown_function"
+            inline_in_match = re.search(r"\(in\s+([a-zA-Z0-9_\.]+)\)", message)
+            if inline_in_match:
+                func = inline_in_match.group(1)
 
-            # High-priority override: Check for learning events
-            learning_match = PerformanceMonitor._LEARNING_LOG_RE.search(message)
-            if learning_match:
+            if self._LEARNING_LOG_RE.search(message):
                 func = "CognitiveAgent._add_new_fact"
 
-            ts_match = PerformanceMonitor._TS_PATTERN.search(line)
+            ts_str = match.group("ts")
             ts = int(time.time())
-            if ts_match:
+            if ts_str:
                 try:
-                    t_struct = time.strptime(ts_match.group("iso"), "%Y-%m-%dT%H:%M:%S")
-                    ts = int(time.mktime(t_struct))
+                    ts = int(datetime.fromisoformat(ts_str).timestamp())
                 except ValueError:
                     pass
 
-            upper_line = line.upper()
-            log_level = "INFO"
-            if "ERROR" in upper_line or "CRITICAL" in upper_line:
-                log_level = "ERROR"
-            elif "WARNING" in upper_line:
-                log_level = "WARNING"
-
-            timing_match = PerformanceMonitor._TIMING_PATTERN.search(message)
+            log_level = (match.group("level") or "INFO").upper()
+            timing_match = self._TIMING_PATTERN.search(message)
             exec_time = float(timing_match.group("seconds")) if timing_match else None
             traceback_str = None
-
             i += 1
 
-            if log_level == "ERROR":
-                if (
-                    i < len(lines)
-                    and lines[i].strip() == "Traceback (most recent call last):"
-                ):
-                    traceback_buffer = [lines[i].strip()]
-                    i += 1
-                    while i < len(lines) and (
-                        lines[i].startswith("  File ")
-                        or re.match(r"^\s*\w+Error:", lines[i])
+            if log_level in ("ERROR", "CRITICAL") or "traceback" in message.lower():
+                if i < len(lines) and "Traceback (most recent call last):" in lines[i]:
+                    tb_lines = []
+                    while (
+                        i < len(lines)
+                        and lines[i].strip()
+                        and not self._LOG_PATTERN.search(lines[i])
                     ):
-                        traceback_buffer.append(lines[i].strip())
+                        tb_lines.append(lines[i].rstrip())
                         i += 1
-                    traceback_str = "\n".join(traceback_buffer)
-
-                    for tb_line in reversed(traceback_buffer):
-                        if tb_line.strip().startswith("File "):
+                    if tb_lines:
+                        traceback_str = "\n".join(tb_lines)
+                        for tb_line in reversed(tb_lines):
                             tb_match = re.search(
-                                r"in\s+<module>|in\s+([a-zA-Z0-9_]+)", tb_line
-                            )
+                                r",\s*in\s+([a-zA-Z0-9_]+)$", tb_line
+                            ) or re.search(r"\sin\s+([a-zA-Z0-9_]+)\b", tb_line)
                             if tb_match:
-                                extracted_func = tb_match.group(1)
-                                if extracted_func and extracted_func != "<module>":
-                                    func = extracted_func
-                                    break
+                                func = tb_match.group(1)
+                                break
+                else:
+                    i -= 1
 
             entry = _LogEntry(func, message, ts, log_level, exec_time, traceback_str)
             analysis_data.entries_by_func[func].append(entry)
@@ -470,48 +463,73 @@ class PerformanceMonitor:
         self,
         analysis_data: _LogAnalysisData,
         scored_candidates: dict[str, tuple[float, list[str]]],
+        introspector: CodeIntrospector,
     ) -> OptimizationTarget | None:
-        """Selects the best target from scored candidates or high-priority alerts."""
-
+        """Selects the best target with a configurable threshold and better logging."""
         for func, entries in analysis_data.entries_by_func.items():
             first_error_entry = next((e for e in entries if e.traceback), None)
             if first_error_entry and first_error_entry.traceback:
+                file_path = introspector.get_source_file(func)
+                if not file_path:
+                    logger.error(
+                        "[Metacognition]: Could not find source file for traceback in function '%s'.",
+                        func,
+                    )
+                    continue
                 logger.warning(
                     "[Metacognition]: Prioritizing critical error (traceback) in '%s'.",
                     func,
                 )
                 return OptimizationTarget(
-                    file_path=self._guess_source_file(func),
+                    file_path=file_path,
                     target_name=func,
                     issue_description=f"A critical error with a traceback occurred in `{func}`.",
                     relevant_logs=first_error_entry.traceback,
                 )
 
         if not scored_candidates:
+            logger.info(
+                "[Metacognition]: No scored candidates after parsing; nothing to act on."
+            )
             return None
 
         func, (top_score, reasons) = max(
-            scored_candidates.items(),
-            key=lambda item: item[1][0],
+            scored_candidates.items(), key=lambda item: item[1][0]
         )
+        file_path = introspector.get_source_file(func)
+        if not file_path:
+            logger.error(
+                "[Metacognition]: Could not find source file for top-scored candidate '%s'.",
+                func,
+            )
+            return None
+
+        default_threshold = 1.5
+        try:
+            env_thresh = float(os.getenv("METACOG_THRESHOLD", str(default_threshold)))
+        except (ValueError, TypeError):
+            env_thresh = default_threshold
 
         baseline = self.baselines.get(func, BaselineStats())
-        threshold = 2.0 + 0.5 * baseline.error_count_ewma
+        threshold = env_thresh + 0.5 * baseline.error_count_ewma
 
-        logger.debug(
-            "[Metacognition]: Candidate '%s' score=%.3f threshold=%.3f",
+        logger.info(
+            "[Metacognition]: Candidate '%s' score=%.3f threshold=%.3f reasons=%s",
             func,
             top_score,
             threshold,
+            reasons,
         )
         if top_score < threshold:
+            logger.info(
+                "[Metacognition]: Top candidate '%s' below threshold; skipping.", func
+            )
             return None
 
         entries = analysis_data.entries_by_func.get(func, [])
-
         anomaly_time = entries[0].timestamp if entries else int(time.time())
-        commit_hint = ""
         correlated_commits = self._correlate_with_commits(anomaly_time)
+        commit_hint = ""
         if correlated_commits:
             commit_hint = "Recent commits within anomaly window:\n" + "\n".join(
                 f"- {c['hexsha'][:8]} {c['author']}: {c['message']}"
@@ -523,59 +541,19 @@ class PerformanceMonitor:
         ]
         if "high ratio" in " ".join(reasons):
             relevant_log_messages.extend(
-                [
-                    e.message
-                    for e in entries
-                    if PerformanceMonitor._LEARNING_LOG_RE.search(e.message)
-                ]
+                [e.message for e in entries if self._LEARNING_LOG_RE.search(e.message)]
             )
-
         sample_logs = "\n".join(list(dict.fromkeys(relevant_log_messages))[:8])
-
         issue_description = f"Automated analysis flagged `{func}` with anomaly score {top_score:.2f}. Contributing factors: {', '.join(reasons or ['elevated composite score'])}."
         if commit_hint:
             issue_description += f"\n\n{commit_hint}"
 
-        final_target_name = func
-
         return OptimizationTarget(
-            file_path=self._guess_source_file(func),
-            target_name=final_target_name,
+            file_path=file_path,
+            target_name=func,
             issue_description=issue_description,
             relevant_logs=sample_logs or "(no sample logs captured)",
         )
-
-    def _guess_source_file(self, func_name: str) -> Path:
-        """
-        Infers the source file path from a function or method name.
-        This version can handle fully qualified 'ClassName.method_name' strings.
-        """
-        class_to_file_map = {
-            "CognitiveAgent": "src/axiom/cognitive_agent.py",
-            "SymbolicParser": "src/axiom/symbolic_parser.py",
-            "KnowledgeHarvester": "src/axiom/knowledge_harvester.py",
-            "UniversalInterpreter": "src/axiom/universal_interpreter.py",
-            "GoalManager": "src/axiom/goal_manager.py",
-            "LexiconManager": "src/axiom/lexicon_manager.py",
-            "ConceptGraph": "src/axiom/graph_core.py",
-        }
-
-        if "." in func_name:
-            class_name = func_name.split(".")[0]
-            if class_name in class_to_file_map:
-                return Path(class_to_file_map[class_name])
-        base_mapping = {
-            "_parse_single_clause": "src/axiom/symbolic_parser.py",
-            "update_graph": "src/axiom/graph_core.py",
-        }
-        base_name = func_name.split(".")[-1]
-
-        if func_name in base_mapping:
-            return Path(base_mapping[func_name])
-        if base_name in base_mapping:
-            return Path(base_mapping[base_name])
-
-        return Path("src/axiom/unknown_module.py")
 
 
 # ---------------------------------------------------------------------------
@@ -584,58 +562,108 @@ class PerformanceMonitor:
 
 
 class CodeIntrospector:
-    """Reads and extracts specific code blocks from the agent's own source."""
+    """Dynamically builds a map of all functions in the project for easy source retrieval."""
 
-    def get_function_source(self, file_path: Path, function_name: str) -> str | None:
-        """Use AST to extract the full source code of a specific function or method."""
-        if not file_path.exists():
-            logger.error("[Metacognition]: Source file not found: %s", file_path)
-            return None
+    def __init__(self) -> None:
+        self.function_map: dict[str, Path] = self._build_function_map()
+
+    def _build_function_map(self) -> dict[str, Path]:
+        """Builds a map of all function/method names to file paths by walking the AST."""
+        logger.info("[Metacognition]: Building source code function map...")
+        function_map: dict[str, Path] = {}
+
+        for file_path in Path(SRC_ROOT).rglob("*.py"):
+            if "tests" in file_path.parts:
+                continue
+            try:
+                source_code = file_path.read_text(encoding="utf-8")
+                tree = ast.parse(source_code)
+
+                for node in ast.walk(tree):
+                    for child in ast.iter_child_nodes(node):
+                        setattr(child, "parent", node)
+
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        parent = getattr(node, "parent", None)
+                        if isinstance(parent, ast.ClassDef):
+                            qualified_name = f"{parent.name}.{node.name}"
+                            function_map[qualified_name] = file_path
+                        elif isinstance(
+                            parent, (ast.FunctionDef, ast.AsyncFunctionDef)
+                        ):
+                            pass
+                        else:
+                            function_map[node.name] = file_path
+            except Exception as e:
+                logger.warning("[Metacognition]: Failed to parse %s: %s", file_path, e)
 
         logger.info(
-            "[Metacognition]: Retrieving source for target function '%s'", function_name
+            "[Metacognition]: Function map built with %d entries.", len(function_map)
         )
+        return function_map
+
+    def get_source_file(self, function_name: str) -> Path | None:
+        """Get the source file path for a function using a multi-pass lookup."""
+        if function_name in self.function_map:
+            return self.function_map[function_name]
+        short_name = function_name.split(".")[-1]
+        if short_name in self.function_map:
+            return self.function_map[short_name]
+        for key, path in self.function_map.items():
+            if key.endswith(f".{short_name}"):
+                return path
+        return None
+
+    def get_function_source(self, function_name: str) -> tuple[Path | None, str | None]:
+        """Retrieves the full source code of a function using the pre-built map."""
+        file_path = self.get_source_file(function_name)
+        if not file_path or not file_path.exists():
+            logger.error(
+                "[Metacognition]: Source file not found for function: %s", function_name
+            )
+            return None, None
 
         try:
             source_code = file_path.read_text(encoding="utf-8")
             tree = ast.parse(source_code)
-            target_parts = function_name.split(".")
-            target_node = None
 
-            if len(target_parts) > 1:
-                class_name, method_name = target_parts[0], target_parts[1]
+            target_parts = function_name.split(".")
+            target_name = target_parts[-1]
+            class_name = target_parts[0] if len(target_parts) > 1 else None
+
+            if class_name:
                 for node in ast.walk(tree):
                     if isinstance(node, ast.ClassDef) and node.name == class_name:
                         for sub_node in node.body:
                             if (
-                                isinstance(sub_node, ast.FunctionDef)
-                                and sub_node.name == method_name
+                                isinstance(
+                                    sub_node, (ast.FunctionDef, ast.AsyncFunctionDef)
+                                )
+                                and sub_node.name == target_name
                             ):
-                                target_node = sub_node
-                                break
-                        break
+                                return file_path, ast.get_source_segment(
+                                    source_code, sub_node
+                                )
             else:
                 for node in ast.walk(tree):
-                    if isinstance(node, ast.FunctionDef) and node.name == function_name:
-                        target_node = node
-                        break
+                    if (
+                        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and node.name == target_name
+                    ):
+                        return file_path, ast.get_source_segment(source_code, node)
 
-            if target_node:
-                return cast("str", ast.unparse(target_node))
-
-            logger.warning(
-                "[Metacognition]: Could not find function '%s' in '%s'.",
-                function_name,
-                file_path,
-            )
-            return None
         except Exception as e:
             logger.error(
-                "[Metacognition]: Failed to parse source code from '%s'. Error: %s",
-                file_path,
-                e,
+                "[Metacognition]: Error reading source for %s: %s", function_name, e
             )
-            return None
+
+        logger.warning(
+            "Could not find a specific match for '%s' in '%s'.",
+            function_name,
+            file_path,
+        )
+        return file_path, None
 
 
 class ExternalAnalysisBridge:
@@ -836,7 +864,6 @@ class SandboxVerifier:
 
                 logger.info("  [Sandbox]: Running multi-pass auto-fixer (Ruff)...")
 
-                # Pass 1: Add # noqa comments to all undefined name errors (F821).
                 subprocess.run(
                     ["ruff", "check", "--select", "F821", "--add-noqa", "."],
                     capture_output=True,
@@ -844,7 +871,6 @@ class SandboxVerifier:
                     cwd=sandbox_root,
                 )
 
-                # Pass 2: Run the auto-formatter.
                 subprocess.run(
                     ["ruff", "format", "."],
                     capture_output=True,
@@ -852,7 +878,6 @@ class SandboxVerifier:
                     cwd=sandbox_root,
                 )
 
-                # Pass 3: Run the full auto-fix, which will now correctly add missing imports.
                 fix_process = subprocess.run(
                     ["ruff", "check", "--fix", "."],
                     capture_output=True,
@@ -1020,19 +1045,18 @@ class MetacognitiveEngine:
             )
 
     def run_introspection_cycle(self) -> None:
-        """
-        Executes one full self-analysis cycle in 'Verified Advisory Mode'.
-        It identifies a problem, generates a fix, verifies it in a sandbox,
-        and saves a detailed report for human review.
-        """
+        """Executes one full self-analysis cycle with improved visibility."""
         suggestion_file = Path("code_suggestion.json")
         if suggestion_file.exists() and suggestion_file.stat().st_size > 0:
             logger.info(
-                "[Metacognition]: Skipping cycle: A pending suggestion exists at '%s' awaiting human review.",
+                "[Metacognition]: Skipping cycle: pending suggestion exists at '%s'. Remove or archive this file to resume cycles.",
                 suggestion_file,
             )
             return
         if not self.analysis_bridge:
+            logger.warning(
+                "[Metacognition]: Self-modification disabled (no Gemini key). To enable, set GEMINI_API_KEY."
+            )
             return
 
         logger.info("=" * 80)
@@ -1041,32 +1065,43 @@ class MetacognitiveEngine:
 
         try:
             log_file = Path("axiom.log")
-            target = self.performance_monitor.find_optimization_target(log_file)
+            if not log_file.exists():
+                logger.info(
+                    "[Metacognition]: No axiom.log found at %s. Nothing to do.",
+                    log_file,
+                )
+                return
+
+            target = self.performance_monitor.find_optimization_target(
+                log_file, self.code_introspector
+            )
             if not target:
                 return
 
-            function_name = target.target_name.split(".")[-1]
-            problematic_code = self.code_introspector.get_function_source(
-                target.file_path,
-                function_name,
+            _file_path, problematic_code = self.code_introspector.get_function_source(
+                target.target_name
             )
             if not problematic_code:
+                logger.error(
+                    "[Metacognition]: Could not extract source for %s in %s",
+                    target.target_name,
+                    target.file_path,
+                )
                 return
 
             suggested_code = self.analysis_bridge.get_code_suggestion(
-                problematic_code,
-                target.issue_description,
-                target.relevant_logs,
+                problematic_code, target.issue_description, target.relevant_logs
             )
             if not suggested_code:
+                logger.error(
+                    "[Metacognition]: External analysis bridge returned no suggested code."
+                )
                 return
 
+            base_function_name = target.target_name.split(".")[-1]
             is_safe = self.sandbox_verifier.verify_change(
-                target.file_path,
-                function_name,
-                suggested_code,
+                target.file_path, base_function_name, suggested_code
             )
-
             self._save_suggestion_report(target, suggested_code, is_safe)
 
         except Exception as e:
