@@ -1,3 +1,4 @@
+
 <p align="center"><img src="https://raw.githubusercontent.com/vicsanity623/Axiom-Agent/main/src/axiom/static/Axiom.png" alt="Axiom Agent Banner"></p>
 
 Axiom is a **cognitive architecture**—a framework for a new type of artificial intelligence designed to achieve genuine understanding by building its own internal, logical model of reality from the ground up.
@@ -27,7 +28,7 @@ To ensure reliability and performance, Axiom does not use a generic, off-the-she
 
 *   **Base Model:** `mistralai/Mistral-7B-Instruct-v0.2`
 *   **Fine-Tuning:** The base model is fine-tuned using a multi-task dataset that teaches it to be an expert at the specific, structured outputs Axiom requires (e.g., generating valid JSON for sentence decomposition and contextual definitions).
-*   **Quantization:** The final, fine-tuned model is quantized to the `Q4_K_M` GGUF format. This dramatically reduces its size and memory footprint, allowing it to run efficiently on a local CPU without a dedicated GPU.
+*   **Quantization:** The final, fine-tuned model is quantized to the `Q6_K` GGUF format. This dramatically reduces its size and memory footprint, allowing it to run efficiently on a local CPU without a dedicated GPU.
 
 This process creates a specialized, lightweight, and reliable "Axiom Expert" model that is perfectly aligned with the agent's architectural needs.
 
@@ -37,44 +38,49 @@ This process creates a specialized, lightweight, and reliable "Axiom Expert" mod
 
 The Axiom Agent operates in a continuous, multi-layered loop of self-improvement. These cycles allow it to discover new topics, research them, decompose complex information, and even analyze its own performance to suggest code improvements.
 
-### The Main Learning Loop: From Curiosity to Knowledge
+### The Main Learning Loop: A Unified Study Cycle
 
-This is the agent's primary process for expanding its knowledge graph. It’s a continuous loop where the agent explores, studies, and integrates new information.
+This is the agent's primary process for expanding its knowledge graph. It’s a continuous, unified loop where the agent selects, resolves, and integrates new information in a robust, multi-phase cycle.
 
 ```mermaid
 %%{init: {"theme": "forest"}}%%
 flowchart TD
-    A["Axiom Agent"] --> B[Discovery Cycle]
-    B --> C{Found New Topic?}
-    C -- Yes --> D[Study Cycle]
-    C -- No --> B
-    D --> E[Learning Cycle]
-    E --> A
-
-    subgraph DISCOVERY ["1. Discovery Cycle"]
-        B1[Explore Core Subjects e.g. Biology]
-        B2[Find and Filter New Concepts e.g. Photosynthesis]
-        B1 --> B2
-    end
+    A["Axiom Agent's Queues"] --> B[Study Cycle]
     
-    subgraph STUDY ["2. Study Cycle"]
-        S1[Query Knowledge Sources such as Dictionary or Wikipedia]
-        S2[LLM Verifies and Decomposes Sentences into Atomic Facts]
-        S1 --> S2
-    end
+    subgraph B ["Unified Study Cycle"]
+        direction LR
+        
+        subgraph Phase1 [Phase 1: Task Selection]
+            direction TB
+            T1{"High-Priority Queue has tasks?"}
+            T2["Curriculum Queue has tasks?"]
+            T3["Select Task"]
+            T1 -- No --> T2
+            T1 -- Yes --> T3
+            T2 -- Yes --> T3
+        end
 
-    subgraph LEARN ["3. Learning Cycle"]
-        L1[Process Atomic Fact e.g. photosynthesis is a process]
-        L2{Lexicon Check - All words known?}
-        L1 --> L2
-        L2 -- Yes --> L3[Update Knowledge Graph]
-        L2 -- No --> L4[Create High Priority Sub Goal such as Investigate Chlorophyll]
-        L4 --> A
+        subgraph Phase2 [Phase 2: Task Resolution]
+            direction TB
+            R1["Query Knowledge Sources (e.g., Dictionary, Wikipedia)"]
+            R2["LLM Decomposes Sentences into Atomic Facts"]
+            R3{Resolution Succeeded?}
+            R1 --> R2 --> R3
+        end
+
+        subgraph Phase3 [Phase 3: Global Consolidation]
+            direction TB
+            C1["Attempt to integrate ALL pending facts into Knowledge Graph"]
+            C2{Consolidation Complete?}
+            C1 --> C2
+        end
+        
+        Phase1 --> Phase2
+        R3 -- Yes --> Phase3
+        R3 -- No --> R4[Deprioritize & Re-queue Task]
+        R4 --> A
+        Phase3 --> A
     end
-    
-    B --> B1
-    D --> S1
-    E --> L1
 ```
 
 ---
@@ -88,7 +94,7 @@ Running in parallel to the main learning loop, the Metacognitive Engine performs
 flowchart TD
     subgraph MetacognitiveEngine ["Metacognitive Cycle - Slow Supervisory Loop"]
         M1["1. Performance Monitor analyzes axiom.log for errors and inefficiencies"]
-        M2["2. Identify Optimization Target such as a slow function"]
+        M2["2. Identify Optimization Target (e.g., a buggy or slow function)"]
         M3["3. Code Introspector retrieves the problematic source code"]
         M4["4. External Analysis Bridge sends code to Gemini for a suggested fix"]
         M5["5. Sandbox Verifier runs isolated tests using check.sh"]
@@ -112,15 +118,14 @@ graph TD
     A[User Input: 'Tell me about zetetic inquiry.']
     
     subgraph Agent's Thought Process
-        B[1. Parser Fails<br/>'zetetic' and 'inquiry' are unknown words]
-        C[2. Lexicon Check<br/>Identifies 'zetetic' as unknown]
-        D[3. Recursive Sub-Goaling<br/>Pauses current task.<br/>Creates new goal: 'INVESTIGATE: zetetic']
-        E[4. Knowledge Harvester<br/>Resolves the new goal by querying Dictionary API]
-        F[5. Word Learned<br/>'zetetic' is added to the lexicon as a known word]
-        G[6. Re-process Original Input<br/>The agent now understands all words and can respond intelligently]
+        B[1. Lexical Analysis<br/>Identifies 'zetetic' as an unknown word]
+        C[2. Recursive Sub-Goaling<br/>Pauses current task.<br/>Creates new HIGH-PRIORITY goal: 'INVESTIGATE: zetetic']
+        D[3. Knowledge Harvester<br/>Resolves the new goal by querying Dictionary API]
+        E[4. Word Learned<br/>'zetetic' is added to the lexicon as a known word]
+        F[5. Consolidation & Resumption<br/>The agent re-processes the original input, now understanding all words]
     end
 
-    A --> B --> C --> D --> E --> F --> G
+    A --> B --> C --> D --> E --> F
 ```
 
 This entire cycle—from curiosity to integration—demonstrates the power of the symbolic-first architecture. The agent uses its LLM as a powerful tool for perception and verification, but the final understanding and knowledge are stored in a clean, logical, and verifiable symbolic brain.
@@ -133,10 +138,10 @@ This architecture enables the agent to learn, reason, and evolve in a verifiable
 
 ### Cognitive & Reasoning Abilities
 *   **Recursive Sub-Goal Learning:** When the agent encounters a concept it can't process due to an unknown word (e.g., learning "spoken language" without knowing "spoken"), it **pauses, creates a new high-priority goal to learn the unknown word**, and then resumes the original task. This is the foundation of true, bottom-up understanding.
-*   **Metacognitive Self-Analysis:** The agent analyzes its own performance logs to detect inefficiencies or errors. It can then use an external LLM (like Gemini) to suggest a code fix, verify that fix in a secure sandbox by running its own test suite, and present a verified patch for human review *(SAFETY-PRECAUTION)*
+*   **Metacognitive Self-Analysis:** The agent analyzes its own performance logs to detect inefficiencies or errors. It can then use an external LLM (like Gemini) to suggest a code fix, verify that fix in a secure sandbox by running its own test suite, and present a verified patch for human review.
 *   **Advanced Autonomous Learning Cycles:**
     *   **Discovery Cycle:** Finds and explores new, relevant topics.
-    *   **Study Cycle:** Researches concepts using an **LLM-powered quality gate** that verifies relevance and **decomposes complex sentences into clean, atomic facts** for learning.
+    *   **Unified Study Cycle:** A robust, multi-phase process that selects tasks, resolves them using an LLM-powered quality gate, and performs a **global consolidation** of all pending knowledge to prevent learning stalls.
     *   **Refinement Cycle:** Periodically reviews its own knowledge base to find and break down overly complex "chunky" facts into more precise knowledge.
 *   **Multi-Stage Symbolic Parsing:** Understands and deconstructs a wide range of sentence structures without LLM intervention.
 *   **Contextual Conversation:** Tracks pronouns (`it`, `they`) to maintain short-term memory across conversational turns.
@@ -145,7 +150,7 @@ This architecture enables the agent to learn, reason, and evolve in a verifiable
 
 ## 💡 The Hidden Potential: A Personalized AI
 
-While the agent can learn general knowledge autonomously, its true power lies in its ability to learn **from you**. By using the interactive `axiom-teach` command, you can manually instruct the agent, building a personalized knowledge base that is unique to you.
+While the agent can learn general knowledge autonomously, its true power lies in its ability to learn **from you**. By using the interactive `axiom-cnt` (Continuous Narrative Training) command, you can manually instruct the agent, building a personalized knowledge base that is unique to you.
 
 This transforms Axiom from a generic information engine into a true **personal assistant** with persistent memory.
 
@@ -166,13 +171,13 @@ Unlike a standard LLM, which has no memory between conversations, Axiom's knowle
 
 ## 🔬 Local Verification (Quickstart)
 
-Check the **[CONTRIBUTING.md](CONTRIBUTING.md)** for quick start guide.
+Check the **[CONTRIBUTING.md](CONTRIBUTING.md)** for the quick start guide.
 
 ## 🚀 The Vision: Intellectual Escape Velocity
 
 The ultimate goal of this project is to achieve **intellectual escape velocity** from the LLM.
 
-The vision is to continuously expand the sophistication of the `SymbolicParser` and the richness of the `ConceptGraph` through autonomous learning. As the agent's internal, verifiable model of reality grows, its reliance on the LLM for language understanding will diminish. The end goal is a cognitive entity whose own symbolic brain is so comprehensive that the LLM fallback for interpretation becomes obsolete. (FYI : Axiom will never stop using the llm and instead will keep it as a tool the same way a mathematician will always keep a calculator handy)
+The vision is to continuously expand the sophistication of the `SymbolicParser` and the richness of the `ConceptGraph` through autonomous learning. As the agent's internal, verifiable model of reality grows, its reliance on the LLM for language understanding will diminish. The end goal is a cognitive entity whose own symbolic brain is so comprehensive that the LLM fallback for interpretation becomes obsolete. (FYI: Axiom will never stop using the LLM and instead will keep it as a tool the same way a mathematician will always keep a calculator handy.)
 
 Beyond language mastery, the agent's evolution will continue by integrating a **Tool Use Framework**. This will allow it to move beyond what it *knows* (semantic knowledge) to what it can *do* (procedural knowledge)—calling on specialized tools for tasks like mathematical calculations, real-time web searches, or code execution.
 
