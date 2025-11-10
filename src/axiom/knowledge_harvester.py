@@ -228,7 +228,6 @@ class KnowledgeHarvester:
         Performs a targeted re-evaluation of deferred facts.
         Returns True if all relevant facts were consolidated, False otherwise.
         """
-        caller_name = f"{self.__class__.__name__}._consolidate_pending_knowledge"
         if not self.agent.pending_relations or not newly_learned_words:
             return True
 
@@ -240,17 +239,15 @@ class KnowledgeHarvester:
             return True
 
         logger.info(
-            "   - Consolidating deferred facts for newly learned words: %s",
-            sorted(relevant_words),
+            f"   - Consolidating deferred facts for newly learned words: {sorted(relevant_words)}"
         )
+
         facts_to_reprocess = []
         for word in relevant_words:
             facts_for_word = self.agent.pending_relations.pop(word, [])
             if facts_for_word:
                 logger.info(
-                    "     - Re-evaluating %d fact(s) blocked by '%s'",
-                    len(facts_for_word),
-                    word,
+                    f"     - Re-evaluating {len(facts_for_word)} fact(s) blocked by '{word}'"
                 )
                 facts_to_reprocess.extend(facts_for_word)
 
@@ -271,15 +268,13 @@ class KnowledgeHarvester:
 
         if processed_count > 0:
             logger.info(
-                "   - Successfully consolidated %d previously deferred facts.",
-                processed_count,
+                f"   - Successfully consolidated {processed_count} previously deferred facts."
             )
 
         if processed_count < len(facts_to_reprocess):
+            remaining = len(facts_to_reprocess) - processed_count
             logger.warning(
-                "   - Consolidation incomplete. %d facts remain deferred.",
-                len(facts_to_reprocess) - processed_count,
-                caller_name,
+                f"   - Consolidation incomplete. {remaining} facts remain deferred."
             )
             return False
 
@@ -289,7 +284,6 @@ class KnowledgeHarvester:
         """
         Run one full study cycle with a two-tiered priority system and loop detection.
         """
-        caller_name = f"{self.__class__.__name__}.study_cycle"
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
             f"[bold cyan]Study Cycle Started at {timestamp}[/bold cyan]", style="cyan"
@@ -314,7 +308,7 @@ class KnowledgeHarvester:
                 task_topic = task_to_process.get("topic", "")
 
             if task_topic:
-                logger.info("   - Attempting %s task: '%s'", task_type, task_topic)
+                logger.info(f"   - Attempting {task_type} task: '{task_topic}'")
                 resolved = self._resolve_investigation_goal(task_to_process)
 
                 consolidation_succeeded = True
@@ -326,16 +320,11 @@ class KnowledgeHarvester:
 
                 if resolved and consolidation_succeeded:
                     logger.info(
-                        "   - ✅ %s task '%s' successfully resolved and consolidated.",
-                        task_type,
-                        task_topic,
+                        f"   - ✅ {task_type} task '{task_topic}' successfully resolved and consolidated."
                     )
                 else:
                     logger.warning(
-                        "   - ❌ Failed to fully resolve %s task '%s'. Deprioritizing.",
-                        task_type,
-                        task_topic,
-                        caller_name,
+                        f"   - ❌ Failed to fully resolve {task_type} task '{task_topic}'. Deprioritizing."
                     )
                     with self.lock:
                         if task_source_is_priority:
@@ -344,7 +333,7 @@ class KnowledgeHarvester:
                         else:
                             self.agent.learning_goals.append(task_to_process)
             else:
-                logger.warning("Found malformed task: %s. Discarding.", task_to_process)
+                logger.warning(f"Found malformed task: {task_to_process}. Discarding.")
         else:
             logger.info(
                 "All learning queues are empty. Attempting to deepen existing knowledge."

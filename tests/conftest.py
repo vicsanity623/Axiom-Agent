@@ -1,72 +1,45 @@
 from __future__ import annotations
 
+import tempfile
+from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import pytest
 import spacy
-from spacy.language import Language
+
+from axiom.cognitive_agent import CognitiveAgent
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Generator
 
     from spacy.language import Language
 
-    from axiom.cognitive_agent import CognitiveAgent
     from axiom.universal_interpreter import InterpretData
 
 
 class MockUniversalInterpreter:
-    """
-    A fake UniversalInterpreter that behaves more realistically for tests.
-    """
+    """A fake UniversalInterpreter that behaves realistically for tests."""
 
     def __init__(self, *args, **kwargs):
         self.llm = None
         print("--- Initialized MockUniversalInterpreter (No LLM Loaded) ---")
 
     def generate_curriculum(self, high_level_goal: str, **kwargs) -> list[str]:
-        """A mock curriculum generator that returns a predictable list."""
         if "birds" in high_level_goal.lower():
             return ["bird", "feather", "nest"]
         return ["test topic 1", "test topic 2"]
 
     def verify_and_reframe_fact(
-        self,
-        original_topic: str,
-        raw_sentence: str,
+        self, original_topic: str, raw_sentence: str
     ) -> str | None:
-        """A simple mock for the verification method."""
         if original_topic.lower() in raw_sentence.lower():
             return raw_sentence
         return None
 
-    def synthesize(
-        self,
-        structured_facts: str | list,
-        original_question: str | None = None,
-        mode: str = "statement",
-        **kwargs,
-    ) -> str:
-        """A mock synthesizer that correctly handles different modes and data types."""
-
-        if (
-            mode == "creative_writing"
-            and "You are a curriculum design expert" in structured_facts
-        ):
-            return (
-                "Generated Curriculum [Stage 1: Phonemic Awareness]: Learn the basics."
-            )
-
-        if mode == "clarification_question":
-            return f"Which is correct regarding {structured_facts}?"
+    def synthesize(self, structured_facts: str | list, **kwargs) -> str:
         if isinstance(structured_facts, list):
-            fact_strings = []
-            for fact_tuple in structured_facts:
-                if len(fact_tuple) == 3:
-                    subject, relation, obj = fact_tuple
-                    fact_strings.append(f"{subject} {relation.replace('_', ' ')} {obj}")
-            if fact_strings:
-                return ". ".join(fact_strings) + "."
+            return ". ".join(map(str, structured_facts)) + "."
         return str(structured_facts)
 
     def interpret(self, user_input: str) -> InterpretData | None:
@@ -83,54 +56,74 @@ class MockUniversalInterpreter:
         )
 
 
+@pytest.fixture(scope="session")
+def session_agent(monkeypatch_session) -> Generator[CognitiveAgent, None, None]:
+    """
+    A session-scoped fixture that creates a single, shared CognitiveAgent.
+    This is the primary mechanism for speeding up the test suite.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        brain_file = Path(tmpdir) / "session_brain.json"
+        state_file = Path(tmpdir) / "session_state.json"
+
+        monkeypatch_session.setattr(
+            "axiom.cognitive_agent.UniversalInterpreter",
+            MockUniversalInterpreter,
+        )
+
+        agent = CognitiveAgent(
+            brain_file=brain_file, state_file=state_file, enable_llm=False
+        )
+        yield agent
+
+
 @pytest.fixture
-def agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
+def agent(session_agent: CognitiveAgent) -> CognitiveAgent:
     """
-    A globally available fixture that creates a fresh, clean CognitiveAgent.
+    A function-scoped fixture that provides a CLEAN agent for each test.
+    It uses the fast session_agent as a base and simply resets its state,
+    avoiding the slow re-initialization process.
     """
-    from axiom.cognitive_agent import CognitiveAgent
+    session_agent.learning_goals.clear()
+    session_agent.high_priority_tasks.clear()
+    session_agent.goal_manager.goals.clear()
+    if session_agent.harvester:
+        session_agent.harvester.researched_terms.clear()
 
-    monkeypatch.setattr(
-        "axiom.cognitive_agent.UniversalInterpreter",
-        MockUniversalInterpreter,
-    )
-    brain_file = tmp_path / "test_brain.json"
-    state_file = tmp_path / "test_state.json"
-    return CognitiveAgent(brain_file=brain_file, state_file=state_file)
+
+    return session_agent
 
 
 @pytest.fixture
-def blank_agent(monkeypatch, tmp_path: Path) -> CognitiveAgent:
+def blank_agent(session_agent: CognitiveAgent, monkeypatch) -> CognitiveAgent:
     """
-    A fixture that provides a CognitiveAgent with a COMPLETELY EMPTY brain.
+    Provides a CognitiveAgent with a COMPLETELY EMPTY brain for specific tests.
+    This is now much faster as it reuses the session agent's components.
     """
-    from axiom.cognitive_agent import CognitiveAgent
+    monkeypatch.setattr(session_agent, "graph", MagicMock())
 
-    monkeypatch.setattr(
-        "axiom.cognitive_agent.UniversalInterpreter",
-        MockUniversalInterpreter,
-    )
-    monkeypatch.setattr(
-        "axiom.cognitive_agent.seed_domain_knowledge",
-        lambda *args: None,
-    )
-    monkeypatch.setattr(
-        "axiom.cognitive_agent.seed_core_vocabulary",
-        lambda *args: None,
-    )
+    session_agent.learning_goals.clear()
+    session_agent.high_priority_tasks.clear()
+    session_agent.goal_manager.goals.clear()
 
-    brain_file = tmp_path / "blank_brain.json"
-    state_file = tmp_path / "blank_state.json"
-    return CognitiveAgent(brain_file=brain_file, state_file=state_file)
+    return session_agent
 
 
 @pytest.fixture(scope="session")
 def spacy_nlp_lg() -> Language | None:
-    """
-    A session-scoped fixture that loads the large spaCy model once.
-    This dramatically reduces memory usage and test startup time.
-    """
+    """A session-scoped fixture that loads the large spaCy model once."""
     try:
         return spacy.load("en_core_web_lg")
-    except ImportError:
+    except (OSError, ImportError):
+        print(
+            "Warning: spaCy model 'en_core_web_lg' not found. spaCy-dependent tests will be skipped."
+        )
         return None
+
+
+@pytest.fixture(scope="session")
+def monkeypatch_session() -> Generator[pytest.MonkeyPatch, None, None]:
+    """A session-scoped monkeypatch fixture."""
+    mp = pytest.MonkeyPatch()
+    yield mp
+    mp.undo()

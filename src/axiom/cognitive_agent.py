@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import threading
+import time
 from collections import defaultdict
 from datetime import date, datetime
 from functools import lru_cache
@@ -131,21 +132,20 @@ class CognitiveAgent:
     ) -> None:
         """Initialize a new instance of the CognitiveAgent."""
         logger.info("[yellow]Initializing Cognitive Agent...[/yellow]")
+
         self.brain_file = brain_file
         self.state_file = state_file
         self.inference_mode = inference_mode
-        if self.inference_mode:
-            logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
-
-        self.brain_file.parent.mkdir(parents=True, exist_ok=True)
         self.interaction_lock = threading.Lock()
-        self.interpreter = UniversalInterpreter(
-            model_path=DEFAULT_LLM_PATH, load_llm=enable_llm
-        )
-        self.lexicon: LexiconManager = LexiconManager(self)
-        self.parser: SymbolicParser = SymbolicParser(self)
+
+        self.graph: ConceptGraph
+        self.interpreter: UniversalInterpreter
+        self.lexicon: LexiconManager
+        self.parser: SymbolicParser
         self.lemmatizer = WordNetLemmatizer()
-        self.goal_manager: GoalManager = GoalManager(self)
+        self.goal_manager: GoalManager
+        self.harvester: KnowledgeHarvester | None = None
+
         self.learning_goals: list[str | Goal] = []
         self.high_priority_tasks: list[Goal] = []
         self.pending_relations: dict[str, list[tuple[RelationData, PropertyData]]] = (
@@ -153,8 +153,26 @@ class CognitiveAgent:
         )
         self.recently_researched: dict[str, float] = {}
         self.learning_iterations: int = 0
+        self.autonomous_cycle_count: int = 0
 
-        self.harvester: KnowledgeHarvester | None = None
+        self.self_node: ConceptNode | None = None
+        self.user_node: ConceptNode | None = None
+
+        self.is_awaiting_clarification = False
+        self.clarification_context: ClarificationContext = ClarificationContext({})
+        self.structured_history: list[tuple[str, list[InterpretData]]] = []
+
+        if self.inference_mode:
+            logger.info("   - Running in INFERENCE-ONLY mode. Learning is disabled.")
+
+        self.brain_file.parent.mkdir(parents=True, exist_ok=True)
+
+        self.interpreter = UniversalInterpreter(
+            model_path=DEFAULT_LLM_PATH, load_llm=enable_llm
+        )
+        self.lexicon = LexiconManager(self)
+        self.parser = SymbolicParser(self)
+        self.goal_manager = GoalManager(self)
         if not self.inference_mode:
             self.harvester = KnowledgeHarvester(agent=self, lock=self.interaction_lock)
 
@@ -163,7 +181,6 @@ class CognitiveAgent:
                 "[green]   - Loading brain from file: %s[/green]", self.brain_file
             )
             self.graph = ConceptGraph.load_from_file(self.brain_file)
-
         elif brain_data is not None:
             logger.info("   - Initializing brain from provided data dictionary.")
             self.graph = ConceptGraph.load_from_dict(brain_data)
@@ -195,10 +212,41 @@ class CognitiveAgent:
             self.save_brain()
             self.save_state()
 
-        self.is_awaiting_clarification = False
-        self.clarification_context: ClarificationContext = ClarificationContext({})
-        self.structured_history: list[tuple[str, list[InterpretData]]] = []
-        self.autonomous_cycle_count = 0
+        self._initialize_identity()
+
+    def _initialize_identity(self):
+        """Finds or creates the core 'self' and 'user' nodes."""
+        self.self_node = self.graph.get_node_by_name("axiom_agent")
+        if not self.self_node:
+            self.self_node = self._add_or_update_concept(
+                "axiom_agent", node_type="self_identity"
+            )
+            self._process_statement_for_learning(
+                cast(
+                    "RelationData",
+                    {
+                        "subject": "axiom_agent",
+                        "verb": "is_a",
+                        "object": "cognitive agent",
+                    },
+                )
+            )
+            self._process_statement_for_learning(
+                cast(
+                    "RelationData",
+                    {
+                        "subject": "axiom_agent",
+                        "verb": "has_goal",
+                        "object": "learn and evolve",
+                    },
+                )
+            )
+
+        self.user_node = self.graph.get_node_by_name("current_user")
+        if not self.user_node:
+            self.user_node = self._add_or_update_concept(
+                "current_user", node_type="user_identity"
+            )
 
     def chat(self, user_input: str) -> str:
         """
@@ -212,6 +260,20 @@ class CognitiveAgent:
             return self._handle_clarification(user_input)
 
         interpretations = self._get_interpretation(user_input)
+
+        if self.user_node and interpretations:
+            primary_interpretation = interpretations[0]
+            interaction_node = self._add_or_update_concept(
+                f"user_interaction_{time.time()}", node_type="event"
+            )
+            if interaction_node:
+                self.graph.add_edge(
+                    self.user_node, interaction_node, "performed_action"
+                )
+                for topic in primary_interpretation.get("key_topics", []):
+                    topic_node = self.graph.get_node_by_name(topic)
+                    if topic_node:
+                        self.graph.add_edge(interaction_node, topic_node, "is_about")
 
         if not interpretations:
             reflex_response = self._handle_cognitive_reflex(user_input)
@@ -940,7 +1002,10 @@ class CognitiveAgent:
             self.autonomous_cycle_count = 0
 
     def load_state(self) -> None:
-        """Load the agent's operational state from the state file."""
+        """
+        Load the agent's complete operational state from the state file,
+        including the curriculum from the GoalManager.
+        """
         if not self.state_file.exists():
             logger.info("   - No agent state file found. Starting with a fresh state.")
             return
@@ -952,6 +1017,9 @@ class CognitiveAgent:
             self.learning_goals = state_data.get("learning_goals", [])
             self.high_priority_tasks = state_data.get("high_priority_tasks", [])
             self.autonomous_cycle_count = state_data.get("autonomous_cycle_count", 0)
+            self.learning_iterations = state_data.get("learning_iterations", 0)
+
+            self.goal_manager.goals = state_data.get("goals", {})
 
             if self.harvester:
                 self.harvester.researched_terms = set(
@@ -968,12 +1036,33 @@ class CognitiveAgent:
             self.learning_goals = []
             self.high_priority_tasks = []
             self.autonomous_cycle_count = 0
+            self.learning_iterations = 0
+            self.goal_manager.goals = {}
 
-    def _save_agent_state(self) -> None:
-        """Save the agent's current operational state to its state file."""
-        state_data = {"learning_iterations": self.learning_iterations}
-        with open(self.state_file, "w", encoding="utf-8") as f:
-            json.dump(state_data, f, indent=4)
+    def save_state(self) -> None:
+        """
+        Save the agent's complete operational state to its state file,
+        including the curriculum from the GoalManager.
+        """
+        logger.info("   - Saving agent's operational state to '%s'...", self.state_file)
+        try:
+            state_data = {
+                "learning_goals": self.learning_goals,
+                "high_priority_tasks": self.high_priority_tasks,
+                "autonomous_cycle_count": self.autonomous_cycle_count,
+                "learning_iterations": self.learning_iterations,
+                "researched_terms": list(
+                    self.harvester.researched_terms if self.harvester else []
+                ),
+                "goals": self.goal_manager.goals,
+            }
+            with self.state_file.open("w", encoding="utf-8") as f:
+                json.dump(state_data, f, indent=4)
+            logger.info("   - Agent state saved successfully.")
+        except Exception as e:
+            logger.error(
+                "   - CRITICAL ERROR: Failed to save agent state. Error: %s", e
+            )
 
     def _expand_contractions(self, text: str) -> str:
         """Expand common English contractions (e.g., "what's" -> "what is")."""
@@ -1410,7 +1499,8 @@ class CognitiveAgent:
             return None
 
         node = self.graph.get_node_by_name(clean_name)
-        if not node:
+
+        if node is None:
             if " " in clean_name:
                 determined_type = (
                     "proper_noun" if any(c.isupper() for c in name) else "noun_phrase"
@@ -1422,9 +1512,8 @@ class CognitiveAgent:
                 else:
                     determined_type = node_type
 
-            node = self.graph.add_node(
-                ConceptNode(clean_name, node_type=determined_type),
-            )
+            new_node_obj = ConceptNode(clean_name, node_type=determined_type)
+            node = self.graph.add_node(new_node_obj)
             logger.info(
                 "[cyan]   - Added new concept to graph: %s (%s)[/cyan]",
                 clean_name,
@@ -1442,6 +1531,8 @@ class CognitiveAgent:
                 context_object_name,
             )
             self.lexicon.promote_word(clean_name, context_object_name, confidence=0.8)
+
+            return self.graph.get_node_by_id(node.id)
 
         return node
 
@@ -1501,8 +1592,3 @@ class CognitiveAgent:
         finally:
             if lock_file.exists():
                 lock_file.unlink()
-
-    def save_state(self) -> None:
-        """Save the agent's current operational state to its JSON file."""
-        if not self.inference_mode:
-            self._save_agent_state()

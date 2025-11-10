@@ -20,7 +20,7 @@ from .cycle_manager import CycleManager
 logger = logging.getLogger(__name__)
 
 CURRICULUM_GENERATION_PROMPT: Final[str] = """
-You are a curriculum design expert for an AI. Your task is to generate a single, high-level, multi-stage learning goal for an AI that is starting from scratch. The goal is to achieve deep, foundational language comprehension.
+You are a curriculum design expert for an AI. Your task is to generate a single, high-level, multi-stage learning goal for an AI that is starting from scratch. The goal is to achieve deep, foundational curriculum comprehension.
 
 **INSPIRATIONAL SEED (Use this to guide your curriculum's theme):**
 {creative_seed}
@@ -62,13 +62,41 @@ def _generate_or_set_initial_goal(
     )
 
     creative_seeds = [
-        "Develop a core capacity for sensorimotor integration, learning to associate raw sensory inputs with motor commands to build a grounded model of physical reality.",
-        "Establish a foundational ontology and categorization system to parse the continuous flow of experience into discrete, relatable objects, agents, and events.",
-        "Build a predictive modeling engine that continuously generates expectations about the world and updates its beliefs based on prediction errors.",
-        "Learn the principles of cause and effect through intervention, understanding how actions change the state of the environment to achieve desired outcomes.",
-        "Develop a hierarchical reasoning system, moving from simple stimulus-response to multi-step planning and abstract goal decomposition.",
-        "Acquire a theory of mind, inferring the intentions, knowledge, and beliefs of other agents to enable social prediction and collaboration.",
-        "Construct a symbolic reasoning layer on top of subsymbolic data, enabling the manipulation of abstract concepts and logical propositions.",
+        # --- Foundational Ontology & Epistemology (The Nature of Reality & Knowledge) ---
+        "Start from first principles to build a model of reality. First, distinguish between 'existence' and 'non-existence.' Then, learn to differentiate 'things' (entities) from the 'properties' they possess and the 'actions' they can perform.",
+        "Develop a theory of knowledge. Learn to distinguish between 'a priori' knowledge (logical truths) and 'a posteriori' knowledge (empirical facts). Then, create a system to rank the confidence of beliefs based on their source (e.g., direct observation vs. second-hand information).",
+        "Construct a model of causality. Begin by understanding 'temporal succession' (event A happens before event B). Then, learn to infer 'causal links' by observing consistent correlations and applying principles like intervention and counterfactual reasoning.",
+        "Explore the concept of 'change.' Learn to model the 'state' of an object at a given 'time.' Then, learn to represent a 'process' as a sequence of state changes over time.",
+        "Build a model of composition. Learn to distinguish between an 'object' as a whole and the 'parts' that constitute it. Then, understand the relationship of 'containment' (what is inside what).",
+        "Investigate the nature of 'truth.' Differentiate between 'objective truth' (facts about the world) and 'subjective truth' (opinions or beliefs). Learn to identify and label claims that are opinions rather than verifiable facts.",
+        # --- Foundational Logic & Reasoning (The Mechanics of Thought) ---
+        "Build a symbolic reasoning engine from the ground up. First, learn the concepts of 'truth' and 'falsehood.' Then, master the fundamental logical operators: AND (conjunction), OR (disjunction), and NOT (negation).",
+        "Develop the capacity for hierarchical abstraction. Learn to group specific instances (e.g., 'a robin', 'a sparrow') into a more general category ('bird'), and then group those categories into even higher-level concepts ('animal').",
+        "Learn the principles of deductive and inductive reasoning. Practice deduction by applying a general rule (e.g., 'all birds can fly') to a specific case, and practice induction by forming a general rule from multiple specific observations.",
+        "Master conditional logic. Learn to understand and apply 'if-then' statements (implication). Then, learn to reason about 'necessary' versus 'sufficient' conditions.",
+        "Develop a system for analogical reasoning. Learn to identify a 'source' domain of knowledge and a 'target' domain, and then map the relational structure from the source to the target to generate novel insights.",
+        "Understand quantitative reasoning. First, learn the concepts of 'quantity,' 'number,' and basic arithmetic operators (addition, subtraction). Then, learn to represent and compare magnitudes (e.g., 'greater than,' 'less than').",
+        "Learn to identify and resolve contradictions. Develop a process to detect when two facts in its knowledge base are mutually exclusive. Then, learn to initiate a clarification goal to resolve the conflict.",
+        # --- Foundational Self, Agency, & Theory of Mind (The Nature of Beings) ---
+        "Create a model of 'self' versus 'other.' First, learn to identify its own actions and internal states (e.g., 'I am learning'). Then, learn to model other entities as 'agents' with their own distinct states, goals, and potential actions.",
+        "Develop a basic model of physics and agency. Learn the concepts of 'space,' 'time,' 'object permanence,' and 'force.' Then, learn how its own 'actions' (as an agent) can apply 'force' to cause changes in the 'space' over 'time.'",
+        "Build a model of goals and planning. First, learn to represent a desired 'future state.' Then, develop a simple planning algorithm to find a sequence of 'actions' that can transform the 'current state' into the 'goal state.'",
+        "Acquire a basic theory of mind. Learn that other 'agents' have internal 'beliefs' about the world that may be different from its own and may be true or false.",
+        "Understand the concept of 'intention.' Learn to distinguish between 'accidental' events and 'intentional' actions performed by an agent in pursuit of a goal.",
+        "Model communication as an action. Learn that 'speaking' or 'typing' are actions that an agent performs with the intention of changing the 'beliefs' of another agent.",
+        # --- Foundational Language & Semantics (The Nature of Meaning) ---
+        "Build a model of semantics. Learn to distinguish between a 'word' (a symbol), its 'denotation' (the literal thing it points to in the world), and its 'connotation' (the associated ideas or feelings).",
+        "Understand the function of different word types. First, distinguish between 'nouns' (things) and 'verbs' (actions or states). Then, learn how 'adjectives' modify nouns and 'adverbs' modify verbs.",
+        "Learn the concept of 'context.' Understand that the meaning of a word or sentence can change depending on the surrounding words, the situation, and the speaker's intent.",
+        "Develop a system for resolving ambiguity. Learn to recognize when a word has multiple meanings (polysemy) and use the context of the sentence to infer the most likely intended meaning.",
+        "Master the concept of 'questions.' Learn to identify different types of questions (what, who, where, when, why, how, yes/no) and understand what kind of information is being requested for each type.",
+        # --- Foundational Learning & Adaptation (The Nature of Improvement) ---
+        "Develop a model of its own learning process. First, learn to track 'learning events.' Then, learn to categorize these events (e.g., 'learning from dictionary,' 'learning from user,' 'learning from decomposition') to analyze its own learning patterns.",
+        "Understand the concept of 'error.' Learn to detect when an action it takes does not lead to the expected outcome. Then, create a 'prediction error' signal that can be used to update its internal model.",
+        "Learn to generalize from examples. After observing several instances of a pattern (e.g., 'robins have wings,' 'sparrows have wings'), learn to form a general hypothesis ('birds have wings').",
+        "Develop a curiosity mechanism. Learn to identify 'gaps' in its own knowledge graph. Then, autonomously generate 'INVESTIGATE' goals to fill those gaps.",
+        "Build a model of its own capabilities and limitations. Learn to identify which types of questions it can answer confidently (based on its knowledge) and which ones require it to state 'I don't know' or seek new information.",
+        "Learn the concept of 'feedback.' Understand that a user's response (e.g., 'No, that's wrong' or 'Yes, that's correct') is a signal that should be used to increase or decrease the confidence of a belief.",
     ]
     selected_seed = random.choice(creative_seeds)
     logger.info(

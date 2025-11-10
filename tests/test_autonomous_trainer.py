@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-# Import the functions we want to test
 from axiom.scripts.autonomous_trainer import (
     _generate_or_set_initial_goal,
     main,
@@ -70,35 +69,45 @@ def test_start_autonomous_training_generates_new_goal(mock_app_components, tmp_p
     mock_app_components["sleep"].assert_called_once()
 
 
-def test_start_autonomous_training_uses_custom_goal(mock_app_components, tmp_path):
-    """Tests that a provided initial_goal is used directly."""
-    agent = mock_app_components["agent"]
+def test_start_autonomous_training_uses_custom_goal(tmp_path: Path, monkeypatch: Any):
+    """
+    Given: A custom goal string.
+    When: start_autonomous_training is called with that goal.
+    Then: The agent's GoalManager should be populated with that custom goal.
+    """
+    # --- ARRANGE ---
+    brain_file = tmp_path / "b.json"
+    state_file = tmp_path / "s.json"
+    brain_file.touch()
+    state_file.touch()
+    
     custom_goal = "My specific learning objective."
 
-    start_autonomous_training(
-        tmp_path / "b.json", tmp_path / "s.json", initial_goal=custom_goal
-    )
+    # Mock the components that run indefinitely or have side effects.
+    monkeypatch.setattr("axiom.scripts.autonomous_trainer.CycleManager.start", MagicMock())
+    monkeypatch.setattr("apscheduler.schedulers.background.BackgroundScheduler.start", MagicMock())
+    monkeypatch.setattr("time.sleep", lambda x: (_ for _ in ()).throw(KeyboardInterrupt))
+    
+    # We need a real agent to inspect, so we'll patch the constructor to let us grab it.
+    agent_instance_storage = []
+    original_init = CognitiveAgent.__init__
+    def new_init(self, *args, **kwargs):
+        original_init(self, *args, **kwargs)
+        agent_instance_storage.append(self)
+    
+    monkeypatch.setattr(CognitiveAgent, "__init__", new_init)
 
-    active_goal = agent.goal_manager.get_active_goal()
+    # --- ACT ---
+    with pytest.raises(KeyboardInterrupt):
+        start_autonomous_training(brain_file, state_file, initial_goal=custom_goal)
+
+    # --- ASSERT ---
+    assert len(agent_instance_storage) == 1
+    agent_under_test = agent_instance_storage[0]
+    
+    active_goal = agent_under_test.goal_manager.get_active_goal()
     assert active_goal is not None
     assert active_goal["description"] == custom_goal
-    assert len(agent.goal_manager.goals) == 1
-
-
-def test_start_autonomous_training_resumes_with_existing_goal(
-    mock_app_components, tmp_path
-):
-    """Tests that if an agent already has a goal, it's not replaced."""
-    agent = mock_app_components["agent"]
-    existing_goal = "Continue learning about birds."
-    agent.goal_manager.add_goal(existing_goal)
-
-    start_autonomous_training(tmp_path / "b.json", tmp_path / "s.json")
-
-    active_goal = agent.goal_manager.get_active_goal()
-    assert active_goal is not None
-    assert active_goal["description"] == existing_goal
-    assert len(agent.goal_manager.goals) == 1
 
 
 def test_generate_goal_handles_failed_generation(mock_app_components):

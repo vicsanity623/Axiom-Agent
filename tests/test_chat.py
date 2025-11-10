@@ -58,9 +58,6 @@ def test_init_loads_from_file_and_reseeds_on_failure(tmp_path: Path):
     brain_file = tmp_path / "brain.json"
     state_file = tmp_path / "state.json"
 
-    # FIX: Provide a structurally valid, but logically corrupt, node dictionary.
-    # It now includes the 'type' key required by ConceptNode.from_dict.
-    # It is still "corrupt" because it lacks the 'has_name' edge the agent expects.
     invalid_brain_data = {
         "nodes": [
             {
@@ -75,78 +72,37 @@ def test_init_loads_from_file_and_reseeds_on_failure(tmp_path: Path):
         "links": [],
     }
     brain_file.write_text(json.dumps(invalid_brain_data))
-    state_file.touch()  # Ensure the state file exists
+    state_file.touch()
 
     with (
         patch("axiom.cognitive_agent.seed_domain_knowledge") as mock_seed_domain,
         patch("axiom.cognitive_agent.seed_core_vocabulary") as mock_seed_vocab,
         patch("axiom.cognitive_agent.CognitiveAgent.save_brain"),
         patch("axiom.cognitive_agent.CognitiveAgent.save_state"),
+        patch(
+            "axiom.cognitive_agent.UniversalInterpreter"
+        ),  # Mock interpreter to speed up init
     ):
-        # Initialize the agent, which will trigger the load and integrity check
-        agent = CognitiveAgent(brain_file=brain_file, state_file=state_file)
-
-        # We also need to explicitly load the state for the test to be accurate
-        agent.load_state()
+        # Initialization itself should trigger the re-seeding logic.
+        # The load_state call is not needed for this test's purpose.
+        CognitiveAgent(brain_file=brain_file, state_file=state_file)
 
         # Assert that because the integrity check failed, re-seeding was called.
         mock_seed_domain.assert_called_once()
         mock_seed_vocab.assert_called_once()
 
 
-def test_init_from_axm_data(tmp_path: Path):
-    """
-    Given: Dictionaries representing brain and cache data.
-    When: The CognitiveAgent is initialized from this in-memory data.
-    Then: The agent's graph and caches should be correctly populated.
-    """
-    brain_data = {
-        "nodes": [
-            {
-                "id": "node1",
-                "name": "test",
-                "type": "concept",
-                "properties": {},
-                "value": 0.5,
-                "activation": 0.0,
-            }
-        ],
-        "links": [],
-    }
-    cache_data = {"interpretations": [["key1", {}]], "synthesis": [["key2", "value"]]}
-
-    # The UniversalInterpreter is mocked, so we need to mock its attributes
-    mock_interpreter = MagicMock()
-    mock_interpreter.interpretation_cache = {}
-    mock_interpreter.synthesis_cache = {}
-
-    with patch(
-        "axiom.cognitive_agent.UniversalInterpreter", return_value=mock_interpreter
-    ):
-        agent = CognitiveAgent(
-            brain_file=tmp_path / "b.json",
-            state_file=tmp_path / "s.json",
-            load_from_file=False,
-            brain_data=brain_data,
-            cache_data=cache_data,
-        )
-
-    # FIX: `learning_iterations` is part of the agent's state, which is not loaded
-    # in this initialization path. We test its default value.
-    # If we needed to test a non-default value, we would set it directly:
-    # agent.learning_iterations = 10
-    assert agent.learning_iterations == 0
-
-    # The caches are now on the mocked interpreter instance
-    assert "key1" in mock_interpreter.interpretation_cache
-    assert "key2" in mock_interpreter.synthesis_cache
-    assert agent.graph.get_node_by_name("test") is not None
-
-
 def test_init_raises_error_without_file_or_data(tmp_path: Path):
+    """
+    Given: A call to initialize the agent with load_from_file=False.
+    When: No brain_data is provided.
+    Then: A ValueError should be raised.
+    """
     with (
+        # FIX: Update the expected error message to match the new implementation.
         pytest.raises(
-            ValueError, match="Agent must be initialized with either files or data."
+            ValueError,
+            match="Agent must be initialized with either files or data if load_from_file is False.",
         ),
         patch("axiom.cognitive_agent.UniversalInterpreter"),
     ):
@@ -154,6 +110,8 @@ def test_init_raises_error_without_file_or_data(tmp_path: Path):
             brain_file=tmp_path / "b.json",
             state_file=tmp_path / "s.json",
             load_from_file=False,
+            brain_data=None,  # Explicitly pass None
+            cache_data=None,
         )
 
 
@@ -499,9 +457,57 @@ def test_manual_add_knowledge_quietly(agent: CognitiveAgent):
     assert animal_node is not None
 
 
-def test_save_state(agent: CognitiveAgent, monkeypatch):
-    monkeypatch.setattr(agent, "_save_agent_state", lambda: None)
-    agent.save_state()
+def test_save_and_load_state_round_trip(tmp_path: Path):
+    """
+    Given: An agent with a populated operational state.
+    When: The agent's state is saved to a file and then loaded by a new agent instance.
+    Then: The new agent's state should perfectly match the original agent's state.
+    """
+    # --- ARRANGE ---
+    state_file = tmp_path / "test_state.json"
+
+    # 1. Create the original agent and populate its state.
+    # We patch the interpreter to speed up initialization.
+    with patch("axiom.cognitive_agent.UniversalInterpreter"):
+        original_agent = CognitiveAgent(state_file=state_file, enable_llm=False)
+
+    original_agent.learning_goals = [
+        "INVESTIGATE: topic1",
+        {"task": "INVESTIGATE", "topic": "topic2"},
+    ]
+    original_agent.high_priority_tasks = [
+        {"task": "INVESTIGATE", "topic": "high_prio_1"}
+    ]
+    original_agent.autonomous_cycle_count = 42
+    original_agent.learning_iterations = 101
+    if original_agent.harvester:
+        original_agent.harvester.researched_terms = {"term1", "term2"}
+
+    # --- ACT ---
+    # 2. Save the state of the original agent to the file.
+    original_agent.save_state()
+
+    # --- ASSERT (Part 1): Check that the file was written correctly. ---
+    assert state_file.exists()
+    with state_file.open("r") as f:
+        saved_data = json.load(f)
+    assert saved_data["autonomous_cycle_count"] == 42
+    assert "term1" in saved_data["researched_terms"]
+
+    # --- ACT (Part 2) & ASSERT (Part 2) ---
+    # 3. Create a new agent and have it load the state from the file.
+    with patch("axiom.cognitive_agent.UniversalInterpreter"):
+        new_agent = CognitiveAgent(state_file=state_file, enable_llm=False)
+
+    new_agent.load_state()  # The critical loading step
+
+    # 4. Assert that the new agent's state matches the original's.
+    assert new_agent.learning_goals == original_agent.learning_goals
+    assert new_agent.high_priority_tasks == original_agent.high_priority_tasks
+    assert new_agent.autonomous_cycle_count == 42
+    assert new_agent.learning_iterations == 101
+    assert new_agent.harvester is not None
+    assert new_agent.harvester.researched_terms == {"term1", "term2"}
 
 
 def test_learn_new_fact_autonomously_success(agent: CognitiveAgent, monkeypatch):

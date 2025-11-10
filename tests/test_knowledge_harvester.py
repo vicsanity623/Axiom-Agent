@@ -45,23 +45,29 @@ def test_resolve_investigation_goal_single_word_api_success(
     """
     Given: A single-word investigation goal.
     When: The dictionary API returns a valid definition and POS.
-    Then: The function returns True and attempts to learn the new facts.
+    Then: The function returns True and attempts to learn both the POS and the definition.
     """
     # Arrange
     goal = "INVESTIGATE: testword"
     mock_api.return_value = ("noun", "a word for testing")
 
-    mock_learn = MagicMock(return_value=True)
-    monkeypatch.setattr(agent, "learn_new_fact_autonomously", mock_learn)
+    mock_learn_fact = MagicMock(return_value=(True, "inserted"))
+    mock_learn_autonomously = MagicMock(return_value=True)
+    
+    # FIX: Mock both learning pathways that are called by the function.
+    monkeypatch.setattr(agent, "_process_statement_for_learning", mock_learn_fact)
+    monkeypatch.setattr(agent, "learn_new_fact_autonomously", mock_learn_autonomously)
 
     # Act
     result = harvester._resolve_investigation_goal(goal)
 
     # Assert
     assert result is True
-
-    # The function's job is to call the learning methods, not to manage the queue.
-    mock_learn.assert_called_once_with("a word for testing", "testword")
+    
+    # Assert that the POS was learned
+    mock_learn_fact.assert_called_once()
+    # Assert that the definition was learned
+    mock_learn_autonomously.assert_called_once_with("a word for testing", "testword")
 
 
 def test_prune_research_cache_no_terms(harvester: KnowledgeHarvester) -> None:
