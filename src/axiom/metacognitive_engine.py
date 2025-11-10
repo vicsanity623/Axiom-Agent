@@ -14,6 +14,7 @@ import time
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from functools import cached_property
 from hashlib import sha256
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, NamedTuple, cast
@@ -97,37 +98,25 @@ class _LogEntry:
 
 @dataclass
 class _LogAnalysisData:
-    """A container for all data aggregated from parsing a log file."""
-
     entries_by_func: dict[str, list[_LogEntry]] = field(
-        default_factory=lambda: defaultdict(list),
+        default_factory=lambda: defaultdict(list)
     )
-
-
-# ---------------------------------------------------------------------------
-# PerformanceMonitor - Analyzes logs for optimization targets
-# ---------------------------------------------------------------------------
+    deferred_targets: list[OptimizationTarget] = field(default_factory=list)
 
 
 class PerformanceMonitor:
     """Analyzes logs to find performance bottlenecks, errors, and learning inefficiencies."""
 
     _LOG_PATTERN: ClassVar[re.Pattern] = re.compile(
-        r"""^(?:(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\s+)?
-            (?:\[?(?P<level>DEBUG|INFO|WARNING|ERROR|CRITICAL)\]?\s+)?
-            \[?(?P<module>[^\]\:]+)\]?\s*[:\-]?\s*
-            (?P<message>.*)$""",
-        re.IGNORECASE | re.VERBOSE,
+        r"""^\[(?P<ts>\d{2}:\d{2}:\d{2})\]\s+
+            (?P<level>\w+)\s+
+            (?P<message>.*?)\s*
+            (?:\(in\s+(?P<function>[\w\.]+)\))?$
+            """,
+        re.VERBOSE,
     )
     _TIMING_PATTERN: ClassVar[re.Pattern] = re.compile(
         r"Execution time[:=]?\s*(?P<seconds>\d+\.\d+)\s*s?", re.IGNORECASE
-    )
-    _TS_PATTERN: ClassVar[re.Pattern] = re.compile(
-        r"^(?P<iso>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})",
-    )
-    _DEFERRED_FACT_RE: ClassVar[re.Pattern] = re.compile(
-        r"[yellow] Deferred learning for\s+(?P<fact>[\w\-\._]+)[/yellow]",
-        re.IGNORECASE,
     )
     _LEARNING_LOG_RE: ClassVar[re.Pattern] = re.compile(
         r"Learned new fact: (?P<sub>.+) --\[(?P<verb>.+)\]--> (?P<obj>.+) \(status=(?P<status>\w+)\)"
@@ -268,65 +257,73 @@ class PerformanceMonitor:
             )
         else:
             logger.info(
-                "[Metacognition]: No clear optimization targets found this cycle.",
+                "[Metacognition]: No clear optimization targets found this cycle."
             )
         return best_target
 
     def _parse_log_file(self, log_file: Path) -> _LogAnalysisData:
-        """Parses a log file using a more robust pattern and traceback extraction."""
+        """Parses a log file, including high-priority heuristics for critical issues."""
         lines = log_file.read_text(encoding="utf-8").splitlines()
         analysis_data = _LogAnalysisData()
         i = 0
         while i < len(lines):
             line = lines[i]
+
+            # --- RESTORED: High-priority heuristic from original version ---
+            if "Deferred learning" in line or "Consolidation incomplete" in line:
+                message = line.strip()
+                target = OptimizationTarget(
+                    file_path=Path("src/axiom/knowledge_harvester.py"),
+                    target_name="KnowledgeHarvester.study_cycle",
+                    issue_description=(
+                        "High-priority systemic issue: The learning or consolidation process is failing, "
+                        "leading to deferred facts or incomplete cycles. This suggests a flaw in the core learning loop."
+                    ),
+                    relevant_logs=message,
+                )
+                analysis_data.deferred_targets.append(target)
+                i += 1
+                continue
+
             match = self._LOG_PATTERN.search(line)
             if not match:
                 i += 1
                 continue
 
-            message = (match.group("message") or "").strip()
-            func = "unknown_function"
-            inline_in_match = re.search(r"\(in\s+([a-zA-Z0-9_\.]+)\)", message)
-            if inline_in_match:
-                func = inline_in_match.group(1)
-
-            if self._LEARNING_LOG_RE.search(message):
-                func = "CognitiveAgent._add_new_fact"
-
-            ts_str = match.group("ts")
+            groups = match.groupdict()
+            message = (groups.get("message") or "").strip()
+            func = (groups.get("function") or "unknown_function").strip()
+            log_level = (groups.get("level") or "INFO").upper()
             ts = int(time.time())
-            if ts_str:
-                try:
-                    ts = int(datetime.fromisoformat(ts_str).timestamp())
-                except ValueError:
-                    pass
-
-            log_level = (match.group("level") or "INFO").upper()
             timing_match = self._TIMING_PATTERN.search(message)
             exec_time = float(timing_match.group("seconds")) if timing_match else None
             traceback_str = None
             i += 1
 
+            # Preserve the robust, multi-line traceback parsing logic
             if log_level in ("ERROR", "CRITICAL") or "traceback" in message.lower():
                 if i < len(lines) and "Traceback (most recent call last):" in lines[i]:
-                    tb_lines = []
-                    while (
-                        i < len(lines)
-                        and lines[i].strip()
-                        and not self._LOG_PATTERN.search(lines[i])
+                    tb_lines = [lines[i]]  # Start with the "Traceback..." line
+                    i += 1
+                    while i < len(lines) and (
+                        lines[i].startswith("  ") or "Error:" in lines[i]
                     ):
                         tb_lines.append(lines[i].rstrip())
                         i += 1
+
                     if tb_lines:
                         traceback_str = "\n".join(tb_lines)
+                        # Extract function name from the last "File" line
                         for tb_line in reversed(tb_lines):
-                            tb_match = re.search(
-                                r",\s*in\s+([a-zA-Z0-9_]+)$", tb_line
-                            ) or re.search(r"\sin\s+([a-zA-Z0-9_]+)\b", tb_line)
-                            if tb_match:
-                                func = tb_match.group(1)
-                                break
+                            if tb_line.strip().startswith("File "):
+                                tb_match = re.search(
+                                    r"in\s+<module>|in\s+([a-zA-Z0-9_]+)", tb_line
+                                )
+                                if tb_match and tb_match.group(1):
+                                    func = tb_match.group(1)
+                                    break
                 else:
+                    # Rewind to ensure the next line is processed if it wasn't part of a traceback
                     i -= 1
 
             entry = _LogEntry(func, message, ts, log_level, exec_time, traceback_str)
@@ -334,8 +331,7 @@ class PerformanceMonitor:
         return analysis_data
 
     def _score_anomalies(
-        self,
-        analysis_data: _LogAnalysisData,
+        self, analysis_data: _LogAnalysisData
     ) -> dict[str, tuple[float, list[str]]]:
         candidate_scores = {}
         candidate_reasons = defaultdict(list)
@@ -416,26 +412,31 @@ class PerformanceMonitor:
         self,
         analysis_data: _LogAnalysisData,
     ) -> tuple[float, list[str], str | None]:
+        """
+        Analyzes the quality of the agent's learning process.
+        Returns the inefficiency score, reasons, and the responsible "meta-function".
+        """
         learned_facts = []
         all_concepts = set()
-        learning_callers = []
 
+        # The learning logs are now correctly attributed by the parser,
+        # but we can still look them up by the known function name.
         learning_entries = analysis_data.entries_by_func.get(
             "CognitiveAgent._add_new_fact", []
         )
         for entry in learning_entries:
-            match = PerformanceMonitor._LEARNING_LOG_RE.search(entry.message)
+            match = self._LEARNING_LOG_RE.search(entry.message)
             if match:
                 subj, obj = match.group("sub").strip(), match.group("obj").strip()
                 learned_facts.append((subj, obj))
                 all_concepts.add(subj.lower())
                 all_concepts.add(obj.lower())
-                learning_callers.append(entry.function_name)
 
         if not learned_facts:
             return 0.0, [], None
 
-        responsible_func = "CognitiveAgent._add_new_fact"
+        # --- FIX: The responsible "meta-function" is a constant for this type of analysis ---
+        responsible_func = "CognitiveAgent.LearningProcess"
         total_facts = len(learned_facts)
         simple_facts_count = sum(
             1 for s, o in learned_facts if len(s.split()) + len(o.split()) <= 3
@@ -457,6 +458,7 @@ class PerformanceMonitor:
                 f"low new concept discovery rate (ratio={discovery_ratio:.2f})",
             )
 
+        # --- FIX: Correctly return all three values ---
         return inefficiency_score, reasons, responsible_func
 
     def _select_best_target(
@@ -465,7 +467,13 @@ class PerformanceMonitor:
         scored_candidates: dict[str, tuple[float, list[str]]],
         introspector: CodeIntrospector,
     ) -> OptimizationTarget | None:
-        """Selects the best target with a configurable threshold and better logging."""
+        """Selects the best target, restoring the logic for high-priority alerts and meta-functions."""
+        # --- RESTORED: Prioritize deferred targets first ---
+        if analysis_data.deferred_targets:
+            logger.warning(
+                "[Metacognition]: Prioritizing 'Deferred learning' issue over other anomalies."
+            )
+            return analysis_data.deferred_targets[0]
         for func, entries in analysis_data.entries_by_func.items():
             first_error_entry = next((e for e in entries if e.traceback), None)
             if first_error_entry and first_error_entry.traceback:
@@ -496,33 +504,32 @@ class PerformanceMonitor:
         func, (top_score, reasons) = max(
             scored_candidates.items(), key=lambda item: item[1][0]
         )
-        file_path = introspector.get_source_file(func)
+
+        # --- RESTORED: Handle the meta-function case ---
+        if func == "CognitiveAgent.LearningProcess":
+            threshold = 1.0  # A fixed, sensitive threshold for systemic issues
+            final_target_name = "CognitiveAgent._process_statement_for_learning"
+            file_path = introspector.get_source_file(final_target_name)
+        else:
+            default_threshold = 1.5
+            env_thresh = float(os.getenv("METACOG_THRESHOLD", str(default_threshold)))
+            baseline = self.baselines.get(func, BaselineStats())
+            threshold = env_thresh + 0.5 * baseline.error_count_ewma
+            final_target_name = func
+            file_path = introspector.get_source_file(func)
+
         if not file_path:
             logger.error(
-                "[Metacognition]: Could not find source file for top-scored candidate '%s'.",
-                func,
+                f"[Metacognition]: Could not find source file for top-scored candidate '{func}'."
             )
             return None
 
-        default_threshold = 1.5
-        try:
-            env_thresh = float(os.getenv("METACOG_THRESHOLD", str(default_threshold)))
-        except (ValueError, TypeError):
-            env_thresh = default_threshold
-
-        baseline = self.baselines.get(func, BaselineStats())
-        threshold = env_thresh + 0.5 * baseline.error_count_ewma
-
         logger.info(
-            "[Metacognition]: Candidate '%s' score=%.3f threshold=%.3f reasons=%s",
-            func,
-            top_score,
-            threshold,
-            reasons,
+            f"[Metacognition]: Candidate '{func}' score={top_score:.3f} threshold={threshold:.3f} reasons={reasons}"
         )
         if top_score < threshold:
             logger.info(
-                "[Metacognition]: Top candidate '%s' below threshold; skipping.", func
+                f"[Metacognition]: Top candidate '{func}' below threshold; skipping."
             )
             return None
 
@@ -566,6 +573,10 @@ class CodeIntrospector:
 
     def __init__(self) -> None:
         self.function_map: dict[str, Path] = self._build_function_map()
+
+    @cached_property
+    def function_map(self) -> dict[str, Path]:
+        return self._build_function_map()
 
     def _build_function_map(self) -> dict[str, Path]:
         """Builds a map of all function/method names to file paths by walking the AST."""
@@ -831,6 +842,8 @@ class SandboxVerifier:
                     "*.bak",
                     ".metacog_baseline.json",
                     "code_suggestion.json",
+                    "models",
+                    "visualizations",
                 )
                 shutil.copytree(
                     project_root,
@@ -1078,17 +1091,27 @@ class MetacognitiveEngine:
             if not target:
                 return
 
-            _file_path, problematic_code = self.code_introspector.get_function_source(
+            # --- NEW, SIMPLIFIED, AND DEFINITIVE FIX ---
+
+            # 1. Get the tuple and unpack it immediately. We trust the type hint that it's always a tuple.
+            file_path, problematic_code = self.code_introspector.get_function_source(
                 target.target_name
             )
-            if not problematic_code:
+
+            # 2. Perform a simple, clear guard clause on each potentially None variable.
+            if file_path is None:
                 logger.error(
-                    "[Metacognition]: Could not extract source for %s in %s",
-                    target.target_name,
-                    target.file_path,
+                    f"[Metacognition]: Could not determine file path for target {target.target_name}"
                 )
                 return
 
+            if problematic_code is None:
+                logger.error(
+                    f"[Metacognition]: Could not extract source code for {target.target_name} in {file_path}"
+                )
+                return
+
+            # By this point, mypy is guaranteed that file_path is a Path and problematic_code is a str.
             suggested_code = self.analysis_bridge.get_code_suggestion(
                 problematic_code, target.issue_description, target.relevant_logs
             )
@@ -1100,7 +1123,7 @@ class MetacognitiveEngine:
 
             base_function_name = target.target_name.split(".")[-1]
             is_safe = self.sandbox_verifier.verify_change(
-                target.file_path, base_function_name, suggested_code
+                file_path, base_function_name, suggested_code
             )
             self._save_suggestion_report(target, suggested_code, is_safe)
 

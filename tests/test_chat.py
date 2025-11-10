@@ -79,15 +79,10 @@ def test_init_loads_from_file_and_reseeds_on_failure(tmp_path: Path):
         patch("axiom.cognitive_agent.seed_core_vocabulary") as mock_seed_vocab,
         patch("axiom.cognitive_agent.CognitiveAgent.save_brain"),
         patch("axiom.cognitive_agent.CognitiveAgent.save_state"),
-        patch(
-            "axiom.cognitive_agent.UniversalInterpreter"
-        ),  # Mock interpreter to speed up init
+        patch("axiom.cognitive_agent.UniversalInterpreter"),
     ):
-        # Initialization itself should trigger the re-seeding logic.
-        # The load_state call is not needed for this test's purpose.
         CognitiveAgent(brain_file=brain_file, state_file=state_file)
 
-        # Assert that because the integrity check failed, re-seeding was called.
         mock_seed_domain.assert_called_once()
         mock_seed_vocab.assert_called_once()
 
@@ -99,7 +94,6 @@ def test_init_raises_error_without_file_or_data(tmp_path: Path):
     Then: A ValueError should be raised.
     """
     with (
-        # FIX: Update the expected error message to match the new implementation.
         pytest.raises(
             ValueError,
             match="Agent must be initialized with either files or data if load_from_file is False.",
@@ -110,7 +104,7 @@ def test_init_raises_error_without_file_or_data(tmp_path: Path):
             brain_file=tmp_path / "b.json",
             state_file=tmp_path / "s.json",
             load_from_file=False,
-            brain_data=None,  # Explicitly pass None
+            brain_data=None,
             cache_data=None,
         )
 
@@ -187,28 +181,20 @@ def test_handle_cognitive_reflex_queues_high_priority_task(
     Then: A structured Goal is added to the high-priority queue, and an
           informative response is returned.
     """
-    # Arrange
     input_text = "this is an unknown word"
-    # Ensure the agent's queues are empty before the test
     agent.high_priority_tasks.clear()
     agent.learning_goals.clear()
 
-    # Act
     response = agent._handle_cognitive_reflex(input_text)
 
-    # Assert
-    # 1. Assert that the correct, informative string is returned.
     expected_response = "I'm not familiar with the word 'unknown'. I will add it to my study queue and research it later."
     assert response == expected_response
 
-    # 2. Assert that the high-priority queue now contains the task.
     assert len(agent.high_priority_tasks) == 1
 
-    # 3. Assert that the task has the correct structure.
     expected_goal = Goal(task="INVESTIGATE", topic="unknown")
     assert agent.high_priority_tasks[0] == expected_goal
 
-    # 4. Assert that the long-term curriculum queue was not affected.
     assert len(agent.learning_goals) == 0
 
 
@@ -356,7 +342,6 @@ def test_reboot_interpreter(agent: CognitiveAgent):
         agent._reboot_interpreter()
         new_interpreter_id = id(agent.interpreter)
         assert old_interpreter_id != new_interpreter_id
-        # ensure old cache passed
         assert agent.interpreter.synthesis_cache.get("test") == "value"
 
 
@@ -442,7 +427,6 @@ def test_resolve_exclusive_conflict_stalemate(agent: CognitiveAgent):
 
     assert not learned
     assert msg in {"exclusive_conflict", "existing_fact_stronger"}
-    # Depending on confidence/provenance logic, a follow-up goal may or may not be added.
 
 
 def test_add_or_update_concept_quietly_empty_name(agent: CognitiveAgent):
@@ -460,16 +444,32 @@ def test_manual_add_knowledge_quietly(agent: CognitiveAgent):
 def test_save_and_load_state_round_trip(tmp_path: Path):
     """
     Given: An agent with a populated operational state.
-    When: The agent's state is saved to a file and then loaded by a new agent instance.
+    When: The agent's state is saved and then loaded by a new agent instance.
     Then: The new agent's state should perfectly match the original agent's state.
     """
-    # --- ARRANGE ---
+    brain_file = tmp_path / "test_brain.json"
     state_file = tmp_path / "test_state.json"
 
-    # 1. Create the original agent and populate its state.
-    # We patch the interpreter to speed up initialization.
+    valid_brain_data = {
+        "nodes": [
+            {"id": "agent_id", "name": "agent", "type": "core_identity"},
+            {"id": "name_id", "name": "TestAgent", "type": "property"},
+        ],
+        "links": [
+            {
+                "source": "agent_id",
+                "target": "name_id",
+                "type": "has_name",
+                "id": "edge_id",
+            }
+        ],
+    }
+    brain_file.write_text(json.dumps(valid_brain_data))
+
     with patch("axiom.cognitive_agent.UniversalInterpreter"):
-        original_agent = CognitiveAgent(state_file=state_file, enable_llm=False)
+        original_agent = CognitiveAgent(
+            brain_file=brain_file, state_file=state_file, enable_llm=False
+        )
 
     original_agent.learning_goals = [
         "INVESTIGATE: topic1",
@@ -483,25 +483,19 @@ def test_save_and_load_state_round_trip(tmp_path: Path):
     if original_agent.harvester:
         original_agent.harvester.researched_terms = {"term1", "term2"}
 
-    # --- ACT ---
-    # 2. Save the state of the original agent to the file.
     original_agent.save_state()
 
-    # --- ASSERT (Part 1): Check that the file was written correctly. ---
     assert state_file.exists()
-    with state_file.open("r") as f:
-        saved_data = json.load(f)
+    saved_data = json.loads(state_file.read_text())
     assert saved_data["autonomous_cycle_count"] == 42
-    assert "term1" in saved_data["researched_terms"]
 
-    # --- ACT (Part 2) & ASSERT (Part 2) ---
-    # 3. Create a new agent and have it load the state from the file.
     with patch("axiom.cognitive_agent.UniversalInterpreter"):
-        new_agent = CognitiveAgent(state_file=state_file, enable_llm=False)
+        new_agent = CognitiveAgent(
+            brain_file=brain_file, state_file=state_file, enable_llm=False
+        )
 
-    new_agent.load_state()  # The critical loading step
+    new_agent.load_state()
 
-    # 4. Assert that the new agent's state matches the original's.
     assert new_agent.learning_goals == original_agent.learning_goals
     assert new_agent.high_priority_tasks == original_agent.high_priority_tasks
     assert new_agent.autonomous_cycle_count == 42

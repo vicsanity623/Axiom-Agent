@@ -151,14 +151,9 @@ class KnowledgeHarvester:
             term_to_learn = goal.get("topic", "").lower()
         if not term_to_learn:
             return False
-
         if self.agent.lexicon.is_known_word(term_to_learn):
-            logger.info(
-                "[Study Cycle]: Skipping '%s' — already known.",
-                term_to_learn,
-            )
+            logger.info("[Study Cycle]: Skipping '%s' — already known.", term_to_learn)
             return True
-
         logger.info(
             "[Study Cycle]: Prioritizing learning goal: To define '%s'.", term_to_learn
         )
@@ -230,18 +225,15 @@ class KnowledgeHarvester:
         """
         if not self.agent.pending_relations or not newly_learned_words:
             return True
-
         newly_learned_set = set(newly_learned_words)
         relevant_words = newly_learned_set.intersection(
             self.agent.pending_relations.keys()
         )
         if not relevant_words:
             return True
-
         logger.info(
             f"   - Consolidating deferred facts for newly learned words: {sorted(relevant_words)}"
         )
-
         facts_to_reprocess = []
         for word in relevant_words:
             facts_for_word = self.agent.pending_relations.pop(word, [])
@@ -250,10 +242,8 @@ class KnowledgeHarvester:
                     f"     - Re-evaluating {len(facts_for_word)} fact(s) blocked by '{word}'"
                 )
                 facts_to_reprocess.extend(facts_for_word)
-
         if not facts_to_reprocess:
             return True
-
         processed_count = 0
         caller_name = f"{self.__class__.__name__}._consolidate_pending_knowledge"
         for relation, properties in facts_to_reprocess:
@@ -265,24 +255,33 @@ class KnowledgeHarvester:
             )
             if status != "deferred":
                 processed_count += 1
-
         if processed_count > 0:
             logger.info(
                 f"   - Successfully consolidated {processed_count} previously deferred facts."
             )
-
         if processed_count < len(facts_to_reprocess):
             remaining = len(facts_to_reprocess) - processed_count
             logger.warning(
                 f"   - Consolidation incomplete. {remaining} facts remain deferred."
             )
             return False
-
         return True
 
     def study_cycle(self) -> None:
         """
-        Run one full study cycle with a two-tiered priority system and loop detection.
+        Run one full study cycle to process learning goals and consolidate knowledge.
+
+        This cycle follows a structured, robust process:
+        1.  Selects a task from a two-tiered priority system (high-priority first).
+        2.  If a task is available, it attempts to resolve it by gathering new,
+            unconsolidated information. If resolution fails, the task is
+            de-prioritized and re-queued to prevent processing loops.
+        3.  If no tasks are in the queues, it attempts to deepen existing
+            knowledge by exploring a randomly selected, known concept.
+        4.  Crucially, at the end of every cycle, it runs a global consolidation
+            step. This attempts to integrate ALL pending knowledge from this and
+            previous cycles into the main knowledge graph, ensuring that deferred
+            facts are eventually processed and preventing learning stalls.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
@@ -290,55 +289,62 @@ class KnowledgeHarvester:
         )
 
         task_to_process: Goal | str | None = None
-        task_source_is_priority = False
+        is_high_priority = False
         with self.lock:
             if self.agent.high_priority_tasks:
                 task_to_process = self.agent.high_priority_tasks.pop(0)
-                task_source_is_priority = True
+                is_high_priority = True
             elif self.agent.learning_goals:
                 task_to_process = self.agent.learning_goals.pop(0)
-                task_source_is_priority = False
+                is_high_priority = False
 
+        # Phase 1: Task Acquisition & Resolution
         if task_to_process:
-            task_topic = ""
-            task_type = "HIGH-PRIORITY" if task_source_is_priority else "CURRICULUM"
+            task_topic: str
             if isinstance(task_to_process, str):
                 task_topic = task_to_process.replace("INVESTIGATE:", "").strip()
             else:
                 task_topic = task_to_process.get("topic", "")
 
-            if task_topic:
+            if not task_topic:
+                logger.warning(f"Found malformed task: {task_to_process}. Discarding.")
+            else:
+                task_type = "HIGH-PRIORITY" if is_high_priority else "CURRICULUM"
                 logger.info(f"   - Attempting {task_type} task: '{task_topic}'")
+
                 resolved = self._resolve_investigation_goal(task_to_process)
-
-                consolidation_succeeded = True
                 if resolved:
-                    with self.lock:
-                        consolidation_succeeded = self._consolidate_pending_knowledge(
-                            [task_topic]
-                        )
-
-                if resolved and consolidation_succeeded:
                     logger.info(
-                        f"   - ✅ {task_type} task '{task_topic}' successfully resolved and consolidated."
+                        f"   - ✅ Task '{task_topic}' resolved. Knowledge is pending consolidation."
                     )
                 else:
                     logger.warning(
-                        f"   - ❌ Failed to fully resolve {task_type} task '{task_topic}'. Deprioritizing."
+                        f"   - ❌ Task '{task_topic}' failed at resolution stage. Deprioritizing."
                     )
                     with self.lock:
-                        if task_source_is_priority:
-                            if isinstance(task_to_process, dict):
-                                self.agent.high_priority_tasks.append(task_to_process)
-                        else:
-                            self.agent.learning_goals.append(task_to_process)
-            else:
-                logger.warning(f"Found malformed task: {task_to_process}. Discarding.")
+                        self.agent.learning_goals.append(task_to_process)
         else:
+            # Phase 1 alternate: No tasks, so deepen existing knowledge
             logger.info(
                 "All learning queues are empty. Attempting to deepen existing knowledge."
             )
             self._deepen_knowledge_of_random_concept()
+
+        # Phase 2: Global Knowledge Consolidation
+        logger.info("   - Initiating global knowledge consolidation phase...")
+        with self.lock:
+            all_known_words = self.agent.graph.get_all_node_names()
+            consolidation_succeeded = self._consolidate_pending_knowledge(
+                all_known_words
+            )
+
+            if consolidation_succeeded:
+                logger.info("   - ✅ All pending knowledge successfully consolidated.")
+            else:
+                # The specific count of deferred facts is logged within the method
+                logger.warning(
+                    "   - Consolidation incomplete. Some facts remain deferred for the next cycle."
+                )
 
         self.console.rule("[bold cyan]Study Cycle Complete.[/bold cyan]", style="cyan")
         self.agent.log_autonomous_cycle_completion()
@@ -353,11 +359,9 @@ class KnowledgeHarvester:
             f"[bold magenta]Refinement Cycle Started at {timestamp}[/bold magenta]",
             style="magenta",
         )
-
         chunky_fact = None
         with self.lock:
             chunky_fact = self._find_chunky_fact()
-
         if chunky_fact:
             source_node, target_node, edge = chunky_fact
             logger.info(
@@ -366,37 +370,27 @@ class KnowledgeHarvester:
                 edge.type,
                 target_node.name,
             )
-
             full_sentence = f"{source_node.name.capitalize()} {edge.type.replace('_', ' ')} {target_node.name}."
-
             atomic_sentences = self.agent.interpreter.break_down_definition(
-                subject=source_node.name,
-                chunky_definition=full_sentence,
+                subject=source_node.name, chunky_definition=full_sentence
             )
-
             if atomic_sentences:
                 logger.info(
                     "  [Refinement]: Decomposed into %d new atomic facts.",
                     len(atomic_sentences),
                 )
-
                 facts_learned_count = 0
                 newly_learned_concepts = set()
-
                 for sentence in atomic_sentences:
                     with self.lock:
                         if self.agent.learn_new_fact_autonomously(sentence):
                             facts_learned_count += 1
                             for word in sentence.split():
                                 clean_word = self.agent._clean_phrase(word)
-                                if (
-                                    clean_word
-                                    and not self.agent.lexicon.is_promoted_word(
-                                        clean_word
-                                    )
+                                if clean_word and (
+                                    not self.agent.lexicon.is_promoted_word(clean_word)
                                 ):
                                     newly_learned_concepts.add(clean_word)
-
                 if facts_learned_count > 0:
                     if newly_learned_concepts:
                         logger.info(
@@ -412,7 +406,6 @@ class KnowledgeHarvester:
                                         self.agent.lexicon.promote_word(
                                             concept, pos, confidence=0.75
                                         )
-
                     with self.lock:
                         graph_edge_data = self.agent.graph.graph.get_edge_data(
                             edge.source, edge.target
@@ -444,9 +437,7 @@ class KnowledgeHarvester:
                 "[Refinement]: No chunky facts found for refinement this cycle. (in %s)",
                 caller_name,
             )
-
         self._prune_research_cache()
-
         self.console.rule(
             "[bold magenta]Refinement Cycle Complete.[/bold magenta]", style="magenta"
         )

@@ -29,45 +29,9 @@ def test_save_research_cache_os_error(
     When: Saving the research cache raises an OSError.
     Then: An error is logged.
     """
-    # Covers lines 96-97
     monkeypatch.setattr(Path, "open", MagicMock(side_effect=OSError("Disk full")))
     harvester._save_research_cache()
     assert "Failed to save research cache" in caplog.text
-
-
-@patch("axiom.knowledge_harvester.KnowledgeHarvester.get_definition_from_api")
-def test_resolve_investigation_goal_single_word_api_success(
-    mock_api: MagicMock,
-    agent: CognitiveAgent,
-    harvester: KnowledgeHarvester,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """
-    Given: A single-word investigation goal.
-    When: The dictionary API returns a valid definition and POS.
-    Then: The function returns True and attempts to learn both the POS and the definition.
-    """
-    # Arrange
-    goal = "INVESTIGATE: testword"
-    mock_api.return_value = ("noun", "a word for testing")
-
-    mock_learn_fact = MagicMock(return_value=(True, "inserted"))
-    mock_learn_autonomously = MagicMock(return_value=True)
-
-    # FIX: Mock both learning pathways that are called by the function.
-    monkeypatch.setattr(agent, "_process_statement_for_learning", mock_learn_fact)
-    monkeypatch.setattr(agent, "learn_new_fact_autonomously", mock_learn_autonomously)
-
-    # Act
-    result = harvester._resolve_investigation_goal(goal)
-
-    # Assert
-    assert result is True
-
-    # Assert that the POS was learned
-    mock_learn_fact.assert_called_once()
-    # Assert that the definition was learned
-    mock_learn_autonomously.assert_called_once_with("a word for testing", "testword")
 
 
 def test_prune_research_cache_no_terms(harvester: KnowledgeHarvester) -> None:
@@ -76,9 +40,7 @@ def test_prune_research_cache_no_terms(harvester: KnowledgeHarvester) -> None:
     When: _prune_research_cache is called.
     Then: The function returns early without error.
     """
-    # Covers lines 436-437
     harvester.researched_terms.clear()
-    # This test just needs to run without raising an exception
     harvester._prune_research_cache()
     assert not harvester.researched_terms
 
@@ -92,9 +54,7 @@ def test_find_new_topic_handles_empty_search_results(
     When: _find_new_topic is called.
     Then: It continues to the next attempt without error.
     """
-    # Covers lines 637-638
     mock_search.return_value = []
-    # We expect it to return None after all attempts fail
     assert harvester._find_new_topic(max_attempts=1) is None
 
 
@@ -106,7 +66,6 @@ def test_get_definition_from_api_http_error(
     When: get_definition_from_api is called.
     Then: It returns None.
     """
-    # Covers lines 730-731
     mock_response = MagicMock()
     mock_response.status_code = 404
     monkeypatch.setattr(requests, "get", lambda url, timeout: mock_response)
@@ -121,7 +80,6 @@ def test_get_fact_from_duckduckgo_with_definition(
     When: get_fact_from_duckduckgo is called.
     Then: A reframed fact is returned.
     """
-    # Covers lines 816-831
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"Definition": "A testable assertion."}

@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -46,25 +47,26 @@ def test_no_target_found_for_clean_log(tmp_path: Path, mock_introspector: MagicM
 
 
 def test_baselines_are_saved_even_when_no_target_is_found(
-    tmp_path: Path, mock_introspector: MagicMock
+    tmp_path: Path, mock_introspector: MagicMock, monkeypatch: Any
 ):
     """
     The monitor should always save its updated statistical baselines at the
     end of a cycle, even if no target meets the threshold for modification.
     """
     log_text = (
-        "2023-01-01T12:00:00 [Graph Core]: WARNING: Low confidence edge. (in update_graph)\n"
-        "2023-01-01T12:00:01 [Graph Core]: Execution time: 0.1s (in update_graph)"
+        "[12:00:00] WARNING Low confidence edge. (in update_graph)\n"
+        "[12:00:01] INFO Execution time: 0.1s (in update_graph)"
     )
     log_file = tmp_path / "minor_issues.log"
     log_file.write_text(log_text, encoding="utf-8")
-    monitor = PerformanceMonitor()
 
-    assert not BASELINE_STORE_PATH.exists()
+    baseline_path = tmp_path / "test_baseline.json"
+    monitor = PerformanceMonitor(baseline_store=baseline_path)
 
-    # --- FIX: Pass the mock introspector to the method call ---
+    assert not baseline_path.exists()
+
     target = monitor.find_optimization_target(log_file, mock_introspector)
 
     assert target is None
-    assert BASELINE_STORE_PATH.exists()
-    assert "update_graph" in BASELINE_STORE_PATH.read_text(encoding="utf-8")
+    assert baseline_path.exists()
+    assert "update_graph" in baseline_path.read_text(encoding="utf-8")

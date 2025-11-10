@@ -646,33 +646,29 @@ class UniversalInterpreter:
                     validated_relations.append(cast("RelationData", relation))
                 else:
                     logger.warning(
-                        "  [Interpreter Validation]: Discarding malformed relation due to non-string components: %s",
-                        relation,
-                        caller_name,
+                        f"  [Interpreter Validation]: Discarding malformed relation due to non-string components: {relation} (in {caller_name})"
                     )
 
             if validated_relations:
                 logger.info(
-                    "[green]   - Decomposed and validated %d atomic relations.[/green]",
-                    len(validated_relations),
+                    f"[green]   - Decomposed and validated {len(validated_relations)} atomic relations.[/green]"
                 )
                 return validated_relations
 
             logger.warning(
-                "  [Interpreter Warning]: No valid atomic relations could be extracted after validation.",
-                caller_name,
+                f"  [Interpreter Warning]: No valid atomic relations could be extracted after validation. (in {caller_name})"
             )
             return []
 
         except Exception as e:
             logger.error(
-                "  [Interpreter Error]: An unexpected error occurred during decomposition. Error: %s",
-                e,
+                f"  [Interpreter Error]: An unexpected error occurred during decomposition. Error: {e} (in {caller_name})"
             )
             return []
 
     def break_down_definition(self, subject: str, chunky_definition: str) -> list[str]:
         """Use the LLM to break a complex definition into simple, atomic facts."""
+        caller_name = f"{self.__class__.__name__}.break_down_definition"
         if self.llm is None:
             logger.warning(
                 "  [Interpreter Error]: LLM is disabled. Cannot break down definition."
@@ -730,12 +726,15 @@ class UniversalInterpreter:
             return []
         except Exception as e:
             logger.error(
-                "  [Interpreter Error]: Could not break down definition. Error: %s", e
+                "  [Interpreter Error]: Could not break down definition. Error: %s",
+                e,
+                caller_name,
             )
             return []
 
     def generate_curious_questions(self, topic: str, known_fact: str) -> list[str]:
         """Generate simple, fundamental follow-up questions about a topic."""
+        caller_name = f"{self.__class__.__name__}.generate_curious_questions"
         if self.llm is None:
             logger.warning(
                 "  [Question Generation Error]: LLM is disabled. Cannot generate questions."
@@ -782,6 +781,7 @@ class UniversalInterpreter:
             logger.error(
                 "  [Question Generation Error]: Could not generate questions. Error: %s",
                 exc,
+                caller_name,
             )
             return []
 
@@ -794,6 +794,7 @@ class UniversalInterpreter:
         Uses the LLM to verify if a raw sentence is relevant to a topic and,
         if so, reframes it into a simple, atomic S-V-O sentence for learning.
         """
+        caller_name = f"{self.__class__.__name__}.verify_and_reframe_fact"
         if self.llm is None:
             logger.warning(
                 "  [Fact Verifier Error]: LLM is disabled. Cannot verify/reframe."
@@ -803,8 +804,7 @@ class UniversalInterpreter:
             return None
 
         logger.info(
-            "[purple]   Asking LLM to verify and reframe fact for '%s'...[/purple]",
-            original_topic,
+            f"[purple]   Asking LLM to verify and reframe fact for '{original_topic}'...[/purple]"
         )
         system_prompt = (
             "You are a precise fact verification and reframing engine. Your task is to analyze a 'Raw Sentence' "
@@ -834,23 +834,22 @@ class UniversalInterpreter:
             )
 
             if not rephrased_fact:
-                logger.error("  [Fact Verifier Error]: LLM returned an empty response.")
+                logger.error(
+                    f"  [Fact Verifier Error]: LLM returned an empty response. (in {caller_name})"
+                )
                 return None
 
             if "none" in rephrased_fact.lower():
-                logger.info("    - LLM rejected the fact as irrelevant.")
+                logger.info(
+                    "  [Fact Verifier]: LLM determined the fact was not relevant."
+                )
                 return None
 
-            logger.info(
-                "[success]   - LLM verified and reframed: '%s'[/success]",
-                rephrased_fact,
-            )
-            return rephrased_fact
+            return rephrased_fact.strip().strip(".")
 
         except Exception as e:
             logger.error(
-                "  [Fact Verifier Error]: Could not process fact with LLM. Error: %s",
-                e,
+                f"  [Fact Verifier Error]: Could not process fact with LLM. Error: {e} (in {caller_name})"
             )
             return None
 
@@ -861,6 +860,7 @@ class UniversalInterpreter:
         mode: str = "statement",
     ) -> str:
         """Convert a structured, internal representation into natural language."""
+        caller_name = f"{self.__class__.__name__}.synthesize"
         facts_str: str
         if isinstance(structured_facts, list):
             try:
@@ -930,7 +930,9 @@ class UniversalInterpreter:
             return synthesized_text
         except Exception as e:
             logger.error(
-                "  [Synthesizer Error]: Could not generate fluent text. Error: %s", e
+                "  [Synthesizer Error]: Could not generate fluent text. Error: %s",
+                e,
+                caller_name,
             )
             return facts_str
 
