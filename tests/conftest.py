@@ -90,7 +90,6 @@ def agent(session_agent: CognitiveAgent) -> CognitiveAgent:
     if session_agent.harvester:
         session_agent.harvester.researched_terms.clear()
 
-
     return session_agent
 
 

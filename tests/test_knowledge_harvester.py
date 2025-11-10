@@ -53,7 +53,7 @@ def test_resolve_investigation_goal_single_word_api_success(
 
     mock_learn_fact = MagicMock(return_value=(True, "inserted"))
     mock_learn_autonomously = MagicMock(return_value=True)
-    
+
     # FIX: Mock both learning pathways that are called by the function.
     monkeypatch.setattr(agent, "_process_statement_for_learning", mock_learn_fact)
     monkeypatch.setattr(agent, "learn_new_fact_autonomously", mock_learn_autonomously)
@@ -63,7 +63,7 @@ def test_resolve_investigation_goal_single_word_api_success(
 
     # Assert
     assert result is True
-    
+
     # Assert that the POS was learned
     mock_learn_fact.assert_called_once()
     # Assert that the definition was learned

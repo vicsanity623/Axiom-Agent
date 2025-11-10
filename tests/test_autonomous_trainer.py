@@ -1,18 +1,19 @@
-# tests/scripts/test_autonomous_trainer.py
+from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import MagicMock, patch
 
 import pytest
 
+from axiom.cognitive_agent import CognitiveAgent
 from axiom.scripts.autonomous_trainer import (
     _generate_or_set_initial_goal,
     main,
     start_autonomous_training,
 )
 
-# Use a common prefix for patching to make it cleaner
 MODULE_PATH = "axiom.scripts.autonomous_trainer"
 
 
@@ -80,21 +81,28 @@ def test_start_autonomous_training_uses_custom_goal(tmp_path: Path, monkeypatch:
     state_file = tmp_path / "s.json"
     brain_file.touch()
     state_file.touch()
-    
+
     custom_goal = "My specific learning objective."
 
     # Mock the components that run indefinitely or have side effects.
-    monkeypatch.setattr("axiom.scripts.autonomous_trainer.CycleManager.start", MagicMock())
-    monkeypatch.setattr("apscheduler.schedulers.background.BackgroundScheduler.start", MagicMock())
-    monkeypatch.setattr("time.sleep", lambda x: (_ for _ in ()).throw(KeyboardInterrupt))
-    
+    monkeypatch.setattr(
+        "axiom.scripts.autonomous_trainer.CycleManager.start", MagicMock()
+    )
+    monkeypatch.setattr(
+        "apscheduler.schedulers.background.BackgroundScheduler.start", MagicMock()
+    )
+    monkeypatch.setattr(
+        "time.sleep", lambda x: (_ for _ in ()).throw(KeyboardInterrupt)
+    )
+
     # We need a real agent to inspect, so we'll patch the constructor to let us grab it.
     agent_instance_storage = []
     original_init = CognitiveAgent.__init__
+
     def new_init(self, *args, **kwargs):
         original_init(self, *args, **kwargs)
         agent_instance_storage.append(self)
-    
+
     monkeypatch.setattr(CognitiveAgent, "__init__", new_init)
 
     # --- ACT ---
@@ -104,7 +112,7 @@ def test_start_autonomous_training_uses_custom_goal(tmp_path: Path, monkeypatch:
     # --- ASSERT ---
     assert len(agent_instance_storage) == 1
     agent_under_test = agent_instance_storage[0]
-    
+
     active_goal = agent_under_test.goal_manager.get_active_goal()
     assert active_goal is not None
     assert active_goal["description"] == custom_goal
