@@ -73,6 +73,7 @@ axiom-webui_app = "axiom.scripts.app:main"
 axiom-metatest = "axiom.scripts.test_metacog:main"
 axiom-extract = "axiom.scripts.extract_code_suggestion:main"
 axiom-analyze = "axiom.scripts.analyze_logs:main"
+axiom-inspect = "axiom.scripts.code_inspector:main"
 
 
 # --- Tool Configurations ---

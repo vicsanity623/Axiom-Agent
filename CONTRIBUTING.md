@@ -90,6 +90,8 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 | `axiom-visualize` | Creates an interactive HTML visualization of the agent's knowledge graph. |
 | **Metacognition** | |
 | `axiom-analyze` | Runs a standalone analysis of `axiom.log` to find optimization targets. |
+| `axiom-inspect` | Runs a deep, opinionated code quality analysis on a specific file. |
+
 
 
 **Typical Debugging Session:**
