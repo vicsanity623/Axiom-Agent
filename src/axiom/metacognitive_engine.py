@@ -435,7 +435,6 @@ class PerformanceMonitor:
         if not learned_facts:
             return 0.0, [], None
 
-        # --- FIX: The responsible "meta-function" is a constant for this type of analysis ---
         responsible_func = "CognitiveAgent.LearningProcess"
         total_facts = len(learned_facts)
         simple_facts_count = sum(
@@ -458,7 +457,6 @@ class PerformanceMonitor:
                 f"low new concept discovery rate (ratio={discovery_ratio:.2f})",
             )
 
-        # --- FIX: Correctly return all three values ---
         return inefficiency_score, reasons, responsible_func
 
     def _select_best_target(
@@ -468,7 +466,6 @@ class PerformanceMonitor:
         introspector: CodeIntrospector,
     ) -> OptimizationTarget | None:
         """Selects the best target, restoring the logic for high-priority alerts and meta-functions."""
-        # --- RESTORED: Prioritize deferred targets first ---
         if analysis_data.deferred_targets:
             logger.warning(
                 "[Metacognition]: Prioritizing 'Deferred learning' issue over other anomalies."
@@ -505,7 +502,6 @@ class PerformanceMonitor:
             scored_candidates.items(), key=lambda item: item[1][0]
         )
 
-        # --- RESTORED: Handle the meta-function case ---
         if func == "CognitiveAgent.LearningProcess":
             threshold = 1.0  # A fixed, sensitive threshold for systemic issues
             final_target_name = "CognitiveAgent._process_statement_for_learning"
@@ -1090,8 +1086,6 @@ class MetacognitiveEngine:
             )
             if not target:
                 return
-
-            # --- NEW, SIMPLIFIED, AND DEFINITIVE FIX ---
 
             # 1. Get the tuple and unpack it immediately. We trust the type hint that it's always a tuple.
             file_path, problematic_code = self.code_introspector.get_function_source(

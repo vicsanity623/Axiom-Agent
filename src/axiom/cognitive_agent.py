@@ -331,12 +331,11 @@ class CognitiveAgent:
 
         word_to_learn = sorted(set(unknown_words))[0]
 
-        # --- FIX: Create a 'Task' object, not a 'Goal' object ---
         # A high-priority investigation of a single word is a simple Task.
         new_task: Task = {"task": "INVESTIGATE", "topic": word_to_learn}
 
         if new_task not in self.high_priority_tasks:
-            # --- FIX: Insert the correctly typed 'new_task' into the list ---
+            # Insert the correctly typed 'new_task' into the list ---
             self.high_priority_tasks.insert(0, new_task)
             logger.info(
                 "  [Cognitive Reflex]: Found unknown word '%s'. Queued for high-priority study.",
@@ -1310,6 +1309,7 @@ class CognitiveAgent:
     def _process_statement_for_learning(
         self,
         relation: RelationData,
+        allow_unknowns_for_topic: str | None = None,
     ) -> tuple[bool, str]:
         """Process a structured fact, handling validation and belief revision."""
         if self.inference_mode:
@@ -1353,11 +1353,11 @@ class CognitiveAgent:
 
         if relation_type in self._EXCLUSIVE_RELATIONS:
             was_learned, message = self._resolve_exclusive_conflict(
-                sub_node, obj_node, relation_type, relation
+                sub_node, obj_node, relation_type, relation, allow_unknowns_for_topic
             )
         else:
             was_learned, message = self._add_new_fact(
-                sub_node, obj_node, relation_type, relation
+                sub_node, obj_node, relation_type, relation, allow_unknowns_for_topic
             )
 
         if was_learned:
@@ -1399,11 +1399,18 @@ class CognitiveAgent:
         obj_node: ConceptNode,
         relation_type: str,
         relation_data: RelationData,
+        allow_unknowns_for_topic: str | None = None,
     ) -> tuple[bool, str]:
         """Handle belief revision for relationships that must be unique."""
         conflict_edge = self.graph.find_exclusive_conflict(sub_node, relation_type)
         if not conflict_edge:
-            return self._add_new_fact(sub_node, obj_node, relation_type, relation_data)
+            return self._add_new_fact(
+                sub_node,
+                obj_node,
+                relation_type,
+                relation_data,
+                allow_unknowns_for_topic,
+            )
 
         rel_props = relation_data.get("properties") or {}
         candidate_confidence = float(rel_props.get("confidence", 0.95))
@@ -1421,7 +1428,13 @@ class CognitiveAgent:
                 conflict_edge,
                 cast("dict[str, object]", {"revision_status": "superseded"}),
             )
-            return self._add_new_fact(sub_node, obj_node, relation_type, relation_data)
+            return self._add_new_fact(
+                sub_node,
+                obj_node,
+                relation_type,
+                relation_data,
+                allow_unknowns_for_topic,
+            )
 
         if candidate_strength < existing_strength:
             return False, "existing_fact_stronger"
@@ -1434,6 +1447,7 @@ class CognitiveAgent:
         obj_node: ConceptNode,
         relation_type: str,
         relation_data: RelationData,
+        allow_unknowns_for_topic: str | None = None,
     ) -> tuple[bool, str]:
         """A simple wrapper that delegates fact addition to the knowledge_base."""
         candidate_fact = cast(
@@ -1448,7 +1462,11 @@ class CognitiveAgent:
         caller_name = f"{self.__class__.__name__}._add_new_fact"
 
         status = validate_and_add_relation(
-            self, candidate_fact, properties, caller_name=caller_name
+            self,
+            candidate_fact,
+            properties,
+            caller_name=caller_name,
+            allow_unknowns_for_topic=allow_unknowns_for_topic,
         )
 
         was_learned = status in ("inserted", "replaced")
@@ -1501,7 +1519,9 @@ class CognitiveAgent:
                 relation_data,
             )
 
-            success, _ = self._process_statement_for_learning(relation_data)
+            success, _ = self._process_statement_for_learning(
+                relation_data, allow_unknowns_for_topic=source_topic
+            )
             if success:
                 facts_learned_count += 1
 

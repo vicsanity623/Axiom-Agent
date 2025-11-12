@@ -62,7 +62,7 @@ def _generate_or_set_initial_goal(
         "[bold purple]No active goals found. Generating a new curriculum.[/bold purple]",
     )
 
-    while True:  # Loop until a valid, non-empty curriculum is generated.
+    while True:
         creative_seeds = [
             # --- Foundational Ontology & Epistemology (The Nature of Reality & Knowledge) ---
             "Start from first principles to build a model of reality. First, distinguish between 'existence' and 'non-existence.' Then, learn to differentiate 'things' (entities) from the 'properties' they possess and the 'actions' they can perform.",
@@ -106,7 +106,6 @@ def _generate_or_set_initial_goal(
             selected_seed,
         )
 
-        # --- FIX: Use the public API to get known concepts ---
         known_concepts = agent.graph.get_all_node_names()
         known_concepts_str = (
             ", ".join(sorted(known_concepts)) if known_concepts else "None"

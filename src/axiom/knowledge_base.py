@@ -918,7 +918,6 @@ def validate_and_add_relation(
     all_words = set(subject_name.split()) | set(object_name.split())
     unknown_words = []
 
-    # --- FIX: The "Trust, Then Verify" Logic ---
     # Determine if this fact is a high-trust definition for a new word.
     is_defining_new_word = props.get("provenance") in (
         "dictionary_api",

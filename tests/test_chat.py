@@ -521,10 +521,13 @@ def test_learn_new_fact_autonomously_success(agent: CognitiveAgent, monkeypatch)
         lambda text, main_topic: mock_relations,
     )
     monkeypatch.setattr(
-        agent, "_process_statement_for_learning", lambda relation: (True, "success")
+        agent,
+        "_process_statement_for_learning",
+        lambda relation, **kwargs: (True, "success"),
     )
 
     result = agent.learn_new_fact_autonomously("A cat is a mammal", "animals")
+
     assert result is True
 
 
@@ -559,8 +562,11 @@ def test_learn_new_fact_autonomously_processing_fails(
         lambda text, main_topic: mock_relations,
     )
     monkeypatch.setattr(
-        agent, "_process_statement_for_learning", lambda relation: (False, "failed")
+        agent,
+        "_process_statement_for_learning",
+        lambda relation, **kwargs: (False, "failed"),
     )
 
     result = agent.learn_new_fact_autonomously("Invalid fact", "topic")
+
     assert result is False
