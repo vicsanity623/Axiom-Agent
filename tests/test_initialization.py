@@ -1,22 +1,24 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from axiom.cognitive_agent import CognitiveAgent, ConceptGraph, ConceptNode
 
+if TYPE_CHECKING:
+    from pathlib import Path
 
-def test_agent_initialization_from_data() -> None:
+
+def test_agent_initialization_from_data(tmp_path: Path) -> None:
     """
     Given: Dictionaries representing brain and cache data.
     When: The CognitiveAgent is initialized in inference mode from this data.
     Then: The agent and its components should be instantiated correctly.
     """
     # Arrange
-    # FIX: Provide brain_data that passes the integrity check.
     brain_data: dict[str, Any] = {
         "nodes": [
             {"id": "agent_id", "name": "agent", "type": "core_identity"},
@@ -29,17 +31,21 @@ def test_agent_initialization_from_data() -> None:
         "synthesis": [["key2", "value"]],
     }
 
-    # FIX: Configure the mock to have a `llm` attribute of None.
     mock_interpreter = MagicMock()
     mock_interpreter.interpretation_cache = {}
     mock_interpreter.synthesis_cache = {}
     mock_interpreter.llm = None
+
+    brain_file = tmp_path / "test_brain.json"
+    state_file = tmp_path / "test_state.json"
 
     # Act
     with patch(
         "axiom.cognitive_agent.UniversalInterpreter", return_value=mock_interpreter
     ):
         agent = CognitiveAgent(
+            brain_file=brain_file,
+            state_file=state_file,
             load_from_file=False,
             brain_data=brain_data,
             cache_data=cache_data,
@@ -52,7 +58,6 @@ def test_agent_initialization_from_data() -> None:
     assert agent.inference_mode is True
     assert agent.graph is not None
     assert agent.interpreter is not None
-    # This will now pass because our mock is configured correctly.
     assert agent.interpreter.llm is None
     assert "key1" in mock_interpreter.interpretation_cache
     assert "key2" in mock_interpreter.synthesis_cache

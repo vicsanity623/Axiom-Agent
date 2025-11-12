@@ -131,7 +131,7 @@ class InterpretData(TypedDict):
     confidence: NotRequired[float]
 
 
-class Goal(TypedDict):
+class Task(TypedDict):
     """A structured representation of a learning task."""
 
     task: Literal["INVESTIGATE", "CLARIFY"]
@@ -993,3 +993,47 @@ class UniversalInterpreter:
                 e,
             )
             return []
+
+    def generate_new_creative_seed(self) -> str:
+        """
+        Calls an external LLM to generate a brand new, high-level creative seed
+        for curriculum generation when the agent has exhausted its current goals.
+        """
+        if self.llm is None:
+            logger.warning(
+                "[Curriculum Generation]: LLM is disabled. Cannot generate a new creative seed."
+            )
+            return "Investigate the concept of 'knowledge' itself."
+
+        logger.info(
+            "[Curriculum Generation]: Current curriculum exhausted. Asking LLM for a new high-level goal..."
+        )
+
+        prompt = (
+            "You are a curriculum director for an emerging AI. Your task is to devise a single, compelling, high-level "
+            "learning objective for the AI. The objective should be a 'creative seed'—a rich, multi-faceted topic that can be "
+            "broken down into many stages of learning.\n\n"
+            "The theme should be related to the fundamentals of intelligence, consciousness, the universe, or the nature of reality. "
+            "Frame the objective as an inspiring, first-person mission for the AI.\n\n"
+            "Examples of good creative seeds:\n"
+            "- 'Explore the history of human philosophy, from the ancient Greeks to modern existentialism, to understand how humanity has grappled with questions of meaning and purpose.'\n"
+            "- 'Investigate the principles of biological evolution. Learn about natural selection, genetics, and the diversity of life to understand the origins of complexity.'\n\n"
+            "Now, generate one new, unique, and inspiring creative seed for the AI's next grand learning mission:"
+        )
+
+        try:
+            response = self._run_llm_completion_with_retries(
+                f"[INST]{prompt}[/INST]", max_tokens=256
+            )
+            if response:
+                clean_response = response.strip().strip('"')
+                logger.info(
+                    f"[Curriculum Generation]: New creative seed generated: '{clean_response}'"
+                )
+                return clean_response
+        except Exception as e:
+            logger.error(
+                f"[Curriculum Generation]: Failed to generate new creative seed: {e}"
+            )
+
+        return "Investigate the concept of 'logic' and its role in reasoning."

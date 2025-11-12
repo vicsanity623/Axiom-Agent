@@ -13,7 +13,7 @@ from axiom.cognitive_agent import (
     InterpretData,
     RelationData,
 )
-from axiom.universal_interpreter import Goal
+from axiom.universal_interpreter import Task
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -192,7 +192,7 @@ def test_handle_cognitive_reflex_queues_high_priority_task(
 
     assert len(agent.high_priority_tasks) == 1
 
-    expected_goal = Goal(task="INVESTIGATE", topic="unknown")
+    expected_goal = Task(task="INVESTIGATE", topic="unknown")
     assert agent.high_priority_tasks[0] == expected_goal
 
     assert len(agent.learning_goals) == 0

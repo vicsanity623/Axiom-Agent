@@ -28,7 +28,7 @@ echo -e "\nErasing old coverage data..."
 python -m coverage erase
 
 # Step B: Run pytest in parallel. change the cores to 1 instead of 4 if you need.
-pytest -q --cov=axiom --cov-append
+pytest --cov=axiom --cov-append
 
 # This checks if there are any files matching the .coverage.* pattern.
 if ls .coverage.* 1> /dev/null 2>&1; then

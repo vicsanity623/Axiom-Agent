@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 if TYPE_CHECKING:
     from .cognitive_agent import CognitiveAgent
+    from .universal_interpreter import Task
+
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,7 @@ class Goal(TypedDict, total=False):
     id: str
     description: str
     status: Literal["pending", "in_progress", "completed", "failed"]
-    sub_goals: list[str | Goal]
+    sub_goals: list[str | Task]
     stages: list[Goal]
     parent_goal: str | None
     priority: int
@@ -91,7 +93,7 @@ class GoalManager:
             logger.error("Failed to generate study plan for goal '%s'.", description)
             return
 
-        sub_goals: list[str | Goal] = [f"INVESTIGATE: {topic}" for topic in topics]
+        sub_goals: list[str | Task] = [f"INVESTIGATE: {topic}" for topic in topics]
         goal["sub_goals"] = sub_goals
         goal["status"] = "in_progress"
         self.agent.learning_goals.extend(cast("list[str]", sub_goals))
@@ -131,7 +133,7 @@ class GoalManager:
                 stage_desc.strip(), style=self._get_random_pedagogical_style()
             )
 
-            sub_goals: list[str | Goal] = [f"INVESTIGATE: {topic}" for topic in topics]
+            sub_goals: list[str | Task] = [f"INVESTIGATE: {topic}" for topic in topics]
             stage_goal: Goal = {
                 "id": stage_id,
                 "description": f"{stage_name}: {stage_desc.strip()}",

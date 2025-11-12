@@ -133,8 +133,6 @@ testpaths = [
     "tests",
 ]
 filterwarnings = [
-        "ignore::FutureWarning:networkx",
-        "ignore::DeprecationWarning",
 ]
 markers = [
     "introspection: tests that require a live LLM model and are skipped in standard CI",

@@ -83,7 +83,7 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 | **Core Workflow** | |
 | `axiom-train` | **(Primary Workflow)** Starts the agent's autonomous learning cycles. |
 | `axiom-webui` | Launches an interactive web UI to chat with the agent. |
-| `axiom-cnt` | (Continuous Narrative Training) Teach the agent facts directly via the terminal. |
+| `axiom-teach` | (Continuous Narrative Training) Teach the agent facts directly via the terminal. |
 | **Analysis & Debugging** | |
 | `axiom-reset` | **(Essential for Debugging)** Wipes the agent's brain, state, and logs for a fresh start. |
 | `axiom-render` | Generates a static snapshot of the brain for the web UI. |
@@ -91,6 +91,7 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 | **Metacognition** | |
 | `axiom-analyze` | Runs a standalone analysis of `axiom.log` to find optimization targets. |
 | `axiom-inspect` | Runs a deep, opinionated code quality analysis on a specific file. |
+## full list of commands found in [**pyproject.toml**](pyproject.toml).
 
 
 

@@ -1,30 +1,25 @@
 #!/bin/bash
 
 # Exit immediately if a command exits with a non-zero status.
-# This makes the script behave like your '&&' chain.
-# If you want scripts to run independently, remove this line.
 set -e
 
-# Define variables for easier maintenance
-PROJECT_DIR="/Volumes/SSD 1/REPO/Axiom-Agent"
-PYTHON_EXEC="$PROJECT_DIR/.venv/bin/python3" # PATH TO YOUR .VENV
-
-# Echo the current timestamp to the log for better debugging
 echo "---"
 echo "Running visualizer scripts at $(date)"
+echo "---"
 
-# Change to the project directory
-cd "$PROJECT_DIR"
+# --- FIX: Use the CLI entry points defined in pyproject.toml ---
+# This is the most robust method. It does not depend on file paths and
+# automatically uses the Python from the activated virtual environment.
 
-# Run the scripts
-echo "Running visualize_brain.py..."
-"$PYTHON_EXEC" src/axiom/scripts/visualize_brain.py
+echo "Generating main brain visualization..."
+axiom-visualize
 
-echo "Running visualize_fibonacci_galaxy.py..."
-"$PYTHON_EXEC" src/axiom/scripts/visualize_fibonacci_galaxy.py
+echo "Generating Fibonacci galaxy visualization..."
+axiom-galaxy1
 
-echo "Running visualize_seed_of_life.py..."
-"$PYTHON_EXEC" src/axiom/scripts/visualize_seed_of_life.py
+echo "Generating Seed of Life visualization..."
+axiom-galaxy2
 
-echo "All scripts finished successfully."
+echo "---"
+echo "All visualization scripts finished successfully."
 echo "---"

@@ -9,7 +9,7 @@ import nltk
 from tqdm import tqdm
 
 from axiom.dictionary_utils import get_word_info_from_wordnet
-from axiom.universal_interpreter import Goal, PropertyData, RelationData
+from axiom.universal_interpreter import PropertyData, RelationData, Task
 from axiom.utils.tqdm_utils import TqdmToLogger
 
 if TYPE_CHECKING:
@@ -917,9 +917,23 @@ def validate_and_add_relation(
 
     all_words = set(subject_name.split()) | set(object_name.split())
     unknown_words = []
+
+    # --- FIX: The "Trust, Then Verify" Logic ---
+    # Determine if this fact is a high-trust definition for a new word.
+    is_defining_new_word = props.get("provenance") in (
+        "dictionary_api",
+        "dictionary_pos",
+    )
+
     for word in all_words:
+        # If we are defining a new word from a trusted source, and this word
+        # is the subject of that definition, we temporarily allow it.
+        if is_defining_new_word and word == subject_name:
+            continue
+
         if allow_unknowns_for_topic and word == allow_unknowns_for_topic:
             continue
+
         if not agent.lexicon.is_known_word(word):
             unknown_words.append(word)
 
@@ -931,7 +945,7 @@ def validate_and_add_relation(
             final_caller_name,
         )
         for word in unknown_words:
-            goal = Goal(
+            goal = Task(
                 task="INVESTIGATE",
                 topic=word,
                 context=f"related to the concept of '{subject_name}'",

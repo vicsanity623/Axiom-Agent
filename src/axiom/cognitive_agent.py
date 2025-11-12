@@ -38,10 +38,10 @@ from .lexicon_manager import LexiconManager
 from .symbolic_parser import SymbolicParser
 from .universal_interpreter import (
     Entity,
-    Goal,
     InterpretData,
     PropertyData,
     RelationData,
+    Task,
     UniversalInterpreter,
 )
 
@@ -146,8 +146,8 @@ class CognitiveAgent:
         self.goal_manager: GoalManager
         self.harvester: KnowledgeHarvester | None = None
 
-        self.learning_goals: list[str | Goal] = []
-        self.high_priority_tasks: list[Goal] = []
+        self.learning_goals: list[str | Task] = []
+        self.high_priority_tasks: list[Task] = []
         self.pending_relations: dict[str, list[tuple[RelationData, PropertyData]]] = (
             defaultdict(list)
         )
@@ -331,10 +331,13 @@ class CognitiveAgent:
 
         word_to_learn = sorted(set(unknown_words))[0]
 
-        goal = Goal(task="INVESTIGATE", topic=word_to_learn)
+        # --- FIX: Create a 'Task' object, not a 'Goal' object ---
+        # A high-priority investigation of a single word is a simple Task.
+        new_task: Task = {"task": "INVESTIGATE", "topic": word_to_learn}
 
-        if goal not in self.high_priority_tasks:
-            self.high_priority_tasks.insert(0, goal)
+        if new_task not in self.high_priority_tasks:
+            # --- FIX: Insert the correctly typed 'new_task' into the list ---
+            self.high_priority_tasks.insert(0, new_task)
             logger.info(
                 "  [Cognitive Reflex]: Found unknown word '%s'. Queued for high-priority study.",
                 word_to_learn,
@@ -1253,18 +1256,32 @@ class CognitiveAgent:
         return sanitized.strip()
 
     def _clean_phrase(self, phrase: str) -> str:
-        """Clean and normalize a phrase for use as a concept or relation in the graph."""
+        """
+        Clean and normalize a phrase for use as a concept or relation in the graph.
+        This version includes more robust and intelligent normalization.
+        """
+        # 1. Start with basic cleaning of case, whitespace, and underscores.
         clean_phrase = phrase.lower().strip().replace("_", " ")
 
+        # 2. Remove content in parentheses.
         clean_phrase = re.sub(r"\s*\([^)]*\)", "", clean_phrase).strip()
 
-        clean_phrase = re.sub(r"[.,!?;']+$", "", clean_phrase)
+        # 3. Handle possessive "'s" ONLY if it's at the very end of the phrase.
+        if clean_phrase.endswith("'s"):
+            clean_phrase = clean_phrase[:-2].strip()
 
+        # 4. Remove any trailing punctuation.
+        clean_phrase = re.sub(r"[.,!?;]+$", "", clean_phrase)
+
+        # 5. --- NEW, SMARTER ARTICLE STRIPPING ---
+        # Only strip leading articles if the phrase is simple (e.g., "a cat", "the sun").
+        # This prevents incorrect stripping from complex phrases like "a part of a whole".
         words = clean_phrase.split()
-        if len(words) > 1 and words[0] in ("a", "an", "the"):
-            return " ".join(words[1:]).strip()
+        if len(words) == 2 and words[0] in ("a", "an", "the"):
+            clean_phrase = words[1]
 
-        return clean_phrase
+        # 6. Final cleanup of any extra internal whitespace.
+        return " ".join(clean_phrase.split())
 
     def _extract_name_from_relation(
         self, value: str | dict[str, Any] | list | None
@@ -1357,6 +1374,24 @@ class CognitiveAgent:
             return True, "I understand. I have noted that."
 
         return False, message
+
+    def is_concept_well_known(self, concept_name: str, threshold: int = 3) -> bool:
+        """
+        A more intelligent check to see if a concept is "well-known".
+
+        Returns True only if a node exists for the concept AND it has more
+        than a threshold number of relationships connected to it.
+        """
+        node = self.graph.get_node_by_name(concept_name)
+        if not node:
+            return False
+
+        # Count incoming and outgoing edges
+        edge_count = len(self.graph.get_edges_from_node(node.id)) + len(
+            self.graph.get_edges_to_node(node.id)
+        )
+
+        return edge_count > threshold
 
     def _resolve_exclusive_conflict(
         self,
