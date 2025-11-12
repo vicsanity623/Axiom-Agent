@@ -543,7 +543,7 @@ class UniversalInterpreter:
     ) -> list[RelationData]:
         """
         Uses the LLM to decompose a sentence into a list of atomic relations,
-        now with robust validation to prevent malformed data.
+        now with a hardened prompt and robust JSON extraction.
         """
         caller_name = f"{self.__class__.__name__}.decompose_sentence_to_relations"
         if self.llm is None:
@@ -562,34 +562,30 @@ class UniversalInterpreter:
         )
 
         prompt = f"""
-        **ROLE:** You are a knowledge engineering system. Your task is to extract and decompose knowledge from a sentence into a list of simple, atomic semantic relations.
+        **ROLE:** You are a silent, non-conversational knowledge engineering system.
 
-        **TASK:** Analyze the user's sentence and break it down into multiple, simple, atomic relations.
+        **TASK:** Analyze the user's sentence and break it down into a list of simple, atomic semantic relations.
         - Each relation MUST be a JSON object: {{"subject": "...", "verb": "...", "object": "..."}}
-        - Subjects and objects should be simple concepts (e.g., "cats", "photosynthesis", "the sun").
-        - Verbs should be concise, standardized predicates (e.g., "is_a", "has_property", "causes", "is_part_of"). Use snake_case.
-        - The goal is DECOMPOSITION. One complex sentence should become several simple facts.
+        - Subjects and objects should be simple concepts.
+        - Verbs should be concise, standardized predicates (e.g., "is_a", "has_property").
 
         **CONTEXT:** {topic_context}
 
         **EXAMPLE:**
-        Topic: Photosynthesis
         Sentence: "Photosynthesis is a process used by plants to convert light energy into chemical energy."
         Output:
         [
           {{"subject": "photosynthesis", "verb": "is_a", "object": "process"}},
-          {{"subject": "photosynthesis", "verb": "is_used_by", "object": "plants"}},
-          {{"subject": "photosynthesis", "verb": "converts", "object": "light energy"}},
-          {{"subject": "light energy", "verb": "is_converted_into", "object": "chemical energy"}}
+          {{"subject": "photosynthesis", "verb": "is_used_by", "object": "plants"}}
         ]
 
         **SENTENCE TO ANALYZE:**
         "{text}"
 
-        **RULES:**
-        1.  Return ONLY a valid JSON list of relation objects.
-        2.  Do NOT include markdown, explanations, or any other text outside the JSON list.
-        3.  If the sentence contains no extractable facts, return an empty list `[]`.
+        **RULES (MANDATORY):**
+        1.  Your entire response MUST be ONLY the JSON list.
+        2.  Do NOT include markdown, explanations, apologies, or conversational filler like "Here is the JSON...".
+        3.  If no facts can be extracted, return an empty list `[]`.
         """
         try:
             response_text = self._run_llm_completion_with_retries(
@@ -605,8 +601,7 @@ class UniversalInterpreter:
             end_bracket = response_text.rfind("]")
             if start_bracket == -1 or end_bracket == -1:
                 logger.warning(
-                    "  [Interpreter Warning]: LLM response did not contain a JSON list. Output: %s",
-                    response_text,
+                    f"  [Interpreter Warning]: LLM response did not contain a JSON list. Output: {response_text}"
                 )
                 return []
 
@@ -615,17 +610,16 @@ class UniversalInterpreter:
                 relations_raw = json.loads(json_str)
             except json.JSONDecodeError as e:
                 logger.error(
-                    "  [Interpreter Error]: Failed to decompose sentence. Error: %s", e
+                    f"  [Interpreter Error]: Failed to decompose sentence. Error: {e}"
                 )
                 logger.debug(
-                    "  [Interpreter Debug]: Malformed JSON from LLM:\n%s", json_str
+                    f"  [Interpreter Debug]: Malformed JSON from LLM:\n{json_str}"
                 )
                 return []
 
             if not isinstance(relations_raw, list):
                 logger.warning(
-                    "  [Interpreter Warning]: LLM returned valid JSON, but it was not a list. Output: %s",
-                    json_str,
+                    f"  [Interpreter Warning]: LLM returned valid JSON, but it was not a list. Output: {json_str}"
                 )
                 return []
 
@@ -637,6 +631,12 @@ class UniversalInterpreter:
                 subject = relation.get("subject")
                 verb = relation.get("verb")
                 obj = relation.get("object")
+
+                if isinstance(obj, dict) and obj.get("type") == "list":
+                    elements = obj.get("elements", [])
+                    if elements:
+                        obj = ", ".join(map(str, elements))
+                        relation["object"] = obj
 
                 if (
                     isinstance(subject, str)

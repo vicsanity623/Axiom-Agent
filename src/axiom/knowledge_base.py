@@ -25,6 +25,8 @@ LEXICON_OBSERVATION_DECAY = 0.0
 
 ALL_KNOWLEDGE = [
     # --- Self-Identity Knowledge ---
+    ("axiom agent", "concept", "is_a", "cognitive agent", 1.0),
+    ("axiom agent", "concept", "has_goal", "learn and evolve", 1.0),
     ("agent", "concept", "has_name", "Axiom", 1.0),
     ("agent", "concept", "is_a", "cognitive agent", 1.0),
     ("cognitive agent", "concept", "is_a", "AI assistant", 0.9),
@@ -480,6 +482,11 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
     logger.info("     - Seeding core vocabulary for Lexicon...")
     tqdm_out = TqdmToLogger(logger, level=logging.INFO)
     core_vocab = {
+        "axiom": "noun",
+        "agent": "noun",
+        "cognitive": "adjective",
+        "evolve": "verb",
+        "learn": "verb",
         "noun": "concept",
         "verb": "concept",
         "adjective": "concept",

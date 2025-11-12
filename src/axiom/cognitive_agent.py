@@ -215,38 +215,29 @@ class CognitiveAgent:
         self._initialize_identity()
 
     def _initialize_identity(self):
-        """Finds or creates the core 'self' and 'user' nodes."""
-        self.self_node = self.graph.get_node_by_name("axiom_agent")
-        if not self.self_node:
-            self.self_node = self._add_or_update_concept(
-                "axiom_agent", node_type="self_identity"
+        """
+        Finds or creates the core 'self' and 'user' nodes and assigns them
+        to instance attributes for easy access. This is an idempotent operation.
+        """
+        self_node = self.graph.get_node_by_name("axiom agent")
+        if not self_node:
+            logger.warning(
+                "[Identity]: 'axiom agent' node not found in seeded brain. Creating it now."
             )
-            self._process_statement_for_learning(
-                cast(
-                    "RelationData",
-                    {
-                        "subject": "axiom_agent",
-                        "verb": "is_a",
-                        "object": "cognitive agent",
-                    },
-                )
+            self_node = self._add_or_update_concept(
+                "axiom agent", node_type="self_identity"
             )
-            self._process_statement_for_learning(
-                cast(
-                    "RelationData",
-                    {
-                        "subject": "axiom_agent",
-                        "verb": "has_goal",
-                        "object": "learn and evolve",
-                    },
-                )
-            )
+        self.self_node = self_node
 
-        self.user_node = self.graph.get_node_by_name("current_user")
-        if not self.user_node:
-            self.user_node = self._add_or_update_concept(
-                "current_user", node_type="user_identity"
+        user_node = self.graph.get_node_by_name("current user")
+        if not user_node:
+            logger.warning(
+                "[Identity]: 'current user' node not found in seeded brain. Creating it now."
             )
+            user_node = self._add_or_update_concept(
+                "current user", node_type="user_identity"
+            )
+        self.user_node = user_node
 
     def chat(self, user_input: str) -> str:
         """
@@ -1272,7 +1263,7 @@ class CognitiveAgent:
         # 4. Remove any trailing punctuation.
         clean_phrase = re.sub(r"[.,!?;]+$", "", clean_phrase)
 
-        # 5. --- NEW, SMARTER ARTICLE STRIPPING ---
+        # 5. --- SMART ARTICLE STRIPPING ---
         # Only strip leading articles if the phrase is simple (e.g., "a cat", "the sun").
         # This prevents incorrect stripping from complex phrases like "a part of a whole".
         words = clean_phrase.split()
@@ -1311,10 +1302,14 @@ class CognitiveAgent:
         relation: RelationData,
         allow_unknowns_for_topic: str | None = None,
     ) -> tuple[bool, str]:
-        """Process a structured fact, handling validation and belief revision."""
+        """
+        Process a structured fact, with robust, centralized logic for handling
+        homonyms before validation and belief revision.
+        """
         if self.inference_mode:
             return False, "Agent is in read-only mode."
 
+        # 1. Extract and clean all parts of the relation.
         subject_name_or_none = self._extract_name_from_relation(relation.get("subject"))
         object_name_or_none = self._extract_name_from_relation(relation.get("object"))
         verb_name_or_none = self._extract_name_from_relation(relation.get("verb"))
@@ -1338,19 +1333,22 @@ class CognitiveAgent:
 
         relation_type = self.get_relation_type(verb_name, subject_name, object_name)
 
+        # 2. --- CENTRALIZED NODE RESOLUTION ---
+        # Resolve the object node first. It's usually unambiguous.
+        obj_node = self._add_or_update_concept(object_name)
+        if not obj_node:
+            return False, f"Failed to create concept for object: '{object_name}'."
+
+        # Now, resolve the subject node, providing context for disambiguation.
         sub_node = self._add_or_update_concept(
             subject_name,
             context_relation_type=relation_type,
             context_object_name=object_name,
         )
-        obj_node = self._add_or_update_concept(object_name)
+        if not sub_node:
+            return False, f"Failed to create concept for subject: '{subject_name}'."
 
-        if not (sub_node and obj_node):
-            return (
-                False,
-                f"Failed to create concepts for '{subject_name}' or '{object_name}'.",
-            )
-
+        # 3. Now that we have the definitive nodes, proceed with logic.
         if relation_type in self._EXCLUSIVE_RELATIONS:
             was_learned, message = self._resolve_exclusive_conflict(
                 sub_node, obj_node, relation_type, relation, allow_unknowns_for_topic
@@ -1449,7 +1447,11 @@ class CognitiveAgent:
         relation_data: RelationData,
         allow_unknowns_for_topic: str | None = None,
     ) -> tuple[bool, str]:
-        """A simple wrapper that delegates fact addition to the knowledge_base."""
+        """
+        A simple wrapper that delegates fact addition to the knowledge_base,
+        now using pre-resolved nodes.
+        """
+        # --- Create the candidate_fact with the names from the resolved nodes ---
         candidate_fact = cast(
             "RelationData",
             {
@@ -1461,12 +1463,18 @@ class CognitiveAgent:
         properties = relation_data.get("properties")
         caller_name = f"{self.__class__.__name__}._add_new_fact"
 
+        # --- Pass the original, ambiguous subject name to the validation context ---
+        # This allows validate_and_add_relation to avoid deferring the fact.
+        original_subject_name = self._extract_name_from_relation(
+            relation_data.get("subject")
+        )
+
         status = validate_and_add_relation(
             self,
             candidate_fact,
             properties,
             caller_name=caller_name,
-            allow_unknowns_for_topic=allow_unknowns_for_topic,
+            allow_unknowns_for_topic=allow_unknowns_for_topic or original_subject_name,
         )
 
         was_learned = status in ("inserted", "replaced")
@@ -1474,9 +1482,9 @@ class CognitiveAgent:
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
         """Determine the semantic relationship type from a simple verb."""
-        cleaned_verb = verb.replace("_", " ")
+        # cleaned_verb = verb.replace("_", " ") <-- redundant already handled inside def _clean_phrase
 
-        if "agent" in subject.lower() and cleaned_verb in [
+        if "agent" in subject.lower() and verb in [
             "be",
             "is",
             "are",
@@ -1485,7 +1493,7 @@ class CognitiveAgent:
             if len(object_.split()) == 1 and object_[0].isupper():
                 return "has name"
 
-        return RELATION_TYPE_MAP.get(cleaned_verb, cleaned_verb)
+        return RELATION_TYPE_MAP.get(verb, verb)
 
     def learn_new_fact_autonomously(
         self, fact_sentence: str, source_topic: str | None = None
@@ -1546,8 +1554,8 @@ class CognitiveAgent:
         context_object_name: str | None = None,
     ) -> ConceptNode | None:
         """
-        Finds a concept by name or creates it, integrating WordNet for type
-        detection and now handling autonomous lexical promotion.
+        Finds a concept by name or creates it, integrating WordNet for type detection.
+        (This is the stable, original version without homonym logic).
         """
         clean_name = self._clean_phrase(name)
         if not clean_name:
@@ -1557,36 +1565,29 @@ class CognitiveAgent:
 
         if node is None:
             if " " in clean_name:
-                determined_type = (
-                    "proper_noun" if any(c.isupper() for c in name) else "noun_phrase"
-                )
+                determined_type = "noun_phrase"
             else:
                 word_info_list = get_word_info_from_wordnet(clean_name)
-                if word_info_list and isinstance(word_info_list[0], dict):
-                    determined_type = word_info_list[0].get("type", node_type)
-                else:
-                    determined_type = node_type
+                determined_type = (
+                    word_info_list[0].get("type", node_type)
+                    if word_info_list and isinstance(word_info_list[0], dict)
+                    else node_type
+                )
 
             new_node_obj = ConceptNode(clean_name, node_type=determined_type)
             node = self.graph.add_node(new_node_obj)
             logger.info(
-                "[cyan]   - Added new concept to graph: %s (%s)[/cyan]",
-                clean_name,
-                node.type,
+                f"[cyan]   - Added new concept to graph: {clean_name} ({node.type})[/cyan]"
             )
 
-        if context_relation_type == "is_a" and context_object_name in (
+        # This is the original, simple logic for lexical promotion.
+        if context_relation_type == "is a" and context_object_name in (
             "noun",
             "verb",
             "adjective",
         ):
-            logger.info(
-                "    [Lexicon]: Autonomously promoting '%s' as a '%s'.",
-                clean_name,
-                context_object_name,
-            )
             self.lexicon.promote_word(clean_name, context_object_name, confidence=0.8)
-
+            # Return the potentially updated node from the graph.
             return self.graph.get_node_by_id(node.id)
 
         return node

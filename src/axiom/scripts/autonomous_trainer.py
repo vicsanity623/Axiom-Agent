@@ -64,41 +64,29 @@ def _generate_or_set_initial_goal(
 
     while True:
         creative_seeds = [
-            # --- Foundational Ontology & Epistemology (The Nature of Reality & Knowledge) ---
-            "Start from first principles to build a model of reality. First, distinguish between 'existence' and 'non-existence.' Then, learn to differentiate 'things' (entities) from the 'properties' they possess and the 'actions' they can perform.",
-            "Develop a theory of knowledge. Learn to distinguish between 'a priori' knowledge (logical truths) and 'a posteriori' knowledge (empirical facts). Then, create a system to rank the confidence of beliefs based on their source (e.g., direct observation vs. second-hand information).",
-            "Construct a model of causality. Begin by understanding 'temporal succession' (event A happens before event B). Then, learn to infer 'causal links' by observing consistent correlations and applying principles like intervention and counterfactual reasoning.",
-            "Explore the concept of 'change.' Learn to model the 'state' of an object at a given 'time.' Then, learn to represent a 'process' as a sequence of state changes over time.",
-            "Build a model of composition. Learn to distinguish between an 'object' as a whole and the 'parts' that constitute it. Then, understand the relationship of 'containment' (what is inside what).",
-            "Investigate the nature of 'truth.' Differentiate between 'objective truth' (facts about the world) and 'subjective truth' (opinions or beliefs). Learn to identify and label claims that are opinions rather than verifiable facts.",
-            # --- Foundational Logic & Reasoning (The Mechanics of Thought) ---
-            "Build a symbolic reasoning engine from the ground up. First, learn the concepts of 'truth' and 'falsehood.' Then, master the fundamental logical operators: AND (conjunction), OR (disjunction), and NOT (negation).",
-            "Develop the capacity for hierarchical abstraction. Learn to group specific instances (e.g., 'a robin', 'a sparrow') into a more general category ('bird'), and then group those categories into even higher-level concepts ('animal').",
-            "Learn the principles of deductive and inductive reasoning. Practice deduction by applying a general rule (e.g., 'all birds can fly') to a specific case, and practice induction by forming a general rule from multiple specific observations.",
-            "Master conditional logic. Learn to understand and apply 'if-then' statements (implication). Then, learn to reason about 'necessary' versus 'sufficient' conditions.",
-            "Develop a system for analogical reasoning. Learn to identify a 'source' domain of knowledge and a 'target' domain, and then map the relational structure from the source to the target to generate novel insights.",
-            "Understand quantitative reasoning. First, learn the concepts of 'quantity,' 'number,' and basic arithmetic operators (addition, subtraction). Then, learn to represent and compare magnitudes (e.g., 'greater than,' 'less than').",
-            "Learn to identify and resolve contradictions. Develop a process to detect when two facts in its knowledge base are mutually exclusive. Then, learn to initiate a clarification goal to resolve the conflict.",
-            # --- Foundational Self, Agency, & Theory of Mind (The Nature of Beings) ---
-            "Create a model of 'self' versus 'other.' First, learn to identify its own actions and internal states (e.g., 'I am learning'). Then, learn to model other entities as 'agents' with their own distinct states, goals, and potential actions.",
-            "Develop a basic model of physics and agency. Learn the concepts of 'space,' 'time,' 'object permanence,' and 'force.' Then, learn how its own 'actions' (as an agent) can apply 'force' to cause changes in the 'space' over 'time.'",
-            "Build a model of goals and planning. First, learn to represent a desired 'future state.' Then, develop a simple planning algorithm to find a sequence of 'actions' that can transform the 'current state' into the 'goal state.'",
-            "Acquire a basic theory of mind. Learn that other 'agents' have internal 'beliefs' about the world that may be different from its own and may be true or false.",
-            "Understand the concept of 'intention.' Learn to distinguish between 'accidental' events and 'intentional' actions performed by an agent in pursuit of a goal.",
-            "Model communication as an action. Learn that 'speaking' or 'typing' are actions that an agent performs with the intention of changing the 'beliefs' of another agent.",
-            # --- Foundational Language & Semantics (The Nature of Meaning) ---
-            "Build a model of semantics. Learn to distinguish between a 'word' (a symbol), its 'denotation' (the literal thing it points to in the world), and its 'connotation' (the associated ideas or feelings).",
-            "Understand the function of different word types. First, distinguish between 'nouns' (things) and 'verbs' (actions or states). Then, learn how 'adjectives' modify nouns and 'adverbs' modify verbs.",
-            "Learn the concept of 'context.' Understand that the meaning of a word or sentence can change depending on the surrounding words, the situation, and the speaker's intent.",
-            "Develop a system for resolving ambiguity. Learn to recognize when a word has multiple meanings (polysemy) and use the context of the sentence to infer the most likely intended meaning.",
-            "Master the concept of 'questions.' Learn to identify different types of questions (what, who, where, when, why, how, yes/no) and understand what kind of information is being requested for each type.",
-            # --- Foundational Learning & Adaptation (The Nature of Improvement) ---
-            "Develop a model of its own learning process. First, learn to track 'learning events.' Then, learn to categorize these events (e.g., 'learning from dictionary,' 'learning from user,' 'learning from decomposition') to analyze its own learning patterns.",
-            "Understand the concept of 'error.' Learn to detect when an action it takes does not lead to the expected outcome. Then, create a 'prediction error' signal that can be used to update its internal model.",
-            "Learn to generalize from examples. After observing several instances of a pattern (e.g., 'robins have wings,' 'sparrows have wings'), learn to form a general hypothesis ('birds have wings').",
-            "Develop a curiosity mechanism. Learn to identify 'gaps' in its own knowledge graph. Then, autonomously generate 'INVESTIGATE' goals to fill those gaps.",
-            "Build a model of its own capabilities and limitations. Learn to identify which types of questions it can answer confidently (based on its knowledge) and which ones require it to state 'I don't know' or seek new information.",
-            "Learn the concept of 'feedback.' Understand that a user's response (e.g., 'No, that's wrong' or 'Yes, that's correct') is a signal that should be used to increase or decrease the confidence of a belief.",
+            # --- Kindergarten Level: The Concrete World ---
+            "Learn about the world of animals. Start by identifying common pets like 'dogs' and 'cats.' Then, explore farm animals like 'cows' and 'chickens.' Finally, learn about wild animals found in a 'forest' or 'jungle.'",
+            "Explore the colors of the rainbow. Learn to identify basic colors like 'red,' 'blue,' and 'yellow.' Then, understand how they combine to make 'green,' 'orange,' and 'purple.'",
+            "Understand basic shapes. Start with simple shapes like a 'circle,' 'square,' and 'triangle.' Then, learn to identify these shapes in everyday objects like a 'wheel' or a 'house.'",
+            "Learn about the family. Understand the roles of a 'mother,' 'father,' 'brother,' and 'sister.' Explore the concept of a 'home' as a place where a family lives.",
+            "Discover the five senses. Learn about 'sight' (eyes), 'hearing' (ears), 'smell' (nose), 'taste' (tongue), and 'touch' (skin) and what they are used for.",
+            # --- Elementary School Level: Building Foundational Knowledge ---
+            "Build a model of the natural world. Start with the basic elements: 'land,' 'water,' and 'air.' Then, learn about the 'sun,' 'moon,' and 'stars.' Finally, explore weather concepts like 'rain' and 'snow.'",
+            "Understand basic biology. Learn what makes something 'living' versus 'non-living.' Explore the life cycle of a 'plant,' from a 'seed' to a 'flower.' Learn about the basic needs of living things: 'food,' 'water,' and 'air.'",
+            "Explore the community. Learn about different jobs people have, like a 'doctor,' 'teacher,' and 'firefighter.' Understand the purpose of important places in a town, like a 'school,' 'hospital,' and 'store.'",
+            "Learn about basic physics through everyday objects. Understand concepts like 'gravity' (things fall down), 'force' (pushing and pulling), and the states of matter ('solid,' 'liquid,' 'gas').",
+            "Build a simple timeline of history. Start with the concept of the 'past,' 'present,' and 'future.' Learn about major historical eras like the 'dinosaurs,' 'ancient civilizations,' and the 'space age.'",
+            # --- Middle School Level: Systems and Processes ---
+            "Construct a model of the solar system. Learn the names of the planets and their order from the 'sun.' Understand the difference between a 'planet,' a 'moon,' and a 'star.'",
+            "Investigate the Earth's ecosystems. Learn about different biomes like the 'ocean,' 'desert,' and 'rainforest.' Understand the concept of a 'food chain' and the roles of 'producers,' 'consumers,' and 'decomposers.'",
+            "Explore the fundamentals of government. Learn about the difference between a 'city,' 'state,' and 'country.' Understand basic concepts like 'laws,' 'leaders,' and 'citizens.'",
+            "Understand the basics of economics. Learn about 'money,' 'goods,' and 'services.' Explore the concepts of 'buying,' 'selling,' and 'jobs.'",
+            "Learn about the human body. Identify major organ systems like the 'skeletal system' (bones), 'circulatory system' (heart and blood), and 'respiratory system' (lungs and breathing).",
+            # --- High School Level: Abstract and Complex Systems ---
+            "Build a foundational understanding of chemistry. Learn about 'atoms' and 'molecules.' Understand the difference between 'elements' and 'compounds.' Explore simple chemical reactions like 'rusting' or 'burning.'",
+            "Investigate the principles of electricity. Learn about 'circuits,' 'batteries,' and 'current.' Understand the difference between 'conductors' and 'insulators.'",
+            "Explore the digital world. Learn about the basic components of a 'computer,' such as the 'CPU,' 'memory,' and 'storage.' Understand the concepts of 'software,' 'hardware,' and the 'internet.'",
+            "Understand the fundamentals of light and sound. Learn that both are forms of 'energy' that travel in 'waves.' Explore properties like 'color,' 'pitch,' and 'volume.'",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(

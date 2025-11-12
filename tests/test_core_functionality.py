@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.graph_core import ConceptGraph, ConceptNode
 from axiom.lexicon_manager import LexiconManager
-from axiom.universal_interpreter import InterpretData
+from axiom.universal_interpreter import InterpretData, RelationData
 
 
 def test_chat_handles_total_interpretation_failure(agent: CognitiveAgent, monkeypatch):
@@ -460,3 +460,57 @@ def test_agent_answers_question_about_entity(agent: CognitiveAgent, monkeypatch)
 
     assert "i don't have any information about dragon" in response_unknown.lower()
     print("Agent correctly handled a question about an unknown entity.")
+
+
+def test_agent_can_learn_multiple_senses_for_a_word(agent: CognitiveAgent):
+    """
+    Given: A clean agent.
+    When: The agent learns two different 'is a' relationships for the same subject.
+    Then: It should create a single node for the subject with two distinct outgoing edges.
+    """
+    # --- Phase 1: Learn the first sense of "one" ---
+    relation1 = cast(
+        "RelationData", {"subject": "one", "verb": "is a", "object": "number"}
+    )
+    success, _ = agent._process_statement_for_learning(relation1)
+    assert success is True
+
+    # Assertion 1: A single node for "one" should exist with one relationship.
+    node_one = agent.graph.get_node_by_name("one")
+    assert node_one is not None
+
+    edges = agent.graph.get_edges_from_node(node_one.id)
+    assert len(edges) == 1
+    assert edges[0].type == "is a"
+    target_node = agent.graph.get_node_by_id(edges[0].target)
+    assert target_node is not None
+    assert target_node.name == "number"
+
+    # --- Phase 2: Learn the second sense of "one" ---
+    relation2 = cast(
+        "RelationData", {"subject": "one", "verb": "is a", "object": "pronoun"}
+    )
+    success, _ = agent._process_statement_for_learning(relation2)
+    assert success is True
+
+    # --- Assertions for the new, simpler architecture ---
+
+    # Assertion 2a: The original "one" node should still be the same node.
+    node_one_after = agent.graph.get_node_by_name("one")
+    assert node_one_after is not None
+    assert node_one_after.id == node_one.id  # It's the same object.
+
+    # Assertion 2b: The node should now have TWO outgoing 'is a' edges.
+    edges_after = agent.graph.get_edges_from_node(node_one_after.id)
+    assert len(edges_after) == 2
+
+    # Assertion 2c: Verify the targets of both edges are correct.
+    target_names = set()
+    for edge in edges_after:
+        assert edge.type == "is a"
+        target = agent.graph.get_node_by_id(edge.target)
+        assert target is not None
+        target_names.add(target.name)
+
+    assert "number" in target_names
+    assert "pronoun" in target_names

@@ -133,6 +133,8 @@ testpaths = [
     "tests",
 ]
 filterwarnings = [
+    # click API depracation warning for `parser.split_arg_string` warning still present
+    # APIScheduler - no longer a present warning
 ]
 markers = [
     "introspection: tests that require a live LLM model and are skipped in standard CI",

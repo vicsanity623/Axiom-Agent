@@ -39,18 +39,18 @@ class CycleManager:
         self.LEARNING_PHASE_DURATION = timedelta(hours=5)
         self.DISCOVERY_PHASE_DURATION = timedelta(minutes=1.2)
         self.REFINEMENT_PHASE_DURATION = timedelta(minutes=10)
-        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=6)
+        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
 
-        self.CYCLE_DELAY_SECONDS = 15
+        self.CYCLE_DELAY_SECONDS = 60
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
 
         fast_mode = os.getenv("AXIOM_FAST_TEST") == "1"
         if fast_mode:
-            self.LEARNING_PHASE_DURATION = timedelta(seconds=5)
+            self.LEARNING_PHASE_DURATION = timedelta(minutes=5)
             self.DISCOVERY_PHASE_DURATION = timedelta(seconds=5)
-            self.REFINEMENT_PHASE_DURATION = timedelta(seconds=5)
-            self.METACOGNITIVE_PHASE_DURATION = timedelta(seconds=5)
+            self.REFINEMENT_PHASE_DURATION = timedelta(minutes=5)
+            self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=4)
             self.CYCLE_DELAY_SECONDS = 2
 
     def start(self) -> None:

@@ -26,7 +26,7 @@ DEFAULT_CACHE_FILE: Final = BRAIN_DIR / "interpreter_cache.json"
 MODEL_VERSION_FILE: Final = BRAIN_DIR / "model_version.txt"
 
 DEFAULT_MODEL_NAME: Final = os.getenv(
-    "AXIOM_MODEL_NAME", "mistral-7b-instruct-v0.2.Q6_K.gguf"
+    "AXIOM_MODEL_NAME", "mistral-7b-instruct-v0.2.Q4_K_M.gguf" # higher quality / accuracy download and use : "mistral-7b-instruct-v0.2.Q6_K.gguf"
 )
 DEFAULT_LLM_PATH: Final = MODELS_DIR / DEFAULT_MODEL_NAME
 
