@@ -149,38 +149,6 @@ class ConceptGraph:
         self.name_to_id: dict[str, str] = {}
         self._type_index: dict[str, set[str]] = defaultdict(set)
 
-    def rename_node_by_id(self, node_id: str, new_name: str) -> None:
-        """Renames a node and updates the name-to-ID mapping."""
-        if node_id in self.graph:
-            old_name = self.graph.nodes[node_id].get("name")
-            if old_name and old_name in self.name_to_id:
-                del self.name_to_id[old_name]
-
-            self.graph.nodes[node_id]["name"] = new_name
-            self.name_to_id[new_name] = node_id
-            logger.info(
-                f"   - Renamed node {node_id} from '{old_name}' to '{new_name}'."
-            )
-
-    def get_edges_by_type(self, node_id: str, edge_type: str) -> list[RelationshipEdge]:
-        """Gets all outgoing edges of a specific type from a node."""
-        if node_id not in self.graph:
-            return []
-        return [
-            edge for edge in self.get_edges_from_node(node_id) if edge.type == edge_type
-        ]
-
-    def has_relationship(
-        self, source_node: ConceptNode, relation_type: str, object_name: str
-    ) -> bool:
-        """Checks if a specific relationship exists from a source node."""
-        for edge in self.get_edges_from_node(source_node.id):
-            if edge.type == relation_type:
-                target_node = self.get_node_by_id(edge.target)
-                if target_node and target_node.name == object_name:
-                    return True
-        return False
-
     def add_node(self, node: ConceptNode) -> ConceptNode:
         """Add or update a concept node in the graph."""
         if existing_id := self.name_to_id.get(node.name):
