@@ -35,7 +35,7 @@ GEMINI_API_KEY: Final[str | None] = os.getenv("GEMINI_API_KEY")
 GITHUB_TOKEN: Final[str | None] = os.getenv("GITHUB_TOKEN")
 NGROK_AUTHTOKEN: Final[str | None] = os.getenv("NGROK_AUTHTOKEN")
 
-# --- Neo4j Database Configuration ---
+# --- Neo4j Database Configuration TODO---
 NEO4J_URI: Final[str | None] = os.getenv("NEO4J_URI")
 NEO4J_USER: Final[str | None] = os.getenv("NEO4J_USER")
 NEO4J_PASSWORD: Final[str | None] = os.getenv("NEO4J_PASSWORD")

@@ -47,6 +47,7 @@ class KnowledgeHarvester:
         "console",
         "llm_definition_failures",
         "llm_circuit_breaker_tripped",
+        "_failed_tasks",
     )
 
     def __init__(self, agent: CognitiveAgent, lock: Lock) -> None:
@@ -60,6 +61,7 @@ class KnowledgeHarvester:
         self.researched_terms: set[str] = set()
         self.llm_definition_failures = 0
         self.llm_circuit_breaker_tripped = False
+        self._failed_tasks: set[str] = set()
         self._load_research_cache()
         logger.info("[success][Knowledge Harvester]: Initialized.[/success]")
 
@@ -158,7 +160,6 @@ class KnowledgeHarvester:
             f"[Study Cycle]: Prioritizing learning goal: To define '{term_to_learn}' (from '{raw_term}')."
         )
 
-        # --- STRATEGY 1: High-precision Dictionary API for single words ---
         is_single_word = " " not in term_to_learn
         if is_single_word:
             logger.info(
@@ -199,7 +200,6 @@ class KnowledgeHarvester:
                     f"   - Dictionary API failed for '{term_to_learn}'. Falling back to web search."
                 )
 
-        # --- STRATEGY 2: Broad web search (for multi-word concepts or as a fallback) ---
         logger.info(f"   - Using web search for '{term_to_learn}'.")
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}"]
         for query in queries:
@@ -266,29 +266,34 @@ class KnowledgeHarvester:
             )
         return processed_count > 0
 
-    def study_cycle(self) -> None:
+    def study_cycle(self, phase_end_time: datetime | None = None) -> bool:
         """
-        Run one full, recursive study cycle until all possible knowledge is consolidated.
+        Run one full, recursive study cycle until all possible knowledge is consolidated,
+        while respecting an optional phase end time.
 
-        This cycle is now a persistent, recursive loop. It will continue to
-        process tasks and consolidate knowledge until the 'pending_relations'
-        queue is empty, or no further progress can be made. If consolidation
-        stalls, it will autonomously generate new high-priority investigation
-        tasks to unblock itself and continue the cycle.
+        Returns:
+            bool: True if progress was made (task processed, knowledge consolidated),
+                False if the cycle was stalled or no work was done.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
             f"[bold cyan]Study Cycle Started at {timestamp}[/bold cyan]", style="cyan"
         )
-
-        # --- The entire cycle is now wrapped in a loop that runs until completion, leaving 0 deferred facts ---
+        progress_made_in_cycle = False
         cycle_iteration = 0
+
         while True:
+            if phase_end_time and datetime.now() >= phase_end_time:
+                logger.warning(
+                    "   - Study cycle time limit reached. Yielding control to CycleManager."
+                )
+                break
+
             cycle_iteration += 1
             logger.info(f"--- Starting Study Cycle Iteration #{cycle_iteration} ---")
 
             task_to_process: Task | str | None = None
-            task_type: str = ""
+            task_type = ""
             with self.lock:
                 if self.agent.high_priority_tasks:
                     task_to_process = self.agent.high_priority_tasks.pop(0)
@@ -298,11 +303,11 @@ class KnowledgeHarvester:
                     task_type = "CURRICULUM"
 
             if task_to_process:
-                task_topic: str
-                if isinstance(task_to_process, str):
-                    task_topic = task_to_process.replace("INVESTIGATE:", "").strip()
-                else:
-                    task_topic = task_to_process.get("topic", "")
+                task_topic = (
+                    task_to_process.replace("INVESTIGATE:", "").strip()
+                    if isinstance(task_to_process, str)
+                    else task_to_process.get("topic", "")
+                )
 
                 if not task_topic:
                     logger.warning(
@@ -315,73 +320,83 @@ class KnowledgeHarvester:
                         logger.warning(
                             f"   - ❌ Task '{task_topic}' failed at resolution stage. Deprioritizing."
                         )
+                        self._failed_tasks.add(task_topic)
                         with self.lock:
                             self.agent.learning_goals.append(task_to_process)
                     else:
                         logger.info(
                             f"   - ✅ Task '{task_topic}' resolved. Knowledge is pending consolidation."
                         )
+                        progress_made_in_cycle = True
             else:
                 logger.info(
                     "All learning queues are empty. Attempting to deepen existing knowledge."
                 )
-                self._deepen_knowledge_of_random_concept()
+                if self._deepen_knowledge_of_random_concept():
+                    progress_made_in_cycle = True
 
-            # --- Iterative Knowledge Consolidation Phase ---
             logger.info("   - Initiating iterative knowledge consolidation phase...")
+            consolidation_made_progress = False
             with self.lock:
-                pass_count = 0
                 while self.agent.pending_relations:
-                    pass_count += 1
-                    logger.debug(f"   - ...starting consolidation pass #{pass_count}.")
-
                     num_pending_before = len(self.agent.pending_relations)
                     all_known_concepts = self.agent.graph.get_all_node_names()
                     self._consolidate_pending_knowledge(all_known_concepts)
                     num_pending_after = len(self.agent.pending_relations)
 
                     if num_pending_after >= num_pending_before:
-                        logger.debug(
-                            "   - ...pass made no progress. Knowledge state is stable for now."
-                        )
                         break
-                    progress_count = num_pending_before - num_pending_after
-                    logger.debug(
-                        f"   - ...pass consolidated {progress_count} fact(s). Re-running..."
-                    )
+                    consolidation_made_progress = True
+                    progress_made_in_cycle = True
 
             if self.agent.pending_relations:
                 logger.warning(
                     f"   - Consolidation stalled. {len(self.agent.pending_relations)} concepts still have deferred facts."
                 )
+                blocker_word_raw = next(iter(self.agent.pending_relations.keys()), None)
+                if blocker_word_raw:
+                    blocker_word_clean = self.agent._clean_phrase(blocker_word_raw)
+                    if not blocker_word_clean:
+                        logger.error(
+                            f"   - Could not clean blocker word '{blocker_word_raw}'. Exiting cycle."
+                        )
+                        break
 
-                # Introspect the pending relations to find the next blocker.
-                blocker_word = next(iter(self.agent.pending_relations.keys()), None)
+                    if blocker_word_clean in self._failed_tasks:
+                        logger.error(
+                            f"   - Stalled on '{blocker_word_clean}', which has failed recently. "
+                            "Breaking cycle to prevent loop."
+                        )
+                        break
 
-                if blocker_word:
                     logger.info(
-                        f"   - Autonomously creating new HIGH-PRIORITY task to unblock consolidation: 'INVESTIGATE: {blocker_word}'"
+                        f"   - Autonomously creating new HIGH-PRIORITY task to unblock consolidation: 'INVESTIGATE: {blocker_word_clean}'"
                     )
-                    new_task: Task = {"task": "INVESTIGATE", "topic": blocker_word}
+                    new_task: Task = {
+                        "task": "INVESTIGATE",
+                        "topic": blocker_word_clean,
+                    }
                     with self.lock:
                         if new_task not in self.agent.high_priority_tasks:
                             self.agent.high_priority_tasks.insert(0, new_task)
-
-                    # Continue the loop to immediately process the new task.
                     continue
-                # This case should be rare, but it's a safe exit.
                 logger.error(
                     "   - Consolidation stalled but could not identify a blocker. Exiting cycle."
                 )
                 break
-            # If there are no pending relations, the entire cycle is complete.
-            logger.info(
-                "   - ✅ All pending knowledge successfully consolidated. Study cycle complete."
-            )
+
+            if not self.agent.pending_relations and consolidation_made_progress:
+                logger.info("   - ✅ All pending knowledge successfully consolidated.")
+                if self._failed_tasks:
+                    logger.info("      - Clearing recent task failure memory.")
+                    self._failed_tasks.clear()
+
+            logger.info("   - Study cycle iteration complete.")
             break
 
         self.console.rule("[bold cyan]Study Cycle Complete.[/bold cyan]", style="cyan")
         self.agent.log_autonomous_cycle_completion()
+        return progress_made_in_cycle
 
     def refinement_cycle(self) -> None:
         """
@@ -495,8 +510,14 @@ class KnowledgeHarvester:
 
         return None
 
-    def _deepen_knowledge_of_random_concept(self) -> None:
-        """Pick a random known concept and try to learn a new related fact."""
+    def _deepen_knowledge_of_random_concept(self) -> bool:
+        """
+        Pick a random known concept and try to learn a new related fact.
+
+        Returns:
+            bool: True if a new fact was successfully found and queued for learning,
+                False otherwise.
+        """
         stop_words = {
             "is",
             "are",
@@ -521,14 +542,15 @@ class KnowledgeHarvester:
             "concept",
             "property",
         }
-        random_node_name = None
+        random_node_name: str | None = None
         with self.lock:
             all_node_names = self.agent.graph.get_all_node_names()
             if len(all_node_names) < 2:
                 logger.info(
                     "[Deepen Knowledge]: Not enough concepts in the brain to study yet."
                 )
-                return
+                return False
+
             eligible_names = [
                 name
                 for name in all_node_names
@@ -538,16 +560,19 @@ class KnowledgeHarvester:
                 logger.info(
                     "[Deepen Knowledge]: No eligible single-word concepts to study."
                 )
-                return
+                return False
             random_node_name = random.choice(eligible_names)
+
         if not random_node_name:
-            return
+            return False
+
         logger.info(
             "[Deepen Knowledge]: Chosen to study the concept: '%s'", random_node_name
         )
         result = self.get_fact_from_wikipedia(
             random_node_name
         ) or self.get_fact_from_duckduckgo(random_node_name)
+
         if result:
             _title, fact_sentence = result
             with self.lock:
@@ -555,11 +580,12 @@ class KnowledgeHarvester:
                     f"  [Deepen Knowledge]: {LogColors.GREEN}Attempting to learn new fact: '{fact_sentence}'{LogColors.RESET}"
                 )
                 self.agent.chat(fact_sentence)
-        else:
-            logger.warning(
-                "[Deepen Knowledge]: Could not find any new facts about '%s'.",
-                random_node_name,
-            )
+            return True
+        logger.warning(
+            "[Deepen Knowledge]: Could not find any new facts about '%s'.",
+            random_node_name,
+        )
+        return False
 
     def _find_new_topic(self, max_attempts: int = 5) -> str | None:
         """Find a new, focused, and unknown topic using a heuristic-driven search."""

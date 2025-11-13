@@ -538,12 +538,36 @@ class UniversalInterpreter:
 
         return self.interpret(contextual_input)
 
+    def _flatten_structured_object(self, obj: Any) -> str:
+        """
+        Recursively traverses a potentially nested dictionary or list from the LLM
+        and extracts all meaningful string values into a single, clean phrase.
+        """
+        if isinstance(obj, str):
+            return obj.strip()
+
+        parts = []
+        if isinstance(obj, dict):
+            if "value" in obj and isinstance(obj["value"], str):
+                return obj["value"].strip()
+            if "name" in obj and isinstance(obj["name"], str):
+                return obj["name"].strip()
+
+            for key, value in obj.items():
+                if key.lower() != "type":
+                    parts.append(self._flatten_structured_object(value))
+
+        elif isinstance(obj, list):
+            parts = [self._flatten_structured_object(item) for item in obj]
+
+        return " ".join(filter(None, parts)).strip()
+
     def decompose_sentence_to_relations(
         self, text: str, main_topic: str | None = None
     ) -> list[RelationData]:
         """
         Uses the LLM to decompose a sentence into a list of atomic relations,
-        now with a hardened prompt and robust JSON extraction.
+        now with robust, recursive validation to handle deeply nested object structures.
         """
         caller_name = f"{self.__class__.__name__}.decompose_sentence_to_relations"
         if self.llm is None:
@@ -632,11 +656,13 @@ class UniversalInterpreter:
                 verb = relation.get("verb")
                 obj = relation.get("object")
 
-                if isinstance(obj, dict) and obj.get("type") == "list":
-                    elements = obj.get("elements", [])
-                    if elements:
-                        obj = ", ".join(map(str, elements))
-                        relation["object"] = obj
+                if not isinstance(subject, str):
+                    subject = " ".join(self._flatten_structured_object(subject).split())
+                    relation["subject"] = subject
+
+                if not isinstance(obj, str):
+                    obj = " ".join(self._flatten_structured_object(obj).split())
+                    relation["object"] = obj
 
                 if (
                     isinstance(subject, str)
@@ -646,7 +672,7 @@ class UniversalInterpreter:
                     validated_relations.append(cast("RelationData", relation))
                 else:
                     logger.warning(
-                        f"  [Interpreter Validation]: Discarding malformed relation due to non-string components: {relation} (in {caller_name})"
+                        f"  [Interpreter Validation]: Discarding malformed relation after flattening: {relation} (in {caller_name})"
                     )
 
             if validated_relations:

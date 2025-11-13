@@ -925,21 +925,16 @@ def validate_and_add_relation(
     all_words = set(subject_name.split()) | set(object_name.split())
     unknown_words = []
 
-    # Determine if this fact is a high-trust definition for a new word.
     is_defining_new_word = props.get("provenance") in (
         "dictionary_api",
         "dictionary_pos",
     )
 
     for word in all_words:
-        # If we are defining a new word from a trusted source, and this word
-        # is the subject of that definition, we temporarily allow it.
         if is_defining_new_word and word == subject_name:
             continue
-
         if allow_unknowns_for_topic and word == allow_unknowns_for_topic:
             continue
-
         if not agent.lexicon.is_known_word(word):
             unknown_words.append(word)
 
@@ -950,17 +945,26 @@ def validate_and_add_relation(
             unknown_words,
             final_caller_name,
         )
+
+        clean_unknown_words = set()
         for word in unknown_words:
+            clean_word = agent._clean_phrase(word)
+            if clean_word:
+                clean_unknown_words.add(clean_word)
+
+        for clean_word in clean_unknown_words:
             goal = Task(
                 task="INVESTIGATE",
-                topic=word,
+                topic=clean_word,
                 context=f"related to the concept of '{subject_name}'",
             )
             if goal not in agent.high_priority_tasks:
                 agent.high_priority_tasks.insert(0, goal)
 
-        add_pending_relation(agent, relation, props, unknown_words)
-        return "deferred"
+        if clean_unknown_words:
+            add_pending_relation(agent, relation, props, list(clean_unknown_words))
+            return "deferred"
+
 
     sub_node = agent._add_or_update_concept(subject_name)
     obj_node = agent._add_or_update_concept(object_name)

@@ -269,7 +269,6 @@ class PerformanceMonitor:
         while i < len(lines):
             line = lines[i]
 
-            # --- RESTORED: High-priority heuristic from original version ---
             if "Deferred learning" in line or "Consolidation incomplete" in line:
                 message = line.strip()
                 target = OptimizationTarget(
@@ -300,10 +299,9 @@ class PerformanceMonitor:
             traceback_str = None
             i += 1
 
-            # Preserve the robust, multi-line traceback parsing logic
             if log_level in ("ERROR", "CRITICAL") or "traceback" in message.lower():
                 if i < len(lines) and "Traceback (most recent call last):" in lines[i]:
-                    tb_lines = [lines[i]]  # Start with the "Traceback..." line
+                    tb_lines = [lines[i]]
                     i += 1
                     while i < len(lines) and (
                         lines[i].startswith("  ") or "Error:" in lines[i]
@@ -313,7 +311,6 @@ class PerformanceMonitor:
 
                     if tb_lines:
                         traceback_str = "\n".join(tb_lines)
-                        # Extract function name from the last "File" line
                         for tb_line in reversed(tb_lines):
                             if tb_line.strip().startswith("File "):
                                 tb_match = re.search(
@@ -323,7 +320,6 @@ class PerformanceMonitor:
                                     func = tb_match.group(1)
                                     break
                 else:
-                    # Rewind to ensure the next line is processed if it wasn't part of a traceback
                     i -= 1
 
             entry = _LogEntry(func, message, ts, log_level, exec_time, traceback_str)
@@ -419,8 +415,6 @@ class PerformanceMonitor:
         learned_facts = []
         all_concepts = set()
 
-        # The learning logs are now correctly attributed by the parser,
-        # but we can still look them up by the known function name.
         learning_entries = analysis_data.entries_by_func.get(
             "CognitiveAgent._add_new_fact", []
         )
@@ -503,7 +497,7 @@ class PerformanceMonitor:
         )
 
         if func == "CognitiveAgent.LearningProcess":
-            threshold = 1.0  # A fixed, sensitive threshold for systemic issues
+            threshold = 1.0
             final_target_name = "CognitiveAgent._process_statement_for_learning"
             file_path = introspector.get_source_file(final_target_name)
         else:
@@ -1053,73 +1047,66 @@ class MetacognitiveEngine:
                 e,
             )
 
-    def run_introspection_cycle(self) -> None:
-        """Executes one full self-analysis cycle with improved visibility."""
+    def run_introspection_cycle(self) -> bool:
+        """
+        Executes one full self-analysis cycle with improved visibility.
+
+        Returns:
+            bool: True if a new code suggestion was successfully generated and saved,
+                False otherwise.
+        """
         suggestion_file = Path("code_suggestion.json")
         if suggestion_file.exists() and suggestion_file.stat().st_size > 0:
             logger.info(
-                "[Metacognition]: Skipping cycle: pending suggestion exists at '%s'. Remove or archive this file to resume cycles.",
+                "[Metacognition]: Skipping cycle: pending suggestion exists at '%s'.",
                 suggestion_file,
             )
-            return
+            return False
         if not self.analysis_bridge:
             logger.warning(
-                "[Metacognition]: Self-modification disabled (no Gemini key). To enable, set GEMINI_API_KEY."
+                "[Metacognition]: Self-modification disabled (no Gemini key)."
             )
-            return
+            return False
 
-        logger.info("=" * 80)
         logger.info("--- [METACOGNITIVE CYCLE STARTED (Verified Advisory Mode)] ---")
-        logger.info("=" * 80)
-
+        progress_made = False
         try:
             log_file = Path("axiom.log")
             if not log_file.exists():
-                logger.info(
-                    "[Metacognition]: No axiom.log found at %s. Nothing to do.",
-                    log_file,
-                )
-                return
+                logger.info("[Metacognition]: No axiom.log found. Nothing to do.")
+                return False
 
             target = self.performance_monitor.find_optimization_target(
                 log_file, self.code_introspector
             )
             if not target:
-                return
+                logger.info(
+                    "[Metacognition]: No optimization target found in current logs."
+                )
+                return False 
 
-            # 1. Get the tuple and unpack it immediately. We trust the type hint that it's always a tuple.
             file_path, problematic_code = self.code_introspector.get_function_source(
                 target.target_name
             )
-
-            # 2. Perform a simple, clear guard clause on each potentially None variable.
-            if file_path is None:
+            if file_path is None or problematic_code is None:
                 logger.error(
-                    f"[Metacognition]: Could not determine file path for target {target.target_name}"
+                    f"[Metacognition]: Could not extract source for {target.target_name}"
                 )
-                return
+                return False
 
-            if problematic_code is None:
-                logger.error(
-                    f"[Metacognition]: Could not extract source code for {target.target_name} in {file_path}"
-                )
-                return
-
-            # By this point, mypy is guaranteed that file_path is a Path and problematic_code is a str.
             suggested_code = self.analysis_bridge.get_code_suggestion(
                 problematic_code, target.issue_description, target.relevant_logs
             )
             if not suggested_code:
-                logger.error(
-                    "[Metacognition]: External analysis bridge returned no suggested code."
-                )
-                return
+                logger.error("[Metacognition]: Analysis bridge returned no suggestion.")
+                return False
 
             base_function_name = target.target_name.split(".")[-1]
             is_safe = self.sandbox_verifier.verify_change(
                 file_path, base_function_name, suggested_code
             )
             self._save_suggestion_report(target, suggested_code, is_safe)
+            progress_made = True
 
         except Exception as e:
             logger.error(
@@ -1127,7 +1114,8 @@ class MetacognitiveEngine:
                 e,
                 exc_info=True,
             )
+            progress_made = False
         finally:
-            logger.info("=" * 80)
             logger.info("--- [METACOGNITIVE CYCLE FINISHED] ---")
-            logger.info("=" * 80)
+
+        return progress_made

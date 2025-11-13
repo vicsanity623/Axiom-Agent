@@ -322,11 +322,9 @@ class CognitiveAgent:
 
         word_to_learn = sorted(set(unknown_words))[0]
 
-        # A high-priority investigation of a single word is a simple Task.
         new_task: Task = {"task": "INVESTIGATE", "topic": word_to_learn}
 
         if new_task not in self.high_priority_tasks:
-            # Insert the correctly typed 'new_task' into the list ---
             self.high_priority_tasks.insert(0, new_task)
             logger.info(
                 "  [Cognitive Reflex]: Found unknown word '%s'. Queued for high-priority study.",
@@ -1250,27 +1248,19 @@ class CognitiveAgent:
         Clean and normalize a phrase for use as a concept or relation in the graph.
         This version includes more robust and intelligent normalization.
         """
-        # 1. Start with basic cleaning of case, whitespace, and underscores.
         clean_phrase = phrase.lower().strip().replace("_", " ")
 
-        # 2. Remove content in parentheses.
+        clean_phrase = re.sub(r"[^a-z0-9\s-]", "", clean_phrase)
+
         clean_phrase = re.sub(r"\s*\([^)]*\)", "", clean_phrase).strip()
 
-        # 3. Handle possessive "'s" ONLY if it's at the very end of the phrase.
         if clean_phrase.endswith("'s"):
             clean_phrase = clean_phrase[:-2].strip()
 
-        # 4. Remove any trailing punctuation.
-        clean_phrase = re.sub(r"[.,!?;]+$", "", clean_phrase)
-
-        # 5. --- SMART ARTICLE STRIPPING ---
-        # Only strip leading articles if the phrase is simple (e.g., "a cat", "the sun").
-        # This prevents incorrect stripping from complex phrases like "a part of a whole".
         words = clean_phrase.split()
         if len(words) == 2 and words[0] in ("a", "an", "the"):
             clean_phrase = words[1]
 
-        # 6. Final cleanup of any extra internal whitespace.
         return " ".join(clean_phrase.split())
 
     def _extract_name_from_relation(
@@ -1309,7 +1299,6 @@ class CognitiveAgent:
         if self.inference_mode:
             return False, "Agent is in read-only mode."
 
-        # 1. Extract and clean all parts of the relation.
         subject_name_or_none = self._extract_name_from_relation(relation.get("subject"))
         object_name_or_none = self._extract_name_from_relation(relation.get("object"))
         verb_name_or_none = self._extract_name_from_relation(relation.get("verb"))
@@ -1333,13 +1322,10 @@ class CognitiveAgent:
 
         relation_type = self.get_relation_type(verb_name, subject_name, object_name)
 
-        # 2. --- CENTRALIZED NODE RESOLUTION ---
-        # Resolve the object node first. It's usually unambiguous.
         obj_node = self._add_or_update_concept(object_name)
         if not obj_node:
             return False, f"Failed to create concept for object: '{object_name}'."
 
-        # Now, resolve the subject node, providing context for disambiguation.
         sub_node = self._add_or_update_concept(
             subject_name,
             context_relation_type=relation_type,
@@ -1348,7 +1334,6 @@ class CognitiveAgent:
         if not sub_node:
             return False, f"Failed to create concept for subject: '{subject_name}'."
 
-        # 3. Now that we have the definitive nodes, proceed with logic.
         if relation_type in self._EXCLUSIVE_RELATIONS:
             was_learned, message = self._resolve_exclusive_conflict(
                 sub_node, obj_node, relation_type, relation, allow_unknowns_for_topic
@@ -1384,7 +1369,6 @@ class CognitiveAgent:
         if not node:
             return False
 
-        # Count incoming and outgoing edges
         edge_count = len(self.graph.get_edges_from_node(node.id)) + len(
             self.graph.get_edges_to_node(node.id)
         )
@@ -1451,7 +1435,6 @@ class CognitiveAgent:
         A simple wrapper that delegates fact addition to the knowledge_base,
         now using pre-resolved nodes.
         """
-        # --- Create the candidate_fact with the names from the resolved nodes ---
         candidate_fact = cast(
             "RelationData",
             {
@@ -1463,8 +1446,6 @@ class CognitiveAgent:
         properties = relation_data.get("properties")
         caller_name = f"{self.__class__.__name__}._add_new_fact"
 
-        # --- Pass the original, ambiguous subject name to the validation context ---
-        # This allows validate_and_add_relation to avoid deferring the fact.
         original_subject_name = self._extract_name_from_relation(
             relation_data.get("subject")
         )
@@ -1580,14 +1561,12 @@ class CognitiveAgent:
                 f"[cyan]   - Added new concept to graph: {clean_name} ({node.type})[/cyan]"
             )
 
-        # This is the original, simple logic for lexical promotion.
         if context_relation_type == "is a" and context_object_name in (
             "noun",
             "verb",
             "adjective",
         ):
             self.lexicon.promote_word(clean_name, context_object_name, confidence=0.8)
-            # Return the potentially updated node from the graph.
             return self.graph.get_node_by_id(node.id)
 
         return node

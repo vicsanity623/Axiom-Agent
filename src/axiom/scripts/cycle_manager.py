@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from apscheduler.schedulers.base import BaseScheduler
     from rich.console import Console
 
@@ -41,7 +43,7 @@ class CycleManager:
         self.REFINEMENT_PHASE_DURATION = timedelta(minutes=10)
         self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
 
-        self.CYCLE_DELAY_SECONDS = 60
+        self.CYCLE_DELAY_SECONDS = 300
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
 
@@ -60,85 +62,49 @@ class CycleManager:
             self._manage_phases, "interval", minutes=1, id="cycle_manager_job"
         )
 
-    def _run_study_cycle(self) -> None:
-        """Wrapper to run the study cycle and schedule the next one."""
-        with self.phase_lock:
-            try:
-                self.harvester.study_cycle()
-            finally:
-                if self.current_phase == "learning":
-                    next_run = datetime.now() + timedelta(
-                        seconds=self.CYCLE_DELAY_SECONDS
-                    )
-                    self.scheduler.add_job(
-                        self._run_study_cycle,
-                        "date",
-                        run_date=next_run,
-                        id="study_cycle_job",
-                        max_instances=1,
-                        misfire_grace_time=None,
-                    )
+    def _run_and_reschedule_cycle(
+        self,
+        cycle_func: Callable[..., bool],
+        job_id: str,
+        phase_name: str,
+        **kwargs: object,
+    ) -> None:
+        """
+        Generic wrapper to run a cycle function and reschedule it only if progress was made.
 
-    def _run_discover_cycle(self) -> None:
-        """Wrapper to run the discover cycle and schedule the next one."""
+        Args:
+            cycle_func: The function to execute (e.g., harvester.study_cycle).
+                        Must return True if progress was made, False otherwise.
+            job_id: The unique ID for the scheduler job.
+            phase_name: The name of the phase this job belongs to.
+            **kwargs: Arguments to pass to the cycle_func.
+        """
         with self.phase_lock:
+            progress_made = False
             try:
-                self.harvester.discover_cycle()
+                progress_made = cycle_func(**kwargs)
             finally:
-                if self.current_phase == "discovery":
+                if self.current_phase == phase_name and progress_made:
                     next_run = datetime.now() + timedelta(
                         seconds=self.CYCLE_DELAY_SECONDS
                     )
                     self.scheduler.add_job(
-                        self._run_discover_cycle,
+                        self._run_and_reschedule_cycle,
                         "date",
                         run_date=next_run,
-                        id="discover_cycle_job",
+                        id=job_id,
+                        args=[cycle_func, job_id, phase_name],
+                        kwargs=kwargs,
                         max_instances=1,
                         misfire_grace_time=None,
                     )
-
-    def _run_refinement_cycle(self) -> None:
-        """Wrapper to run the refinement cycle and schedule the next one."""
-        with self.phase_lock:
-            try:
-                self.harvester.refinement_cycle()
-            finally:
-                if self.current_phase == "refinement":
-                    next_run = datetime.now() + timedelta(
-                        seconds=self.CYCLE_DELAY_SECONDS
-                    )
-                    self.scheduler.add_job(
-                        self._run_refinement_cycle,
-                        "date",
-                        run_date=next_run,
-                        id="refinement_cycle_job",
-                        max_instances=1,
-                        misfire_grace_time=None,
-                    )
-
-    def _run_metacognitive_cycle(self) -> None:
-        """Wrapper to run the metacognitive cycle and schedule the next one."""
-        with self.phase_lock:
-            try:
-                self.metacognitive_engine.run_introspection_cycle()
-            finally:
-                if self.current_phase == "metacognitive":
-                    next_run = datetime.now() + timedelta(
-                        seconds=self.CYCLE_DELAY_SECONDS
-                    )
-                    self.scheduler.add_job(
-                        self._run_metacognitive_cycle,
-                        "date",
-                        run_date=next_run,
-                        id="metacognitive_cycle_job",
-                        max_instances=1,
-                        misfire_grace_time=None,
+                elif not progress_made:
+                    logger.warning(
+                        f"Cycle '{job_id}' reported no progress. Pausing execution until next phase."
                     )
 
     def _start_learning_phase(self) -> None:
         """Start the Learning Phase by scheduling the first study cycle."""
-
         hours = self.LEARNING_PHASE_DURATION.total_seconds() / 3600
         self.console.rule(
             f"[bold cyan]Starting {hours:.1f}-hour LEARNING phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold cyan]",
@@ -147,11 +113,15 @@ class CycleManager:
         self._clear_all_jobs()
         self.current_phase = "learning"
         self.phase_start_time = datetime.now()
+        phase_end_time = self.phase_start_time + self.LEARNING_PHASE_DURATION
+
         self.scheduler.add_job(
-            self._run_study_cycle,
+            self._run_and_reschedule_cycle,
             "date",
             run_date=datetime.now(),
             id="study_cycle_job",
+            args=[self.harvester.study_cycle, "study_cycle_job", "learning"],
+            kwargs={"phase_end_time": phase_end_time},
             max_instances=1,
         )
 
@@ -166,10 +136,11 @@ class CycleManager:
         self.current_phase = "discovery"
         self.phase_start_time = datetime.now()
         self.scheduler.add_job(
-            self._run_discover_cycle,
+            self._run_and_reschedule_cycle,
             "date",
             run_date=datetime.now(),
             id="discover_cycle_job",
+            args=[self.harvester.discover_cycle, "discover_cycle_job", "discovery"],
             max_instances=1,
         )
 
@@ -184,10 +155,15 @@ class CycleManager:
         self.current_phase = "refinement"
         self.phase_start_time = datetime.now()
         self.scheduler.add_job(
-            self._run_refinement_cycle,
+            self._run_and_reschedule_cycle,
             "date",
             run_date=datetime.now(),
             id="refinement_cycle_job",
+            args=[
+                self.harvester.refinement_cycle,
+                "refinement_cycle_job",
+                "refinement",
+            ],
             max_instances=1,
         )
 
@@ -202,10 +178,15 @@ class CycleManager:
         self.current_phase = "metacognitive"
         self.phase_start_time = datetime.now()
         self.scheduler.add_job(
-            self._run_metacognitive_cycle,
+            self._run_and_reschedule_cycle,
             "date",
             run_date=datetime.now(),
             id="metacognitive_cycle_job",
+            args=[
+                self.metacognitive_engine.run_introspection_cycle,
+                "metacognitive_cycle_job",
+                "metacognitive",
+            ],
             max_instances=1,
         )
 

@@ -65,28 +65,28 @@ def _generate_or_set_initial_goal(
     while True:
         creative_seeds = [
             # --- Kindergarten Level: The Concrete World ---
-            "Learn about the world of animals. Start by identifying common pets like 'dogs' and 'cats.' Then, explore farm animals like 'cows' and 'chickens.' Finally, learn about wild animals found in a 'forest' or 'jungle.'",
-            "Explore the colors of the rainbow. Learn to identify basic colors like 'red,' 'blue,' and 'yellow.' Then, understand how they combine to make 'green,' 'orange,' and 'purple.'",
-            "Understand basic shapes. Start with simple shapes like a 'circle,' 'square,' and 'triangle.' Then, learn to identify these shapes in everyday objects like a 'wheel' or a 'house.'",
-            "Learn about the family. Understand the roles of a 'mother,' 'father,' 'brother,' and 'sister.' Explore the concept of a 'home' as a place where a family lives.",
-            "Discover the five senses. Learn about 'sight' (eyes), 'hearing' (ears), 'smell' (nose), 'taste' (tongue), and 'touch' (skin) and what they are used for.",
+            "Learn about the world of animals.' Start by identifying common pets like 'dogs' and 'cats.' Then, explore farm animals like 'cows' and 'chickens.' Finally, learn about wild animals found in a 'forest' or 'jungle.'",
+            "Explore the colors of the rainbow.' Learn to identify basic colors like 'red', 'blue', and 'yellow.' Then, understand how they combine to make 'green', 'orange', and 'purple.'",
+            "Understand basic shapes.' Start with simple shapes like a 'circle', 'square', and 'triangle.' Then, learn to identify these shapes in everyday objects like a 'wheel' or a 'house.'",
+            "Learn about the family.' Understand the roles of a 'mother', 'father', 'brother', and 'sister.' Explore the concept of a 'home' as a place where a family lives.",
+            "Discover the five senses.' Learn about 'sight' (eyes), 'hearing' (ears), 'smell' (nose), 'taste' (tongue), and 'touch' (skin) and what they are used for.",
             # --- Elementary School Level: Building Foundational Knowledge ---
-            "Build a model of the natural world. Start with the basic elements: 'land,' 'water,' and 'air.' Then, learn about the 'sun,' 'moon,' and 'stars.' Finally, explore weather concepts like 'rain' and 'snow.'",
-            "Understand basic biology. Learn what makes something 'living' versus 'non-living.' Explore the life cycle of a 'plant,' from a 'seed' to a 'flower.' Learn about the basic needs of living things: 'food,' 'water,' and 'air.'",
-            "Explore the community. Learn about different jobs people have, like a 'doctor,' 'teacher,' and 'firefighter.' Understand the purpose of important places in a town, like a 'school,' 'hospital,' and 'store.'",
-            "Learn about basic physics through everyday objects. Understand concepts like 'gravity' (things fall down), 'force' (pushing and pulling), and the states of matter ('solid,' 'liquid,' 'gas').",
-            "Build a simple timeline of history. Start with the concept of the 'past,' 'present,' and 'future.' Learn about major historical eras like the 'dinosaurs,' 'ancient civilizations,' and the 'space age.'",
+            "Build a model of the natural world.' Start with the basic elements: 'land', 'water', and 'air.' Then, learn about the 'sun', 'moon', and 'stars.' Finally, explore weather concepts like 'rain' and 'snow.'",
+            "Understand basic biology.' Learn what makes something 'living' versus 'non-living.' Explore the life cycle of a 'plant', from a 'seed' to a 'flower.' Learn about the basic needs of living things: 'food', 'water', and 'air.'",
+            "Explore the community.' Learn about different jobs people have, like a 'doctor', 'teacher', and 'firefighter.' Understand the purpose of important places in a town, like a 'school', 'hospital', and 'store.'",
+            "Learn about basic physics through everyday objects.' Understand concepts like 'gravity' (things fall down), 'force' (pushing and pulling), and the states of matter ('solid', 'liquid', 'gas').",
+            "Build a simple timeline of history.' Start with the concept of the 'past', 'present', and 'future.' Learn about major historical eras like the 'dinosaurs', 'ancient civilizations', and the 'space age.'",
             # --- Middle School Level: Systems and Processes ---
-            "Construct a model of the solar system. Learn the names of the planets and their order from the 'sun.' Understand the difference between a 'planet,' a 'moon,' and a 'star.'",
-            "Investigate the Earth's ecosystems. Learn about different biomes like the 'ocean,' 'desert,' and 'rainforest.' Understand the concept of a 'food chain' and the roles of 'producers,' 'consumers,' and 'decomposers.'",
-            "Explore the fundamentals of government. Learn about the difference between a 'city,' 'state,' and 'country.' Understand basic concepts like 'laws,' 'leaders,' and 'citizens.'",
-            "Understand the basics of economics. Learn about 'money,' 'goods,' and 'services.' Explore the concepts of 'buying,' 'selling,' and 'jobs.'",
-            "Learn about the human body. Identify major organ systems like the 'skeletal system' (bones), 'circulatory system' (heart and blood), and 'respiratory system' (lungs and breathing).",
+            "Construct a model of the solar system.' Learn the names of the planets and their order from the 'sun.' Understand the difference between a 'planet', a 'moon', and a 'star.'",
+            "Investigate the Earth’s ecosystems.' Learn about different biomes like the 'ocean', 'desert', and 'rainforest.' Understand the concept of a 'food chain' and the roles of 'producers', 'consumers', and 'decomposers.'",
+            "Explore the fundamentals of government.' Learn about the difference between a 'city', 'state', and 'country.' Understand basic concepts like 'laws', 'leaders', and 'citizens.'",
+            "Understand the basics of economics.' Learn about 'money', 'goods', and 'services'. Explore the concepts of 'buying', 'selling', and 'jobs'.",
+            "Learn about the human body.' Identify major organ systems like the 'skeletal system' (bones), 'circulatory system' (heart and blood), and 'respiratory system' (lungs and breathing).",
             # --- High School Level: Abstract and Complex Systems ---
-            "Build a foundational understanding of chemistry. Learn about 'atoms' and 'molecules.' Understand the difference between 'elements' and 'compounds.' Explore simple chemical reactions like 'rusting' or 'burning.'",
-            "Investigate the principles of electricity. Learn about 'circuits,' 'batteries,' and 'current.' Understand the difference between 'conductors' and 'insulators.'",
-            "Explore the digital world. Learn about the basic components of a 'computer,' such as the 'CPU,' 'memory,' and 'storage.' Understand the concepts of 'software,' 'hardware,' and the 'internet.'",
-            "Understand the fundamentals of light and sound. Learn that both are forms of 'energy' that travel in 'waves.' Explore properties like 'color,' 'pitch,' and 'volume.'",
+            "Build a foundational understanding of chemistry.' Learn about 'atoms' and 'molecules.' Understand the difference between 'elements' and 'compounds.' Explore simple chemical reactions like 'rusting' or 'burning.'",
+            "Investigate the principles of electricity.' Learn about 'circuits', 'batteries', and 'current.' Understand the difference between 'conductors' and 'insulators.'",
+            "Explore the digital world.' Learn about the basic components of a 'computer', such as the 'CPU', 'memory', and 'storage.' Understand the concepts of 'software', 'hardware', and the 'internet.'",
+            "Understand the fundamentals of light and sound.' Learn that both are forms of 'energy' that travel in 'waves.' Explore properties like 'color', 'pitch', and 'volume.'",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(
