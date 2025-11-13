@@ -567,7 +567,7 @@ class UniversalInterpreter:
     ) -> list[RelationData]:
         """
         Uses the LLM to decompose a sentence into a list of atomic relations,
-        now with robust, recursive validation to handle deeply nested object structures.
+        now with robust validation and input sanitization.
         """
         caller_name = f"{self.__class__.__name__}.decompose_sentence_to_relations"
         if self.llm is None:
@@ -577,6 +577,8 @@ class UniversalInterpreter:
         logger.info(
             "[purple]   - [Interpreter]: Decomposing sentence into atomic facts...[/purple]"
         )
+
+        sanitized_text = text.replace("\\", "\\\\").replace('"', '\\"')
 
         topic_context = (
             f"The primary topic of this sentence is '{main_topic}'. "
@@ -604,7 +606,7 @@ class UniversalInterpreter:
         ]
 
         **SENTENCE TO ANALYZE:**
-        "{text}"
+        "{sanitized_text}"
 
         **RULES (MANDATORY):**
         1.  Your entire response MUST be ONLY the JSON list.

@@ -170,6 +170,10 @@ class KnowledgeHarvester:
                 part_of_speech, definition = api_result
                 was_learned = False
                 with self.lock:
+                    self.agent.lexicon.promote_word(
+                        term_to_learn, part_of_speech, confidence=0.9, quiet=True
+                    )
+
                     pos_relation: RelationData = {
                         "subject": term_to_learn,
                         "verb": "is_a",
@@ -210,6 +214,10 @@ class KnowledgeHarvester:
                 _source, web_fact = result
                 with self.lock:
                     if self.agent.learn_new_fact_autonomously(web_fact, term_to_learn):
+                        self.agent.lexicon.promote_word(
+                            term_to_learn, "noun", confidence=0.7, quiet=True
+                        )
+
                         logger.info(
                             f"[green]   - Agent successfully learned '{term_to_learn}' from web.[/green]"
                         )

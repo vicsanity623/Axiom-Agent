@@ -57,6 +57,7 @@ code_suggestion.json
 extract_suggestion.py
 code.py
 savedfacts.txt
+show_structure.py
 
 # -----------------------------------------------------------------------------
 # System & Editor Files

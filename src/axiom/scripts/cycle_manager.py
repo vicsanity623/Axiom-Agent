@@ -43,7 +43,7 @@ class CycleManager:
         self.REFINEMENT_PHASE_DURATION = timedelta(minutes=10)
         self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
 
-        self.CYCLE_DELAY_SECONDS = 300
+        self.CYCLE_DELAY_SECONDS = 120
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
 

@@ -1246,11 +1246,28 @@ class CognitiveAgent:
     def _clean_phrase(self, phrase: str) -> str:
         """
         Clean and normalize a phrase for use as a concept or relation in the graph.
-        This version includes more robust and intelligent normalization.
+        This version now includes number-to-word conversion.
         """
+        digit_map = {
+            "0": "zero",
+            "1": "one",
+            "2": "two",
+            "3": "three",
+            "4": "four",
+            "5": "five",
+            "6": "six",
+            "7": "seven",
+            "8": "eight",
+            "9": "nine",
+        }
+
         clean_phrase = phrase.lower().strip().replace("_", " ")
 
         clean_phrase = re.sub(r"[^a-z0-9\s-]", "", clean_phrase)
+
+        words = clean_phrase.split()
+        normalized_words = [digit_map.get(word, word) for word in words]
+        clean_phrase = " ".join(normalized_words)
 
         clean_phrase = re.sub(r"\s*\([^)]*\)", "", clean_phrase).strip()
 
