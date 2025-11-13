@@ -1083,7 +1083,7 @@ class MetacognitiveEngine:
                 logger.info(
                     "[Metacognition]: No optimization target found in current logs."
                 )
-                return False 
+                return False
 
             file_path, problematic_code = self.code_introspector.get_function_source(
                 target.target_name

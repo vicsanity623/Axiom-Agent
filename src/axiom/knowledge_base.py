@@ -965,7 +965,6 @@ def validate_and_add_relation(
             add_pending_relation(agent, relation, props, list(clean_unknown_words))
             return "deferred"
 
-
     sub_node = agent._add_or_update_concept(subject_name)
     obj_node = agent._add_or_update_concept(object_name)
 
