@@ -122,7 +122,7 @@ def _generate_or_set_initial_goal(
             filtered_sub_goals = [
                 sg
                 for sg in original_sub_goals
-                if not agent.is_concept_well_known(
+                if not agent.conversation_manager.is_concept_well_known(
                     str(sg).replace("INVESTIGATE:", "").strip()
                 )
             ]

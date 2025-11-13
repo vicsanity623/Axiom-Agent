@@ -400,7 +400,6 @@ ALL_KNOWLEDGE = [
 def initialize_linguistic_resources():
     """
     Check for and download required NLTK data packages.
-    This function should be called once at application startup, after logging is configured.
     """
     try:
         nltk.data.find("taggers/averaged_perceptron_tagger")
@@ -438,12 +437,8 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         file=tqdm_out,
         mininterval=1,
     ):
-        agent_instance.manual_add_knowledge_quietly(
-            subject,
-            s_type,
-            relation,
-            obj,
-            weight,
+        agent_instance.knowledge_manager.manual_add_knowledge_quietly(
+            subject, s_type, relation, obj, weight
         )
 
     logger.info("     - Integrating WordNet definitions for seeded concepts...")
@@ -466,8 +461,10 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
             if word_info["hypernyms_raw"]:
                 main_node = agent_instance.graph.get_node_by_name(word)
                 for hypernym_word in word_info["hypernyms_raw"][:1]:
-                    hypernym_node = agent_instance._add_or_update_concept_quietly(
-                        hypernym_word,
+                    hypernym_node = (
+                        agent_instance.knowledge_manager._add_or_update_concept_quietly(
+                            hypernym_word,
+                        )
                     )
                     if main_node and hypernym_node and main_node.id != hypernym_node.id:
                         agent_instance.graph.add_edge(
@@ -779,19 +776,16 @@ def promote_word(
     quiet: bool = False,
 ) -> None:
     """
-    Directly promotes a word to a given part of speech by updating its
-    node properties in the graph. This is the final step in lexical learning.
+    Directly promotes a word to a given part of speech.
     """
     node = agent_instance.graph.get_node_by_name(word)
     if not node:
         return
 
     props = agent_instance.graph.graph.nodes[node.id].setdefault("properties", {})
-
     promoted_as = props.setdefault("lexical_promoted_as", {})
     if isinstance(promoted_as, dict):
         promoted_as[pos] = confidence
-
     props.pop("lexical_observations", None)
 
     if not quiet:
@@ -810,26 +804,22 @@ def record_lexical_observation(
     confidence: float = 0.5,
 ) -> None:
     """
-    Record a single POS observation for a `word`. This accumulates votes
-    in the node's properties under `lexical_observations`.
+    Record a single POS observation for a `word`.
     """
     if not word:
         return
     word = word.lower().strip()
     node = agent_instance.graph.get_node_by_name(word)
     if not node:
-        node = agent_instance._add_or_update_concept_quietly(word)
-
+        node = agent_instance.knowledge_manager._add_or_update_concept_quietly(word)
     if not node:
         return
 
     props = agent_instance.graph.graph.nodes[node.id].setdefault("properties", {})
     obs = props.setdefault("lexical_observations", {"votes": {}, "total": 0.0})
-
     votes = obs["votes"]
     votes[observed_pos] = float(votes.get(observed_pos, 0.0)) + float(confidence)
     obs["total"] = float(obs.get("total", 0.0)) + float(confidence)
-
     try_promote_lexicon(agent_instance, word)
 
 
@@ -840,8 +830,6 @@ def try_promote_lexicon(
 ) -> bool:
     """
     Promote the token to a stable lexicon POS once the top POS crosses the threshold.
-
-    Creates an `is_a` edge word -> POS with properties marking provenance.
     """
     if not word:
         return False
@@ -868,12 +856,12 @@ def try_promote_lexicon(
     frac = top_score / total if total > 0 else 0.0
     if frac >= threshold:
         promote_word(agent_instance, word, top_pos, float(frac))
-
         node = agent_instance.graph.get_node_by_name(word)
-        pos_node = agent_instance._add_or_update_concept_quietly(top_pos)
+        pos_node = agent_instance.knowledge_manager._add_or_update_concept_quietly(
+            top_pos
+        )
         if node and pos_node:
             agent_instance.graph.add_edge(node, pos_node, "is_a", float(frac))
-
         return True
     return False
 
@@ -945,13 +933,11 @@ def validate_and_add_relation(
             unknown_words,
             final_caller_name,
         )
-
         clean_unknown_words = set()
         for word in unknown_words:
             clean_word = agent._clean_phrase(word)
             if clean_word:
                 clean_unknown_words.add(clean_word)
-
         for clean_word in clean_unknown_words:
             goal = Task(
                 task="INVESTIGATE",
@@ -960,13 +946,12 @@ def validate_and_add_relation(
             )
             if goal not in agent.high_priority_tasks:
                 agent.high_priority_tasks.insert(0, goal)
-
         if clean_unknown_words:
             add_pending_relation(agent, relation, props, list(clean_unknown_words))
             return "deferred"
 
-    sub_node = agent._add_or_update_concept(subject_name)
-    obj_node = agent._add_or_update_concept(object_name)
+    sub_node = agent.knowledge_manager._add_or_update_concept(subject_name)
+    obj_node = agent.knowledge_manager._add_or_update_concept(object_name)
 
     if not (sub_node and obj_node):
         return "error_creating_nodes"
@@ -974,7 +959,6 @@ def validate_and_add_relation(
     new_conf = float(props.get("confidence", 0.95))
     new_neg = bool(props.get("negated", False))
     new_provenance = str(props.get("provenance", "user"))
-
     new_props: PropertyData = {
         "negated": new_neg,
         "provenance": new_provenance,
@@ -993,24 +977,18 @@ def validate_and_add_relation(
         e = existing_edges[0]
         existing_conf = float(e.properties.get("confidence", e.weight))
         existing_neg = bool(e.properties.get("negated", False))
-
         if existing_neg != new_neg:
             if new_conf > existing_conf + 0.2:
                 agent.graph.update_edge_properties(
                     e, cast("dict[str, object]", new_props)
                 )
                 return "replaced"
-
             contradiction_props = new_props.copy()
             contradiction_props["contradicted"] = True
             contradiction_props["confidence"] = max(0.05, new_conf * 0.5)
             agent.graph.add_edge(
-                sub_node,
-                obj_node,
-                relation_type,
-                properties=contradiction_props,
+                sub_node, obj_node, relation_type, properties=contradiction_props
             )
-
             clarify_goal = f"CLARIFY: {subject_name} {relation_type} {object_name}"
             if clarify_goal not in agent.learning_goals:
                 agent.learning_goals.insert(0, clarify_goal)
@@ -1019,7 +997,6 @@ def validate_and_add_relation(
                     clarify_goal,
                 )
             return "contradiction_stored"
-
         merged_conf = max(existing_conf, new_conf)
         update_props = new_props.copy()
         update_props["confidence"] = merged_conf
@@ -1027,10 +1004,6 @@ def validate_and_add_relation(
         return "inserted"
 
     agent.graph.add_edge(
-        sub_node,
-        obj_node,
-        relation_type,
-        new_conf,
-        properties=new_props,
+        sub_node, obj_node, relation_type, new_conf, properties=new_props
     )
     return "inserted"

@@ -118,7 +118,6 @@ def status() -> Response:
 
 @app.route("/chat", methods=["POST"])
 def chat() -> Response | tuple[Response, int]:
-    """Handle an incoming user message and return the agent's response."""
     start_time = time.time()
     while agent_status != "ready":
         if agent_status.startswith("error"):
@@ -127,20 +126,24 @@ def chat() -> Response | tuple[Response, int]:
             return jsonify({"error": "Agent is taking too long to initialize."}), 503
         time.sleep(1)
 
-    if request.json is None:
+    if request.content_type != "application/json":
+        return jsonify({"error": "Unsupported Media Type"}), 415
+
+    payload = request.get_json(silent=True)
+    if payload is None:
         return jsonify({"error": "Request must be a JSON"}), 400
 
     if axiom_agent is None:
         return jsonify({"error": "Agent is not available."}), 503
 
-    user_message = request.json.get("message")
+    user_message = payload.get("message")
     if not user_message:
         return jsonify({"error": "No message provided"}), 400
 
     try:
         with agent_interaction_lock:
             logger.debug("  [Lock]: User chat acquired lock.")
-            agent_response = axiom_agent.chat(user_message)
+            agent_response = axiom_agent.conversation_manager.chat(user_message)
         logger.debug("  [Lock]: User chat released lock.")
         return jsonify({"response": agent_response})
     except Exception as e:

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from .universal_interpreter import PropertyData
 
 if TYPE_CHECKING:
-    from axiom.cognitive_agent import CognitiveAgent
+    from .cognitive_agent import CognitiveAgent
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,6 @@ class LexiconManager:
     def is_part_of_speech(self, word: str, pos: str) -> bool:
         """
         Check if a word has been promoted as a specific part of speech.
-        This provides a clean, boolean API for other modules.
         """
         promoted_parts = self.get_promoted_pos(word)
         return pos.lower() in promoted_parts
@@ -47,8 +46,12 @@ class LexiconManager:
         if not clean_word:
             return
 
-        word_node = self.agent._add_or_update_concept_quietly(clean_word)
-        pos_node = self.agent._add_or_update_concept_quietly(part_of_speech)
+        word_node = self.agent.knowledge_manager._add_or_update_concept_quietly(
+            clean_word
+        )
+        pos_node = self.agent.knowledge_manager._add_or_update_concept_quietly(
+            part_of_speech
+        )
 
         if word_node and pos_node:
             self.agent.graph.add_edge(
@@ -61,23 +64,23 @@ class LexiconManager:
             self.promote_word(clean_word, part_of_speech, confidence=0.95, quiet=True)
 
             if part_of_speech == "adjective":
-                property_node = self.agent._add_or_update_concept_quietly("property")
+                property_node = (
+                    self.agent.knowledge_manager._add_or_update_concept_quietly(
+                        "property"
+                    )
+                )
                 if property_node:
                     self.agent.graph.add_edge(
-                        pos_node,
-                        property_node,
-                        "is_a",
-                        weight=0.9,
+                        pos_node, property_node, "is_a", weight=0.9
                     )
 
         if definition:
-            def_node = self.agent._add_or_update_concept_quietly(definition)
+            def_node = self.agent.knowledge_manager._add_or_update_concept_quietly(
+                definition
+            )
             if word_node and def_node:
                 self.agent.graph.add_edge(
-                    word_node,
-                    def_node,
-                    "has_definition",
-                    weight=0.9,
+                    word_node, def_node, "has_definition", weight=0.9
                 )
 
     def observe_word_pos(self, word: str, pos: str, confidence: float = 0.5) -> None:
@@ -85,7 +88,7 @@ class LexiconManager:
         clean_word = self.agent._clean_phrase(word)
         if not clean_word:
             return
-        node = self.agent._add_or_update_concept_quietly(clean_word)
+        node = self.agent.knowledge_manager._add_or_update_concept_quietly(clean_word)
         if not node:
             return
 
@@ -131,7 +134,9 @@ class LexiconManager:
 
         node = self.agent.graph.get_node_by_name(clean_word)
         if not node:
-            node = self.agent._add_or_update_concept(clean_word, node_type=pos)
+            node = self.agent.knowledge_manager._add_or_update_concept(
+                clean_word, node_type=pos
+            )
             if not node:
                 if not quiet:
                     logger.warning(
@@ -197,7 +202,7 @@ class LexiconManager:
 
     def _promote_word_for_test(self, word: str, pos: str) -> None:
         """A helper method ONLY for tests to directly promote a word."""
-        node = self.agent._add_or_update_concept_quietly(word)
+        node = self.agent.knowledge_manager._add_or_update_concept_quietly(word)
         if not node:
             return
 

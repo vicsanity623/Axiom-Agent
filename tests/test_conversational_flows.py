@@ -43,7 +43,10 @@ def test_agent_handle_clarification_reinforces_and_punishes(
         lambda *args, **kwargs: mock_interpretation,
     )
 
-    response = agent._handle_clarification("Paris is the correct one")
+    # --- FIX: Point to the conversation_manager ---
+    response = agent.conversation_manager._handle_clarification(
+        "Paris is the correct one"
+    )
 
     assert agent.is_awaiting_clarification is False
     assert "Thank you for the clarification" in response
@@ -60,5 +63,3 @@ def test_agent_handle_clarification_reinforces_and_punishes(
 
     assert paris_edge_weight == 1.0, "The correct fact should have been reinforced."
     assert lyon_edge_weight == 0.1, "The incorrect fact should have been punished."
-
-    print("Agent correctly handled clarification, reinforcing and punishing facts.")
