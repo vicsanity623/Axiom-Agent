@@ -219,28 +219,35 @@ class KnowledgeHarvester:
         self._mark_as_researched(term_to_learn)
         return False
 
-    def _consolidate_pending_knowledge(self, newly_learned_words: list[str]) -> bool:
-        if not self.agent.pending_relations or not newly_learned_words:
+    def _consolidate_pending_knowledge(self) -> bool:
+        """
+        Performs a full re-evaluation of ALL deferred facts against the
+        agent's complete, current lexicon.
+        Returns True if any progress was made, False otherwise.
+        """
+        if not self.agent.pending_relations:
             return False
-        newly_learned_set = set(newly_learned_words)
-        relevant_words = newly_learned_set.intersection(
-            self.agent.pending_relations.keys()
-        )
-        if not relevant_words:
-            return False
-        logger.info(
-            f"   - Consolidating deferred facts for newly learned words: {sorted(relevant_words)}"
-        )
+
+        all_known_words = self.agent.graph.get_all_node_names()
+
         facts_to_reprocess = []
-        for word in relevant_words:
-            facts_for_word = self.agent.pending_relations.pop(word, [])
-            if facts_for_word:
-                logger.info(
-                    f"     - Re-evaluating {len(facts_for_word)} fact(s) blocked by '{word}'"
-                )
-                facts_to_reprocess.extend(facts_for_word)
+        words_to_clear = []
+
+        for blocker_word, facts in self.agent.pending_relations.items():
+            if blocker_word in all_known_words:
+                facts_to_reprocess.extend(facts)
+                words_to_clear.append(blocker_word)
+
         if not facts_to_reprocess:
             return False
+
+        logger.info(
+            f"   - Consolidating deferred facts unblocked by: {sorted(words_to_clear)}"
+        )
+
+        for word in words_to_clear:
+            self.agent.pending_relations.pop(word, None)
+
         processed_count = 0
         caller_name = f"{self.__class__.__name__}._consolidate_pending_knowledge"
         for relation, properties in facts_to_reprocess:
@@ -252,13 +259,19 @@ class KnowledgeHarvester:
             )
             if status != "deferred":
                 processed_count += 1
+
         if processed_count > 0:
             logger.info(
                 f"   - Successfully consolidated {processed_count} previously deferred facts."
             )
+
         return processed_count > 0
 
     def study_cycle(self, phase_end_time: datetime | None = None) -> bool:
+        """
+        Run one full, recursive study cycle until all possible knowledge is consolidated,
+        while respecting an optional phase end time.
+        """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
             f"[bold cyan]Study Cycle Started at {timestamp}[/bold cyan]", style="cyan"
@@ -313,16 +326,23 @@ class KnowledgeHarvester:
                 )
                 if self._deepen_knowledge_of_random_concept():
                     progress_made_in_cycle = True
+
             logger.info("   - Initiating iterative knowledge consolidation phase...")
             consolidation_made_progress = False
             with self.lock:
                 while self.agent.pending_relations:
                     num_pending_before = len(self.agent.pending_relations)
-                    all_known_concepts = self.agent.graph.get_all_node_names()
-                    self._consolidate_pending_knowledge(all_known_concepts)
+
+                    made_progress_this_pass = self._consolidate_pending_knowledge()
+
                     num_pending_after = len(self.agent.pending_relations)
-                    if num_pending_after >= num_pending_before:
+
+                    if (
+                        not made_progress_this_pass
+                        or num_pending_after >= num_pending_before
+                    ):
                         break
+
                     consolidation_made_progress = True
                     progress_made_in_cycle = True
 
@@ -362,11 +382,13 @@ class KnowledgeHarvester:
                     "   - Stalled on all available blockers. All have failed recently. Breaking cycle to prevent loop."
                 )
                 break
+
             if consolidation_made_progress:
                 logger.info("   - ✅ All pending knowledge successfully consolidated.")
                 if self._failed_tasks:
                     logger.info("      - Clearing recent task failure memory.")
                     self._failed_tasks.clear()
+
             logger.info("   - Study cycle iteration complete.")
             break
 

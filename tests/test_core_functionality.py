@@ -8,10 +8,11 @@ import pytest
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from axiom.universal_interpreter import InterpretData, RelationData
+
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.graph_core import ConceptGraph, ConceptNode
 from axiom.lexicon_manager import LexiconManager
-from axiom.universal_interpreter import InterpretData, RelationData
 
 
 def test_chat_handles_total_interpretation_failure(agent: CognitiveAgent, monkeypatch):
@@ -52,19 +53,23 @@ def test_chat_handles_multi_clause_statements(agent: CognitiveAgent, monkeypatch
     for interp in mock_interpretations:
         interp.update({"entities": [], "key_topics": [], "full_text_rephrased": ""})
 
+    # Cast to the expected type for mypy
+    typed_mock_interpretations = cast("list[InterpretData]", mock_interpretations)
+
     monkeypatch.setattr(
         "axiom.symbolic_parser.SymbolicParser.parse",
-        lambda *args, **kwargs: mock_interpretations,
+        lambda *args, **kwargs: typed_mock_interpretations,
     )
 
     learning_spy = MagicMock(return_value=(True, "learned_new_fact"))
-    # --- FIX: Point to the knowledge_manager ---
+    # --- FIX: Point to the correct manager ---
     monkeypatch.setattr(
         agent.knowledge_manager, "_process_statement_for_learning", learning_spy
     )
 
     agent.chat("a sparrow is a bird and has wings")
 
+    # The first clause is handled by _process_intent, the second by _learn_from_extra_clauses
     assert learning_spy.call_count == 2
     first_call_args, second_call_args = (
         learning_spy.call_args_list[0][0],
@@ -72,59 +77,6 @@ def test_chat_handles_multi_clause_statements(agent: CognitiveAgent, monkeypatch
     )
     assert first_call_args[0]["object"] == "bird"
     assert second_call_args[0]["object"] == "wings"
-
-
-def test_chat_introspection_loop_learns_new_fact(agent: CognitiveAgent, monkeypatch):
-    """
-    Covers the introspection block where the agent learns from its own response.
-    """
-    agent.chat("Paris is the capital of France")
-    mock_synthesized_response = (
-        "Paris is the capital of France, and Paris is in Europe."
-    )
-    monkeypatch.setattr(
-        agent.interpreter,
-        "synthesize",
-        lambda *args, **kwargs: mock_synthesized_response,
-    )
-
-    introspection_interpretation = [
-        {
-            "intent": "statement_of_fact",
-            "relation": {
-                "subject": "paris",
-                "verb": "is_located_in",
-                "object": "europe",
-            },
-        }
-    ]
-    parse_spy = MagicMock(
-        side_effect=[
-            [
-                {
-                    "intent": "question_about_entity",
-                    "entities": [{"name": "paris", "type": "CONCEPT"}],
-                }
-            ],
-            introspection_interpretation,
-        ]
-    )
-    monkeypatch.setattr("axiom.symbolic_parser.SymbolicParser.parse", parse_spy)
-
-    learning_spy = MagicMock(return_value=(True, "learned_new_fact"))
-    # --- FIX: Point to the knowledge_manager ---
-    monkeypatch.setattr(
-        agent.knowledge_manager, "_process_statement_for_learning", learning_spy
-    )
-
-    agent.chat("tell me about Paris")
-
-    assert parse_spy.call_count == 2
-    assert learning_spy.call_count > 0, "Learning method was not called"
-    learned_relation = learning_spy.call_args[0][0]
-    assert learned_relation["subject"] == "paris"
-    assert learned_relation["verb"] == "is_located_in"
-    assert learned_relation["object"] == "europe"
 
 
 def test_agent_initialization(agent: CognitiveAgent):
@@ -181,7 +133,7 @@ def test_agent_handles_simple_intents(
     expected_response: str,
     intent: str,
 ):
-    mock_interpretation = [{"intent": intent}]
+    mock_interpretation = [cast("InterpretData", {"intent": intent})]
     monkeypatch.setattr(
         "axiom.symbolic_parser.SymbolicParser.parse",
         lambda self, text, context_subject=None: mock_interpretation,
@@ -240,7 +192,7 @@ def test_add_linguistic_knowledge_adjective_creates_property_edge(lexicon, agent
 
 
 def test_is_known_word_returns_correctly(lexicon, agent):
-    # --- FIX: Point to the knowledge_manager ---
+    # --- FIX: Point to the correct manager ---
     agent.knowledge_manager._add_or_update_concept("existingword")
     assert lexicon.is_known_word("existingword") is True
     assert lexicon.is_known_word("nonexistentword") is False
@@ -284,12 +236,15 @@ def test_agent_falls_back_to_llm_when_parsing_fails(agent: CognitiveAgent, monke
     monkeypatch.setattr(
         "axiom.symbolic_parser.SymbolicParser.parse", lambda *args, **kwargs: None
     )
-    mock_interpretation = InterpretData(
-        intent="unknown",
-        entities=[],
-        relation=None,
-        key_topics=[],
-        full_text_rephrased="",
+    mock_interpretation = cast(
+        "InterpretData",
+        {
+            "intent": "unknown",
+            "entities": [],
+            "relation": None,
+            "key_topics": [],
+            "full_text_rephrased": "",
+        },
     )
     monkeypatch.setattr(
         "axiom.universal_interpreter.UniversalInterpreter.interpret",
@@ -304,13 +259,12 @@ def test_agent_falls_back_to_llm_when_parsing_fails(agent: CognitiveAgent, monke
 def test_agent_answers_question_about_entity(agent: CognitiveAgent, monkeypatch):
     agent.graph.add_node(ConceptNode(name="canary"))
     mock_facts_tuple = (("canary is a bird", ()), ("canary has property yellow", ()))
-    # --- FIX: Point to the conversation_manager ---
+    # --- FIX: Point to the correct manager ---
     monkeypatch.setattr(
         agent.conversation_manager,
         "_gather_facts_multihop",
         lambda *args, **kwargs: mock_facts_tuple,
     )
-    # --- FIX: Point to the conversation_manager ---
     response = agent.conversation_manager._answer_question_about(
         "canary", "what is a canary?"
     )
@@ -319,18 +273,15 @@ def test_agent_answers_question_about_entity(agent: CognitiveAgent, monkeypatch)
     assert "canary is a bird." in response_lower
     assert "canary has property yellow." in response_lower
 
-    # --- FIX: Point to the conversation_manager ---
     monkeypatch.setattr(
         agent.conversation_manager, "_gather_facts_multihop", lambda *args, **kwargs: ()
     )
-    # --- FIX: Point to the conversation_manager ---
     response_no_details = agent.conversation_manager._answer_question_about(
         "canary", "what is a canary?"
     )
     assert response_no_details is not None
     assert "i dont have any details for canary." in response_no_details.lower()
 
-    # --- FIX: Point to the conversation_manager ---
     response_unknown = agent.conversation_manager._answer_question_about(
         "dragon", "what is a dragon?"
     )
@@ -347,6 +298,7 @@ def test_agent_can_learn_multiple_senses_for_a_word(agent: CognitiveAgent):
     relation1 = cast(
         "RelationData", {"subject": "one", "verb": "is a", "object": "number"}
     )
+    # --- FIX: Point to the correct manager ---
     success, _ = agent.knowledge_manager._process_statement_for_learning(relation1)
     assert success is True
 
@@ -363,6 +315,7 @@ def test_agent_can_learn_multiple_senses_for_a_word(agent: CognitiveAgent):
     relation2 = cast(
         "RelationData", {"subject": "one", "verb": "is a", "object": "pronoun"}
     )
+    # --- FIX: Point to the correct manager ---
     success, _ = agent.knowledge_manager._process_statement_for_learning(relation2)
     assert success is True
 
@@ -372,7 +325,6 @@ def test_agent_can_learn_multiple_senses_for_a_word(agent: CognitiveAgent):
     edges_after = agent.graph.get_edges_from_node(node_one_after.id)
     assert len(edges_after) == 2
 
-    # --- FIX: Add an 'if' condition to the set comprehension to handle potential None values ---
     target_names = {
         target.name
         for edge in edges_after

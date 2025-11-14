@@ -481,7 +481,10 @@ class ConversationManager:
                 self._learn_from_extra_clauses(new_interpretations)
 
     def _resolve_references(self, text: str) -> str:
-        """Resolves simple pronouns by prioritizing nouns that appear *before* the pronoun."""
+        """
+        Resolves simple pronouns by prioritizing the nearest valid noun that appears
+        before the pronoun, ignoring common interrogative nouns.
+        """
         pronouns_to_resolve = {"it", "they", "its", "their", "them"}
         words = text.split()
         pronoun_found_at_index: int | None = None
@@ -489,19 +492,28 @@ class ConversationManager:
             if word.lower().strip(".,!?;") in pronouns_to_resolve:
                 pronoun_found_at_index = i
                 break
+
         if pronoun_found_at_index is None:
             return text
+
         antecedent: str | None = None
+
+        interrogative_nouns = {"color", "name", "type", "kind", "sort", "way", "reason"}
+
         if pronoun_found_at_index > 0:
             words_before_pronoun = words[:pronoun_found_at_index]
-            local_candidates = [
-                word.strip(".,!?;")
-                for word in reversed(words_before_pronoun)
-                if self.agent.lexicon.is_part_of_speech(word, "noun")
-            ]
-            if local_candidates:
-                antecedent = local_candidates[0]
-                logger.debug("[Coreference]: Found local antecedent: '%s'", antecedent)
+            for word in reversed(words_before_pronoun):
+                clean_word = word.strip(".,!?;")
+                if (
+                    self.agent.lexicon.is_part_of_speech(clean_word, "noun")
+                    and clean_word not in interrogative_nouns
+                ):
+                    antecedent = clean_word
+                    logger.debug(
+                        "[Coreference]: Found local antecedent: '%s'", antecedent
+                    )
+                    break
+
         if not antecedent:
             logger.debug("[Coreference]: No local antecedent found. Checking history.")
             antecedent_raw: str | dict[str, Any] | list | None = None
@@ -520,17 +532,24 @@ class ConversationManager:
                 antecedent = antecedent_raw
             elif isinstance(antecedent_raw, dict):
                 antecedent = antecedent_raw.get("name")
+
         if antecedent:
             clean_antecedent = self.agent._clean_phrase(antecedent)
             if not clean_antecedent:
                 return text
+
             modified_text = re.sub(
-                r"\b(it|they|them)\b", clean_antecedent, text, flags=re.IGNORECASE
+                r"\b(it|they|them)\b",
+                clean_antecedent,
+                text,
+                count=1,
+                flags=re.IGNORECASE,
             )
             modified_text = re.sub(
                 r"\b(its|their)\b",
                 f"{clean_antecedent}'s",
                 modified_text,
+                count=1,
                 flags=re.IGNORECASE,
             )
             if modified_text != text:
@@ -540,6 +559,7 @@ class ConversationManager:
                     modified_text,
                 )
                 return modified_text
+
         logger.debug("[Coreference]: No suitable antecedent found.")
         return text
 

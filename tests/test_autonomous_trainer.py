@@ -51,17 +51,29 @@ def mock_app_components(mocker, agent):
 
 def test_generate_goal_handles_failed_generation(mock_app_components):
     """
-    Tests that if the mock LLM fails, no goal is added.
-    We can achieve this by monkeypatching the mock interpreter for one test.
+    Tests that if the LLM fails to generate a creative curriculum (after the
+    foundational one is complete), no goal is added and an error is logged.
     """
     agent = mock_app_components["agent"]
     monkeypatch = pytest.MonkeyPatch()
+
+    # --- Phase 1: Simulate the foundational curriculum being complete ---
+    # We set the curriculum_index to a very high number to force the logic
+    # into the creative generation path.
+    agent.curriculum_index = 9999
+
+    # --- Phase 2: Simulate the LLM failing to generate a creative goal ---
+    # Now, we apply the monkeypatch to the synthesize method.
     monkeypatch.setattr(agent.interpreter, "synthesize", lambda *args, **kwargs: None)
 
+    # Call the function under test.
     _generate_or_set_initial_goal(agent, None)
 
+    # Assert that no new complex goal was created and an error was logged.
     assert agent.goal_manager.get_active_goal() is None
     mock_app_components["logger"].error.assert_called_once()
+
+    # It's good practice to undo the patch, although pytest handles this.
     monkeypatch.undo()
 
 

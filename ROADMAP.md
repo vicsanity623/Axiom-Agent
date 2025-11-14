@@ -60,10 +60,10 @@ Following this, the agent has now achieved a new level of intelligence in the **
 
 ### Key Features
 *   **Centralized & Robust Architecture:** Refactored the entire project to use a central `config.py` for all file paths.
-*   **LLM-Powered Fact Verification:** Implemented an LLM-driven "quality gate" (`verify_and_reframe_fact`) that critically evaluates facts found on the web, rejecting irrelevant information and simplifying good facts.
+*   **LLM-Powered Fact Verification:** Implemented an LLM-driven "quality gate" (`verify_and_reframe_fact`) that critically evaluates facts found on the web.
 *   **Intelligent Lexicon Promotion:** Created a formal "promotion" system for the lexicon, allowing the agent to distinguish between observing a word and trusting its definition.
-*   **Comprehensive Test Suite:** Achieved a fully passing, clean CI/CD pipeline (Ruff, MyPy, Pytest) to validate all cognitive behaviors.
-*   **Streamlined User Experience:** Refactored developer scripts into professional command-line entry points. (`axiom-train`, `axiom-webui`, `axiom-llm`). Axiom is uv ready check the **[CONTRIBUTING.md](CONTRIBUTING.md)** for quick start guide.
+*   **Comprehensive Test Suite:** Achieved a fully passing, clean CI/CD pipeline (Ruff, MyPy, Pytest).
+*   **Streamlined User Experience:** Refactored developer scripts into professional command-line entry points (`axiom-train`, `axiom-webui`, `axiom-llm`).
 
 ---
 
@@ -72,42 +72,52 @@ Following this, the agent has now achieved a new level of intelligence in the **
 **Goal:** Elevate the agent from a simple learner to a strategic, goal-oriented entity capable of introspection, self-correction, and persistent, stateful learning.
 
 ### Key Features
-*   **Hierarchical & Creative Goal Planning:** The `GoalManager` and `UniversalInterpreter` were upgraded to support randomized, creative curriculum generation. On each startup, the agent now generates a unique, multi-stage learning plan by injecting random "creative seeds" and "pedagogical styles" into its LLM prompts, ensuring novel learning paths.
-*   **Event-Driven Cognitive Cycles:** The `CycleManager` was re-architected from a static, interval-based timer to a responsive, event-driven model. A new cognitive cycle now begins a few seconds after the previous one completes, dramatically increasing the agent's operational tempo and eliminating idle time.
-*   **Intelligent Learning Filters:** The core learning pipeline (`_process_statement_for_learning`) was enhanced with a "triviality filter." Acting on the advice of the `MetacognitiveEngine`, the agent now uses fuzzy logic to detect and reject semantically useless facts (e.g., "a step is a step"), improving learning efficiency.
-*   **Hardened Refinement & Metacognition:**
-    *   The `Refinement Cycle` is now transactional, only deprecating "chunky" facts if their decomposition into new, atomic facts is successful. The heuristic for identifying chunky facts was also made more linguistically intelligent.
-    *   The `MetacognitiveEngine`'s prioritization logic was fixed. It no longer gets "stuck" on low-priority events and now correctly prioritizes critical errors (tracebacks) over other anomalies, enabling it to discover a wider range of potential self-improvements.
-*   **Robust Development Environment:** The project's dependency management was hardened by resolving C-extension build failures (`blis`), correcting environment setup (`uv`), and creating a high-coverage End-to-End test to validate the entire `axiom-train` lifecycle.
+*   **Hierarchical & Creative Goal Planning:** The `GoalManager` and `UniversalInterpreter` were upgraded to support randomized, creative curriculum generation.
+*   **Event-Driven Cognitive Cycles:** The `CycleManager` was re-architected from a static timer to a responsive, event-driven model, dramatically increasing the agent's operational tempo.
+*   **Intelligent Learning Filters:** The core learning pipeline was enhanced with a "triviality filter" to reject semantically useless facts.
+*   **Hardened Refinement & Metacognition:** The `Refinement Cycle` was made transactional, and the `MetacognitiveEngine`'s prioritization logic was fixed.
+*   **Robust Development Environment:** The project's dependency management was hardened, and a high-coverage End-to-End test was created to validate the entire `axiom-train` lifecycle.
 
 ---
 
-# Phase 5 — Semantic Mastery
+# Phase 5 — Foundational Bootstrapping & Belief Systems (COMPLETE)
+
+**Goal:** Dramatically accelerate the agent's initial learning, establish a robust belief system, and handle linguistic ambiguity.
+
+### Key Features
+*   **Recursive Self-Unblocking Study Cycle:** The `study_cycle` was re-architected into a powerful, recursive loop. It can now autonomously identify its own knowledge gaps ("blockers") and create high-priority tasks to resolve them, allowing it to solve deep dependency chains in a single, persistent cycle.
+*   **Innate Foundational Knowledge:** The slow, active "foundational curriculum" was replaced with a much more efficient "innate" knowledge system. Hundreds of fundamental concepts are now pre-loaded directly into the `seed_core_vocabulary`, making the agent's bootstrapping process orders of magnitude faster.
+*   **Knowledge Provenance & Confidence:** The `PropertyData` structure and `validate_and_add_relation` function were enhanced to track the `provenance` (source) and `confidence` of every learned fact.
+*   **Belief Revision System:** A formal belief revision system was implemented. The `_resolve_exclusive_conflict` method now uses `PROVENANCE_RANK` to intelligently decide whether to accept a new fact, reject it, or ask for clarification, allowing the agent to update its beliefs based on more trustworthy information.
+
+---
+
+# Phase 6 — Semantic Mastery
 
 **Goal:** Deepen the agent's understanding of language nuance, context, and complex relationships.
 
 ### Key Features
-*   **Knowledge Provenance & Confidence Scoring:** Add metadata to all learned facts, tracking their source (`user`, `llm_verified`, `dictionary`), timestamp, and confidence score. This is a prerequisite for belief revision.
-*   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
-*   **Belief Revision System:** Implement a strategy for resolving conflicting facts. When a contradiction is found, the agent will use provenance and confidence scores to decide whether to update its belief, ask for clarification, or maintain both possibilities.
+*   **Homonym & Polysemy Disambiguation:** Enhance the `_add_or_update_concept` method and `ConceptGraph` to create and manage distinct "sense" nodes for words with multiple meanings (e.g., "one" the number vs. "one" the pronoun).
+*   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and the `ConceptGraph` to represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
 *   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly, making conversation feel more empathetic and natural.
+*   **Temporal Reasoning:** Upgrade the `_filter_facts_for_temporal_query` to handle a wider range of date/time formats and relative queries (e.g., "before 2020," "last year").
 
 ---
 
-# Phase 6 — The Logical Reasoner (Procedural Thought)
+# Phase 7 — The Logical Reasoner (Procedural Thought)
 
 **Goal:** Evolve beyond semantic knowledge to incorporate procedural and logical reasoning by introducing "Tools."
 
 ### Key Features
-*   *CAUTION- PROMPT INJECTION AND OTHER HIGH-SECURITY RISKS PROCEED WITH CAUTION:*
+*   **CAUTION: This phase introduces significant security risks (e.g., prompt injection, arbitrary code execution). Proceed with extreme caution and a focus on sandboxing.**
 *   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use. Each tool will be a specialized function for tasks the knowledge graph cannot perform.
-*   **Mathematical Capability (First Tool):A `MathTool` that integrates a symbolic math library like `SymPy`.
+*   **Mathematical Capability (First Tool):** A `MathTool` that integrates a symbolic math library like `SymPy`.
 *   **Real-Time Data (Second Tool):** A `WebSearchTool` and a `CurrentDateTool` to fetch live data from the internet.
 *   **Code Execution (Advanced Tool):** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
 
 ---
 
-# Phase 7 — The Autonomous Operator
+# Phase 8 — The Autonomous Operator
 
 **Goal:** Grant the agent the agency to act upon its own conclusions, evolving from a "Verified Advisor" to a "Human-in-the-Loop Operator."
 
@@ -119,7 +129,7 @@ Following this, the agent has now achieved a new level of intelligence in the **
 
 ---
 
-# Phase 8 — Distributed Mind
+# Phase 9 — Distributed Mind
 
 **Goal:** Prepare the agent for massive scalability and collaborative learning.
 
