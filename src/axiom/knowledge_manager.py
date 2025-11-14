@@ -25,6 +25,89 @@ class KnowledgeManager:
         """Initializes the KnowledgeManager with a reference to the main agent."""
         self.agent = agent
 
+    def get_or_create_concept(
+        self,
+        name: str,
+        node_type: str = "concept",
+        context_relation_type: str | None = None,
+        context_object_name: str | None = None,
+    ) -> ConceptNode | None:
+        """
+        Public API to find a concept by name or create it. This method handles
+        the full lifecycle, including homonym disambiguation.
+        """
+        return self._get_or_create_concept_node(
+            name, node_type, context_relation_type, context_object_name
+        )
+
+    def _get_or_create_concept_node(
+        self,
+        name: str,
+        node_type: str = "concept",
+        context_relation_type: str | None = None,
+        context_object_name: str | None = None,
+    ) -> ConceptNode | None:
+        """
+        Internal implementation for finding or creating a concept node, including
+        logic to handle homonyms by creating distinct "sense" nodes.
+        """
+        clean_name = self.agent._clean_phrase(name)
+        if not clean_name:
+            return None
+
+        existing_node = self.agent.graph.get_node_by_name(clean_name)
+
+        if not existing_node:
+            if " " in clean_name:
+                determined_type = "noun_phrase"
+            else:
+                word_info_list = get_word_info_from_wordnet(clean_name)
+                determined_type = (
+                    word_info_list[0].get("type", node_type)
+                    if word_info_list and isinstance(word_info_list[0], dict)
+                    else node_type
+                )
+            new_node_obj = ConceptNode(clean_name, node_type=determined_type)
+            node = self.agent.graph.add_node(new_node_obj)
+            logger.info(
+                f"[cyan]   - Added new concept to graph: {clean_name} ({node.type})[/cyan]"
+            )
+            return node
+
+        if not context_relation_type or not context_object_name:
+            return existing_node
+
+        if self.agent.graph.has_relationship(
+            existing_node, context_relation_type, context_object_name
+        ):
+            return existing_node
+
+        new_sense_name = f"{clean_name} ({context_object_name})"
+        logger.info(
+            f"   - Ambiguity detected for '{clean_name}'. Creating specific sense: '{new_sense_name}'"
+        )
+
+        existing_sense_node = self.agent.graph.get_node_by_name(new_sense_name)
+        if existing_sense_node:
+            return existing_sense_node
+
+        if " " in clean_name:
+            determined_type = "noun_phrase"
+        else:
+            word_info_list = get_word_info_from_wordnet(clean_name)
+            determined_type = (
+                word_info_list[0].get("type", node_type)
+                if word_info_list and isinstance(word_info_list[0], dict)
+                else node_type
+            )
+
+        new_node_obj = ConceptNode(new_sense_name, node_type=determined_type)
+        node = self.agent.graph.add_node(new_node_obj)
+        logger.info(
+            f"[cyan]   - Added new concept to graph: {new_sense_name} ({node.type})[/cyan]"
+        )
+        return node
+
     def _process_statement_for_learning(
         self,
         relation: RelationData,
@@ -212,6 +295,7 @@ class KnowledgeManager:
                 caller_name,
             )
             return False
+
         facts_learned_count = 0
         for relation_data in atomic_relations:
             props = relation_data.setdefault("properties", {})
@@ -223,15 +307,16 @@ class KnowledgeManager:
             )
             if success:
                 facts_learned_count += 1
+
         if facts_learned_count > 0:
             logger.info(
                 "[green]  [Autonomous Learning]: Successfully learned and saved %d new fact(s).[/green]",
                 facts_learned_count,
             )
             return True
-        logger.warning(
-            "[yellow]Failed to learn any new facts from the decomposed relations (e.g., trivial, invalid, not worthy).[/yellow] (in %s)",
-            caller_name,
+
+        logger.info(
+            "   - No new facts were learned from the decomposed relations (e.g., trivial, invalid)."
         )
         return False
 

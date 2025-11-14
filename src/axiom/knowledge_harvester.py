@@ -250,7 +250,17 @@ class KnowledgeHarvester:
 
         processed_count = 0
         caller_name = f"{self.__class__.__name__}._consolidate_pending_knowledge"
+
+        unique_fact_strings = set()
         for relation, properties in facts_to_reprocess:
+            fact_string = json.dumps((relation, properties), sort_keys=True)
+            unique_fact_strings.add(fact_string)
+
+        if not unique_fact_strings:
+            return False
+
+        for fact_string in unique_fact_strings:
+            relation, properties = json.loads(fact_string)
             status = validate_and_add_relation(
                 agent=self.agent,
                 relation=relation,
@@ -397,15 +407,24 @@ class KnowledgeHarvester:
         return progress_made_in_cycle
 
     def refinement_cycle(self) -> None:
+        """
+        Periodically reviews and improves the quality of the knowledge graph by
+        decomposing complex facts and promoting observed words in the lexicon.
+        """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
             f"[bold magenta]Refinement Cycle Started at {timestamp}[/bold magenta]",
             style="magenta",
         )
+
+        actions_taken = 0
+
         chunky_fact = None
         with self.lock:
             chunky_fact = self._find_chunky_fact()
+
         if chunky_fact:
+            actions_taken += 1
             source_node, target_node, edge = chunky_fact
             logger.info(
                 "  [Refinement]: Found a chunky fact to refine: '%s' --[%s]--> '%s'",
@@ -443,11 +462,23 @@ class KnowledgeHarvester:
                         "  [Refinement]: Failed to learn any new atomic facts from the decomposition."
                     )
         else:
-            caller_name = f"{self.__class__.__name__}._find_chunky_fact"
-            logger.warning(
-                f"[Refinement]: No chunky facts found for refinement this cycle. (in {caller_name})"
+            logger.info(
+                "[Refinement]: No chunky facts found for refinement this cycle."
             )
+
+        promoted_count = self.agent.lexicon.review_and_promote_observed_words()
+        if promoted_count > 0:
+            actions_taken += promoted_count
+
+        pruned_count = self.agent.lexicon.prune_low_confidence_observations()
+        if pruned_count > 0:
+            actions_taken += pruned_count
+
         self._prune_research_cache()
+
+        if actions_taken == 0:
+            logger.info("   - No refinement actions were necessary in this cycle.")
+
         self.console.rule(
             "[bold magenta]Refinement Cycle Complete.[/bold magenta]", style="magenta"
         )

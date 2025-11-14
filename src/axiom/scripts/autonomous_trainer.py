@@ -78,7 +78,7 @@ def _generate_or_set_initial_goal(
             "The concept of time: past, present, and future",
             # --- Middle School Level: Systems and Processes ---
             "The solar system and its planets",
-            "Earth's ecosystems and the food chain",
+            "Earth’s ecosystems and the food chain",
             "Fundamentals of government: cities, states, and countries",
             "Basic economics: money, goods, and services",
             "The major systems of the human body",

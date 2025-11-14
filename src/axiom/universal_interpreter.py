@@ -567,7 +567,7 @@ class UniversalInterpreter:
     ) -> list[RelationData]:
         """
         Uses the LLM to decompose a sentence into a list of atomic relations,
-        now with robust validation and input sanitization.
+        now with a hardened prompt to ensure literal, space-separated decomposition.
         """
         caller_name = f"{self.__class__.__name__}.decompose_sentence_to_relations"
         if self.llm is None:
@@ -588,12 +588,13 @@ class UniversalInterpreter:
         )
 
         prompt = f"""
-        **ROLE:** You are a silent, non-conversational knowledge engineering system.
+        **ROLE:** You are a silent, non-conversational, syntactic decomposition engine. Your ONLY task is to break down the given sentence into its core semantic components.
 
-        **TASK:** Analyze the user's sentence and break it down into a list of simple, atomic semantic relations.
+        **TASK:** Analyze the "SENTENCE TO ANALYZE" and extract a list of simple, atomic relations.
         - Each relation MUST be a JSON object: {{"subject": "...", "verb": "...", "object": "..."}}
-        - Subjects and objects should be simple concepts.
-        - Verbs should be concise, standardized predicates (e.g., "is_a", "has_property").
+        - The subjects, verbs, and objects you extract MUST come directly from the words and concepts present in the original sentence.
+        - Verbs should be concise, space-separated phrases (e.g., "is a", "has property", "causes"). DO NOT use snake_case.
+        - DO NOT infer or add external knowledge. Your task is to decompose, not to reason or enrich.
 
         **CONTEXT:** {topic_context}
 
@@ -601,8 +602,8 @@ class UniversalInterpreter:
         Sentence: "Photosynthesis is a process used by plants to convert light energy into chemical energy."
         Output:
         [
-          {{"subject": "photosynthesis", "verb": "is_a", "object": "process"}},
-          {{"subject": "photosynthesis", "verb": "is_used_by", "object": "plants"}}
+          {{"subject": "photosynthesis", "verb": "is a", "object": "process"}},
+          {{"subject": "photosynthesis", "verb": "is used by", "object": "plants"}}
         ]
 
         **SENTENCE TO ANALYZE:**

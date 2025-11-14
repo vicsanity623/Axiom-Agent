@@ -210,3 +210,70 @@ class LexiconManager:
         promoted_as = props.setdefault("lexical_promoted_as", {})
         if isinstance(promoted_as, dict):
             promoted_as[pos] = 1.0
+
+    def review_and_promote_observed_words(
+        self, promotion_threshold: float = 0.7
+    ) -> int:
+        """
+        Iterates through all nodes with lexical observations, calculates the most
+        likely part of speech, and promotes the word if confidence exceeds a threshold.
+        This is a key part of the Refinement Cycle.
+        """
+        promoted_count = 0
+        nodes_to_review = [
+            node_id
+            for node_id, data in self.agent.graph.graph.nodes(data=True)
+            if "lexical_observations" in data.get("properties", {})
+        ]
+
+        if not nodes_to_review:
+            return 0
+
+        logger.info(
+            "[Refinement]: Reviewing %d words for lexical promotion...",
+            len(nodes_to_review),
+        )
+
+        for node_id in nodes_to_review:
+            node = self.agent.graph.get_node_by_id(node_id)
+            if not node:
+                continue
+
+            props = self.agent.graph.graph.nodes[node.id].get("properties", {})
+            observations = props.get("lexical_observations")
+            if not isinstance(observations, dict):
+                continue
+
+            total_votes = 0
+            pos_scores: dict[str, float] = {}
+            for pos, confidences in observations.items():
+                if isinstance(confidences, list):
+                    score = sum(confidences)
+                    pos_scores[pos] = score
+                    total_votes += score
+
+            if not pos_scores or total_votes == 0:
+                continue
+
+            winner_pos = max(pos_scores, key=lambda pos: pos_scores[pos])
+            winner_score = pos_scores[winner_pos]
+            confidence = winner_score / total_votes
+
+            if confidence >= promotion_threshold:
+                logger.info(
+                    "   - Promoting '%s' to '%s' with confidence %.2f.",
+                    node.name,
+                    winner_pos,
+                    confidence,
+                )
+                self.promote_word(
+                    node.name, winner_pos, confidence=confidence, quiet=True
+                )
+                promoted_count += 1
+
+        if promoted_count > 0:
+            logger.info(
+                "[Refinement]: Promoted %d new words to the lexicon.", promoted_count
+            )
+
+        return promoted_count

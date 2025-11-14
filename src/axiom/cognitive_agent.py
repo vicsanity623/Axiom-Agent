@@ -1,8 +1,18 @@
+"""
+This module defines the core CognitiveAgent class.
+
+It integrates various components like the:
+knowledge graph, language parsers, and learning systems to enable complex behaviors such
+as conversation, autonomous learning, and self-reflection.
+"""
+
 from __future__ import annotations
 
+import importlib.resources
 import json
 import logging
 import re
+import shutil
 import threading
 from collections import defaultdict
 from typing import (
@@ -76,7 +86,6 @@ class CognitiveAgent:
         self.inference_mode = inference_mode
         self.interaction_lock = threading.Lock()
 
-        # Core Components & State
         self.graph: ConceptGraph
         self.interpreter: UniversalInterpreter
         self.lexicon: LexiconManager
@@ -103,7 +112,6 @@ class CognitiveAgent:
 
         self.brain_file.parent.mkdir(parents=True, exist_ok=True)
 
-        # Initialize Components
         self.interpreter = UniversalInterpreter(
             model_path=DEFAULT_LLM_PATH, load_llm=enable_llm
         )
@@ -113,16 +121,42 @@ class CognitiveAgent:
         if not self.inference_mode:
             self.harvester = KnowledgeHarvester(agent=self, lock=self.interaction_lock)
 
-        # Initialize Managers
         self.knowledge_manager = KnowledgeManager(self)
         self.conversation_manager = ConversationManager(self)
 
-        # Load Brain
         if load_from_file:
+            if not self.brain_file.exists():
+                logger.info(
+                    f"   - No user brain found at {self.brain_file}. Initializing from master template."
+                )
+                try:
+                    master_brain_ref = importlib.resources.files("axiom").joinpath(
+                        "static/master_brain.json"
+                    )
+
+                    if master_brain_ref.is_file():
+                        with importlib.resources.as_file(
+                            master_brain_ref
+                        ) as master_brain_path:
+                            shutil.copy(master_brain_path, self.brain_file)
+                        logger.info(
+                            "   - Successfully copied master brain to user directory."
+                        )
+                    else:
+                        logger.warning(
+                            "   - Master brain template not found. A fresh brain will be created and seeded."
+                        )
+
+                except Exception as e:
+                    logger.error(
+                        f"   - Failed to copy master brain. A fresh brain will be created. Error: {e}"
+                    )
+
             logger.info(
-                "[green]   - Loading brain from file: %s[/green]", self.brain_file
+                f"[green]   - Loading brain from file: {self.brain_file}[/green]"
             )
             self.graph = ConceptGraph.load_from_file(self.brain_file)
+
         elif brain_data is not None:
             logger.info("   - Initializing brain from provided data dictionary.")
             self.graph = ConceptGraph.load_from_dict(brain_data)
@@ -136,7 +170,6 @@ class CognitiveAgent:
                 "Agent must be initialized with either files or data if load_from_file is False."
             )
 
-        # Integrity Check and Seeding
         agent_node = self.graph.get_node_by_name("agent")
         has_name_edge = False
         if agent_node:
@@ -147,7 +180,7 @@ class CognitiveAgent:
 
         if not has_name_edge:
             logger.critical(
-                "[red]   - CRITICAL FAILURE: Missing identity, Re-seeding brain for integrity.[/red]"
+                "[red]   - ERROR: Brain is invalid or missing. Re-seeding.[/red]"
             )
             self.graph = ConceptGraph()
             seed_domain_knowledge(self)
@@ -166,24 +199,18 @@ class CognitiveAgent:
         Finds or creates the core 'self' and 'user' nodes and assigns them
         to instance attributes for easy access. This is an idempotent operation.
         """
-        self_node = self.graph.get_node_by_name("axiom agent")
+        self_node = self.knowledge_manager.get_or_create_concept(
+            "axiom agent", node_type="self_identity"
+        )
         if not self_node:
-            logger.warning(
-                "[Identity]: 'axiom agent' node not found in seeded brain. Creating it now."
-            )
-            self_node = self.knowledge_manager._add_or_update_concept(
-                "axiom agent", node_type="self_identity"
-            )
+            logger.error("[Identity]: CRITICAL - Failed to create 'axiom agent' node.")
         self.self_node = self_node
 
-        user_node = self.graph.get_node_by_name("current user")
+        user_node = self.knowledge_manager.get_or_create_concept(
+            "current user", node_type="user_identity"
+        )
         if not user_node:
-            logger.warning(
-                "[Identity]: 'current user' node not found in seeded brain. Creating it now."
-            )
-            user_node = self.knowledge_manager._add_or_update_concept(
-                "current user", node_type="user_identity"
-            )
+            logger.error("[Identity]: CRITICAL - Failed to create 'current user' node.")
         self.user_node = user_node
 
     def load_state(self) -> None:
@@ -203,20 +230,19 @@ class CognitiveAgent:
                 self.harvester.researched_terms = set(
                     state_data.get("researched_terms", [])
                 )
-            logger.info("   - Agent state loaded from '%s'.", self.state_file)
+            logger.info(f"   - Agent state loaded from '{self.state_file}'.")
         except (json.JSONDecodeError, OSError) as e:
             logger.error(
-                "   - Error loading agent state from %s: %s. Starting fresh.",
-                self.state_file,
-                e,
+                f"   - Error loading agent state from {self.state_file}: {e}. Starting fresh."
             )
+
             self.learning_goals, self.high_priority_tasks = [], []
             self.autonomous_cycle_count, self.learning_iterations = 0, 0
             self.goal_manager.goals = {}
 
     def save_state(self) -> None:
         """Save the agent's complete operational state to its state file."""
-        logger.info("   - Saving agent's operational state to '%s'...", self.state_file)
+        logger.info(f"   - Saving agent's operational state to '{self.state_file}'...")
         try:
             state_data = {
                 "learning_goals": self.learning_goals,
@@ -232,9 +258,7 @@ class CognitiveAgent:
                 json.dump(state_data, f, indent=4)
             logger.info("   - Agent state saved successfully.")
         except Exception as e:
-            logger.error(
-                "   - CRITICAL ERROR: Failed to save agent state. Error: %s", e
-            )
+            logger.error(f"   - CRITICAL ERROR: Failed to save agent state. Error: {e}")
 
     def save_brain(self) -> None:
         """Save the current knowledge graph to its JSON file."""
@@ -244,7 +268,7 @@ class CognitiveAgent:
         try:
             lock_file.touch()
             self.graph.save_to_file(self.brain_file)
-            logger.info("[cyan]   - Agent brain saved to %s[/cyan]", self.brain_file)
+            logger.info(f"[cyan]   - Agent brain saved to {self.brain_file}[/cyan]")
         finally:
             if lock_file.exists():
                 lock_file.unlink()
@@ -323,7 +347,7 @@ class CognitiveAgent:
         expanded_text = " ".join(expanded_words)
         if expanded_text != text.lower():
             logger.info(
-                "  [Contraction Expander]: Normalized input to '%s'", expanded_text
+                f"  [Contraction Expander]: Normalized input to '{expanded_text}'"
             )
         return expanded_text
 
@@ -348,7 +372,7 @@ class CognitiveAgent:
             r"(?<!thank )\byou\b", "the agent", processed_text, flags=re.IGNORECASE
         )
         if processed_text != text:
-            logger.debug("  [Pre-processor]: Normalized input to '%s'", processed_text)
+            logger.debug(f"  [Pre-processor]: Normalized input to '{processed_text}'")
         return processed_text
 
     def get_relation_type(self, verb: str, subject: str, object_: str) -> str:
