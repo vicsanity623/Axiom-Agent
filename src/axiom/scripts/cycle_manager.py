@@ -39,8 +39,8 @@ class CycleManager:
         self.phase_lock = threading.Lock()
 
         self.LEARNING_PHASE_DURATION = timedelta(hours=5)
-        self.DISCOVERY_PHASE_DURATION = timedelta(minutes=1.2)
-        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=10)
+        self.DISCOVERY_PHASE_DURATION = timedelta(minutes=3.2)
+        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=3)
         self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
 
         self.CYCLE_DELAY_SECONDS = 60

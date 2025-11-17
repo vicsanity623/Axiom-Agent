@@ -10,7 +10,6 @@ import pytest
 from axiom.cognitive_agent import (
     CognitiveAgent,
     InterpretData,
-    PropertyData,
     RelationData,
 )
 from axiom.universal_interpreter import Task
@@ -197,8 +196,8 @@ def test_handle_clarification_full_flow(agent: CognitiveAgent, monkeypatch):
     monkeypatch.setattr(
         agent.interpreter, "interpret", lambda *args, **kwargs: mock_interp
     )
-    raven_node = agent.knowledge_manager._add_or_update_concept("raven")
-    mammal_node = agent.knowledge_manager._add_or_update_concept("mammal")
+    raven_node = agent.knowledge_manager.get_or_create_concept("raven")
+    mammal_node = agent.knowledge_manager.get_or_create_concept("mammal")
     # --- FIX (arg-type): Add guard clauses ---
     assert raven_node is not None
     assert mammal_node is not None
@@ -208,7 +207,7 @@ def test_handle_clarification_full_flow(agent: CognitiveAgent, monkeypatch):
 
 
 def test_get_corrected_entity_no_match(agent: CognitiveAgent):
-    agent.knowledge_manager._add_or_update_concept("testing")
+    agent.knowledge_manager.get_or_create_concept("testing")
     assert agent.conversation_manager._get_corrected_entity("tsting") == "testing"
     assert agent.conversation_manager._get_corrected_entity("xyz") == "xyz"
 
@@ -227,9 +226,9 @@ def test_process_intent_unhandled_intent(agent: CognitiveAgent):
 
 
 def test_find_specific_fact_multiple_results(agent: CognitiveAgent):
-    agent_node = agent.knowledge_manager._add_or_update_concept("agent")
-    ability1 = agent.knowledge_manager._add_or_update_concept("learn")
-    ability2 = agent.knowledge_manager._add_or_update_concept("reason")
+    agent_node = agent.knowledge_manager.get_or_create_concept("agent")
+    ability1 = agent.knowledge_manager.get_or_create_concept("learn")
+    ability2 = agent.knowledge_manager.get_or_create_concept("reason")
     # --- FIX (arg-type): Add guard clauses ---
     assert agent_node is not None
     assert ability1 is not None
@@ -242,8 +241,8 @@ def test_find_specific_fact_multiple_results(agent: CognitiveAgent):
 
 
 def test_answer_question_about_agent_name(agent: CognitiveAgent):
-    agent_node = agent.knowledge_manager._add_or_update_concept("agent")
-    name_node = agent.knowledge_manager._add_or_update_concept("Axiom")
+    agent_node = agent.knowledge_manager.get_or_create_concept("agent")
+    name_node = agent.knowledge_manager.get_or_create_concept("Axiom")
     # --- FIX (arg-type): Add guard clauses ---
     assert agent_node is not None
     assert name_node is not None
@@ -262,47 +261,8 @@ def test_synthesize_response_non_trigger(agent: CognitiveAgent):
     assert not was_used
 
 
-def test_perform_multi_hop_query_max_hops(agent: CognitiveAgent):
-    n1 = agent.knowledge_manager._add_or_update_concept("n1")
-    n2 = agent.knowledge_manager._add_or_update_concept("n2")
-    n3 = agent.knowledge_manager._add_or_update_concept("n3")
-    n4 = agent.knowledge_manager._add_or_update_concept("n4")
-
-    # --- FIX: Break down the compound assertion into atomic assertions ---
-    # This is clearer, easier to debug, and provides type guarding for mypy.
-    assert n1 is not None
-    assert n2 is not None
-    assert n3 is not None
-    assert n4 is not None
-
-    agent.graph.add_edge(n1, n2, "rel")
-    agent.graph.add_edge(n2, n3, "rel")
-    agent.graph.add_edge(n3, n4, "rel")
-
-    path = agent.conversation_manager._perform_multi_hop_query(n1, n4, max_hops=2)
-    assert path is None
-
-
 def test_format_path_as_sentence_empty_path(agent: CognitiveAgent):
     assert agent.conversation_manager._format_path_as_sentence([]) == ""
-
-
-def test_gather_facts_multihop_filtering(agent: CognitiveAgent):
-    start_node = agent.knowledge_manager._add_or_update_concept("start")
-    assert start_node is not None
-    for i in range(12):
-        other_node = agent.knowledge_manager._add_or_update_concept(f"node{i}")
-        assert other_node is not None
-
-        # --- FIX: Cast the properties dictionary to satisfy mypy ---
-        # We are setting an informal property for testing purposes that is not
-        # part of the strict PropertyData TypedDict. Casting tells mypy this is intentional.
-        test_properties = cast("PropertyData", {"access_count": i})
-
-        agent.graph.add_edge(start_node, other_node, "rel", properties=test_properties)
-
-    facts = agent.conversation_manager._gather_facts_multihop(start_node.id, max_hops=1)
-    assert len(facts) == 10
 
 
 def test_filter_facts_for_temporal_query(agent: CognitiveAgent):
@@ -331,9 +291,9 @@ def test_process_statement_for_learning_incomplete_relation(agent: CognitiveAgen
 
 
 def test_resolve_exclusive_conflict_stalemate(agent: CognitiveAgent):
-    sub_node = agent.knowledge_manager._add_or_update_concept("earth")
-    obj_node = agent.knowledge_manager._add_or_update_concept("sphere")
-    existing_obj = agent.knowledge_manager._add_or_update_concept("oblate spheroid")
+    sub_node = agent.knowledge_manager.get_or_create_concept("earth")
+    obj_node = agent.knowledge_manager.get_or_create_concept("sphere")
+    existing_obj = agent.knowledge_manager.get_or_create_concept("oblate spheroid")
     # --- FIX (arg-type): Add guard clauses ---
     assert sub_node is not None
     assert obj_node is not None

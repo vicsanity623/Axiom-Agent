@@ -269,14 +269,14 @@ class PerformanceMonitor:
         while i < len(lines):
             line = lines[i]
 
-            if "Deferred learning" in line or "Consolidation incomplete" in line:
+            if "Consolidation stalled" in line or "Consolidation incomplete" in line:
                 message = line.strip()
                 target = OptimizationTarget(
                     file_path=Path("src/axiom/knowledge_harvester.py"),
                     target_name="KnowledgeHarvester.study_cycle",
                     issue_description=(
-                        "High-priority systemic issue: The learning or consolidation process is failing, "
-                        "leading to deferred facts or incomplete cycles. This suggests a flaw in the core learning loop."
+                        "High-priority systemic issue: The learning or consolidation process is stalling, "
+                        "leading to a growing backlog of deferred facts. This suggests a flaw in the core learning loop's efficiency."
                     ),
                     relevant_logs=message,
                 )

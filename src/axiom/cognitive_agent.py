@@ -297,7 +297,10 @@ class CognitiveAgent:
         )
 
     def _clean_phrase(self, phrase: str) -> str:
-        """Clean and normalize a phrase for use as a concept or relation in the graph."""
+        """
+        Clean and normalize a phrase for use as a concept or relation in the graph.
+        This version now includes lemmatization for better root word identification.
+        """
         digit_map = {
             "0": "zero",
             "1": "one",
@@ -312,15 +315,34 @@ class CognitiveAgent:
         }
         clean_phrase = phrase.lower().strip().replace("_", " ")
         clean_phrase = re.sub(r"[^a-z0-9\s-]", "", clean_phrase)
-        words = clean_phrase.split()
-        normalized_words = [digit_map.get(word, word) for word in words]
+
+        processed_words = []
+        for word in clean_phrase.split():
+            # First, filter out malformed words (like 'ch2ch')
+            if not (word.isalpha() or word.isdigit() or "-" in word):
+                continue
+
+            # Second, lemmatize words ending in 's' to handle plurals/possessives
+            if word.endswith("s") and len(word) > 1:
+                # Use the noun lemmatizer to convert e.g., "cats" -> "cat", "someones" -> "someone"
+                lemmatized_word = self.lemmatizer.lemmatize(word, pos="n")
+                processed_words.append(lemmatized_word)
+            else:
+                processed_words.append(word)
+
+        # Third, convert any remaining digits to words
+        normalized_words = [digit_map.get(word, word) for word in processed_words]
         clean_phrase = " ".join(normalized_words)
+
+        # The rest of your logic remains the same
         clean_phrase = re.sub(r"\s*\([^)]*\)", "", clean_phrase).strip()
         if clean_phrase.endswith("'s"):
             clean_phrase = clean_phrase[:-2].strip()
+
         words = clean_phrase.split()
         if len(words) == 2 and words[0] in ("a", "an", "the"):
             clean_phrase = words[1]
+
         return " ".join(clean_phrase.split())
 
     def _extract_name_from_relation(

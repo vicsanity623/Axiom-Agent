@@ -134,7 +134,7 @@ class LexiconManager:
 
         node = self.agent.graph.get_node_by_name(clean_word)
         if not node:
-            node = self.agent.knowledge_manager._add_or_update_concept(
+            node = self.agent.knowledge_manager.get_or_create_concept(
                 clean_word, node_type=pos
             )
             if not node:

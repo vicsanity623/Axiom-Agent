@@ -64,29 +64,40 @@ def _generate_or_set_initial_goal(
 
     while True:
         creative_seeds = [
-            # --- Kindergarten Level: The Concrete World ---
-            "The world of animals",
-            "Colors and the rainbow",
-            "Basic geometric shapes",
-            "The concept of family and home",
-            "The five human senses",
-            # --- Elementary School Level: Building Foundational Knowledge ---
-            "The natural world: land, water, air, and sky",
-            "Basic biology: living vs. non-living things",
-            "People and jobs in a community",
-            "Basic physics in everyday objects: gravity and force",
-            "The concept of time: past, present, and future",
-            # --- Middle School Level: Systems and Processes ---
-            "The solar system and its planets",
-            "Earth’s ecosystems and the food chain",
-            "Fundamentals of government: cities, states, and countries",
-            "Basic economics: money, goods, and services",
-            "The major systems of the human body",
-            # --- High School Level: Abstract and Complex Systems ---
-            "Foundational chemistry: atoms, molecules, and elements",
-            "The principles of electricity and circuits",
-            "The components of a computer and the internet",
-            "The nature of light and sound as waves",
+            # -------------------------------------- CHANGE OR CUSTOMIZE WHT AXIOM LEARNS HERE --------------------------------------
+            # --- Basic Objects & The World ---
+            "Learn about the things in a house. Start with 'chair' and 'table.' Then, learn about 'door' and 'window.' Finally, understand what a 'roof' is.",
+            "Explore the kitchen. Learn about a 'cup,' a 'plate,' and a 'spoon.' Then, find out what a 'fork' and a 'knife' are used for.",
+            "Learn about things you can wear. Start with 'shirt' and 'pants.' Then, learn about 'shoes' and 'socks.' Finally, understand what a 'hat' is.",
+            "Discover things in a classroom. Learn about a 'book,' a 'pencil,' and 'paper.' Then, understand what a 'desk' and a 'blackboard' are.",
+            "Learn about toys. Start with 'ball' and 'doll.' Then, learn about 'blocks' and 'crayons.'",
+            # --- Colors & Shapes ---
+            "Build a model of colors. First, learn the primary colors: 'red,' 'blue,' and 'yellow.' Then, learn the secondary colors: 'green,' 'orange,' and 'purple.'",
+            "Learn to identify basic shapes. Start with 'circle' and 'square.' Then, learn about 'triangle' and 'star.'",
+            "Explore the colors of nature. Learn that the 'sky' is 'blue' and 'grass' is 'green.' Then, learn that a 'sunflower' is 'yellow.'",
+            # --- Animals ---
+            "Learn about common pets. Start with 'dog' and 'cat.' Then, learn about 'fish' and 'bird.'",
+            "Discover farm animals. Learn about a 'cow,' a 'pig,' and a 'sheep.' Then, find out what a 'chicken' and a 'horse' are.",
+            "Explore wild animals. Learn about a 'lion,' a 'tiger,' and a 'bear.' Then, learn about an 'elephant' and a 'monkey.'",
+            # --- Simple Actions & Verbs ---
+            "Understand basic actions. Learn the meaning of 'walk' and 'run.' Then, learn about 'jump' and 'sleep.'",
+            "Learn about how we interact with objects. Start with 'eat' and 'drink.' Then, learn about 'play' and 'read.'",
+            "Explore verbs of creation. Learn the meaning of 'draw' and 'build.'",
+            # --- People & Family ---
+            "Build a model of a family. Learn the concepts of 'mother' and 'father.' Then, learn about 'brother' and 'sister.' Finally, understand 'baby.'",
+            "Learn about people in the community. Start with 'teacher' and 'doctor.' Then, learn about 'firefighter' and 'police officer.'",
+            # --- Nature & The Outdoors ---
+            "Learn about the sky. Start with the 'sun' and the 'moon.' Then, learn about 'stars' and 'clouds.'",
+            "Explore the weather. Learn the difference between 'rain' and 'snow.' Then, understand what 'wind' is.",
+            "Discover plants. Learn about a 'tree,' a 'flower,' and 'grass.'",
+            # --- Food ---
+            "Learn about fruits. Start with 'apple' and 'banana.' Then, learn about 'orange' and 'grape.'",
+            "Discover vegetables. Learn about 'carrot' and 'pea.' Then, learn about 'broccoli' and 'corn.'",
+            "Learn about simple meals. Start with 'bread' and 'cheese.' Then, learn about 'milk' and 'water.'",
+            # --- Basic Concepts ---
+            "Understand opposites. Learn the difference between 'big' and 'small.' Then, learn about 'hot' and 'cold,' and 'up' and 'down.'",
+            "Learn to count. Start with the numbers 'one,' 'two,' and 'three.' Then, learn 'four' and 'five.'",
+            "Explore the senses. Learn about 'seeing,' 'hearing,' and 'touching.' Then, learn about 'smelling' and 'tasting.'",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(

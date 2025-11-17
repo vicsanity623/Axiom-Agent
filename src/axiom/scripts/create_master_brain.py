@@ -17,8 +17,8 @@ def main() -> None:
     # 1. Initialize an agent with a completely empty, in-memory brain.
     agent = CognitiveAgent(load_from_file=False, brain_data={"nodes": [], "links": []})
 
-    # 2. Run the full, expensive seeding process. 
-    # THIS IS  HANDLED ALREADY AND INCLUDED IN THE REPO. 
+    # 2. Run the full, expensive seeding process.
+    # THIS IS  HANDLED ALREADY AND INCLUDED IN THE REPO.
     # The system no longer wastes resources re-seeding on fresh start.
     console.print("   - Seeding domain knowledge...")
     seed_domain_knowledge(agent)

@@ -5,10 +5,9 @@ import pytest
 
 from axiom.cognitive_agent import CognitiveAgent
 from axiom.graph_core import ConceptGraph, ConceptNode
-from axiom.knowledge_base import validate_and_add_relation
 
 # --- FIX: Import the correct 'Task' type and remove the incorrect 'Goal' import ---
-from axiom.universal_interpreter import PropertyData, RelationData, Task
+from axiom.universal_interpreter import RelationData, Task
 
 
 @pytest.fixture
@@ -88,27 +87,35 @@ def agent(tmp_path: Path) -> CognitiveAgent:
 
 def test_validate_and_add_relation_defers_unknown_words(agent: CognitiveAgent):
     """
-    Given a relation containing unknown words, validate_and_add_relation
-    should return 'deferred' and create new structured INVESTIGATE tasks in the
+    Given a relation containing unknown words, the learning process should
+    return 'deferred' and create new structured INVESTIGATE tasks in the
     high-priority queue.
     """
+    # 1. SETUP: Ensure the words are not known.
     assert not agent.lexicon.is_known_word("newwordify")
+    assert not agent.lexicon.is_known_word("flangdoodle")
 
+    # 2. ARRANGE: Create the raw relation data.
     relation_dict = cast(
         "RelationData",
         {
             "subject": "newwordify",
-            "verb": "is_a",
+            "verb": "is a",
             "object": "flangdoodle",
+            "properties": {"confidence": 0.3, "provenance": "user"},
         },
     )
-    properties = cast("PropertyData", {"confidence": 0.3, "provenance": "user"})
 
-    status = validate_and_add_relation(agent, relation_dict, properties)
+    # 3. ACT: Call the high-level learning method, which is responsible for the full pipeline.
+    # We are testing the behavior of the entire learning process for a single statement.
+    success, message = agent.knowledge_manager._process_statement_for_learning(
+        relation_dict
+    )
 
-    assert status == "deferred"
+    # 4. ASSERT: Verify the deferral behavior.
+    assert success is False
+    assert message == "deferred"
 
-    # --- FIX: The function now creates 'Task' objects, not 'Goal' objects ---
     expected_task_1 = Task(
         task="INVESTIGATE",
         topic="newwordify",
@@ -120,6 +127,7 @@ def test_validate_and_add_relation_defers_unknown_words(agent: CognitiveAgent):
         context="related to the concept of 'newwordify'",
     )
 
+    # Check that the tasks were created and added to the high-priority queue.
     assert expected_task_1 in agent.high_priority_tasks
     assert expected_task_2 in agent.high_priority_tasks
     assert len(agent.learning_goals) == 0

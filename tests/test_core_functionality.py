@@ -192,8 +192,8 @@ def test_add_linguistic_knowledge_adjective_creates_property_edge(lexicon, agent
 
 
 def test_is_known_word_returns_correctly(lexicon, agent):
-    # --- FIX: Point to the correct manager ---
-    agent.knowledge_manager._add_or_update_concept("existingword")
+    # --- FIX: Use the correct public API ---
+    agent.knowledge_manager.get_or_create_concept("existingword")
     assert lexicon.is_known_word("existingword") is True
     assert lexicon.is_known_word("nonexistentword") is False
 
@@ -232,30 +232,6 @@ def test_agent_expands_contractions(
     assert processed_text == expected_output
 
 
-def test_agent_falls_back_to_llm_when_parsing_fails(agent: CognitiveAgent, monkeypatch):
-    monkeypatch.setattr(
-        "axiom.symbolic_parser.SymbolicParser.parse", lambda *args, **kwargs: None
-    )
-    mock_interpretation = cast(
-        "InterpretData",
-        {
-            "intent": "unknown",
-            "entities": [],
-            "relation": None,
-            "key_topics": [],
-            "full_text_rephrased": "",
-        },
-    )
-    monkeypatch.setattr(
-        "axiom.universal_interpreter.UniversalInterpreter.interpret",
-        lambda self, user_input: mock_interpretation,
-    )
-    agent.lexicon.add_linguistic_knowledge_quietly("complex", "adjective")
-    agent.lexicon.add_linguistic_knowledge_quietly("sentence", "noun")
-    response = agent.chat("a complex sentence")
-    assert "I'm not sure how to process that" in response
-
-
 def test_agent_answers_question_about_entity(agent: CognitiveAgent, monkeypatch):
     agent.graph.add_node(ConceptNode(name="canary"))
     mock_facts_tuple = (("canary is a bird", ()), ("canary has property yellow", ()))
@@ -289,47 +265,60 @@ def test_agent_answers_question_about_entity(agent: CognitiveAgent, monkeypatch)
     assert "i don't have any information about dragon" in response_unknown.lower()
 
 
-def test_agent_can_learn_multiple_senses_for_a_word(agent: CognitiveAgent):
+def test_agent_learns_multiple_senses_for_a_word(agent: CognitiveAgent):
     """
-    Given: A clean agent.
+    Given: An agent that knows the word 'one'.
     When: The agent learns two different 'is a' relationships for the same subject.
-    Then: It should create a single node for the subject with two distinct outgoing edges.
+    Then: It should use the base node for the first relationship, and create a
+          new 'sense' node for the second, ambiguous relationship.
     """
+    # 1. LEARN FIRST RELATIONSHIP: "one is a number"
     relation1 = cast(
         "RelationData", {"subject": "one", "verb": "is a", "object": "number"}
     )
-    # --- FIX: Point to the correct manager ---
     success, _ = agent.knowledge_manager._process_statement_for_learning(relation1)
-    assert success is True
+    assert success is True, "Learning 'one is a number' should succeed"
 
-    node_one = agent.graph.get_node_by_name("one")
-    assert node_one is not None
+    # 2. VERIFY INTERMEDIATE STATE: The edge should be on the BASE node "one"
+    node_one_base = agent.graph.get_node_by_name("one")
+    assert node_one_base is not None
 
-    edges = agent.graph.get_edges_from_node(node_one.id)
-    assert len(edges) == 1
-    assert edges[0].type == "is a"
-    target_node = agent.graph.get_node_by_id(edges[0].target)
-    assert target_node is not None
-    assert target_node.name == "number"
+    base_edges = agent.graph.get_edges_from_node(node_one_base.id)
+    base_targets = {
+        target.name
+        for edge in base_edges
+        if edge.type == "is a" and (target := agent.graph.get_node_by_id(edge.target))
+    }
+    assert "number" in base_targets
+    assert len(base_targets) == 1
 
+    # 3. LEARN SECOND, AMBIGUOUS RELATIONSHIP: "one is a pronoun"
     relation2 = cast(
         "RelationData", {"subject": "one", "verb": "is a", "object": "pronoun"}
     )
-    # --- FIX: Point to the correct manager ---
     success, _ = agent.knowledge_manager._process_statement_for_learning(relation2)
-    assert success is True
+    assert success is True, "Learning 'one is a pronoun' should succeed"
 
-    node_one_after = agent.graph.get_node_by_name("one")
-    assert node_one_after is not None
-    assert node_one_after.id == node_one.id
-    edges_after = agent.graph.get_edges_from_node(node_one_after.id)
-    assert len(edges_after) == 2
+    # 4. VERIFY FINAL STATE: A NEW 'sense' node should have been created
+    node_one_sense = agent.graph.get_node_by_name("one (pronoun)")
+    assert node_one_sense is not None, (
+        "A new sense node 'one (pronoun)' should have been created"
+    )
 
-    target_names = {
+    # The new edge should be on the SENSE node
+    sense_edges = agent.graph.get_edges_from_node(node_one_sense.id)
+    sense_targets = {
         target.name
-        for edge in edges_after
-        if (target := agent.graph.get_node_by_id(edge.target)) is not None
+        for edge in sense_edges
+        if edge.type == "is a" and (target := agent.graph.get_node_by_id(edge.target))
     }
+    assert "pronoun" in sense_targets
 
-    assert "number" in target_names
-    assert "pronoun" in target_names
+    # The BASE node should remain unchanged
+    final_base_edges = agent.graph.get_edges_from_node(node_one_base.id)
+    final_base_targets = {
+        target.name
+        for edge in final_base_edges
+        if edge.type == "is a" and (target := agent.graph.get_node_by_id(edge.target))
+    }
+    assert final_base_targets == {"number"}

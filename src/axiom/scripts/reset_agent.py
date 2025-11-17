@@ -1,5 +1,3 @@
-# In src/axiom/scripts/reset_agent.py
-
 from __future__ import annotations
 
 import logging

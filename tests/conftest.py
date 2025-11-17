@@ -19,10 +19,10 @@ if TYPE_CHECKING:
 
 
 class MockUniversalInterpreter:
-    """A fake UniversalInterpreter that behaves realistically for tests."""
+    """A fake UniversalInterpreter that routes calls to realistic canned responses."""
 
     def __init__(self, *args, **kwargs):
-        self.llm = None
+        self.llm = "This is a mock LLM object"  # Make it not None
         print("--- Initialized MockUniversalInterpreter (No LLM Loaded) ---")
 
     def generate_curriculum(self, high_level_goal: str, **kwargs) -> list[str]:
@@ -34,10 +34,27 @@ class MockUniversalInterpreter:
         self, original_topic: str, raw_sentence: str
     ) -> str | None:
         if original_topic.lower() in raw_sentence.lower():
-            return raw_sentence
+            return raw_sentence.replace(".", "")  # Return a clean sentence
         return None
 
-    def synthesize(self, structured_facts: str | list, **kwargs) -> str:
+    def synthesize(
+        self,
+        structured_facts: str | list,
+        original_question: str | None = None,
+        **kwargs,
+    ) -> str:
+        # --- FIX: Add routing logic for synthesis tests ---
+        if original_question and "What is a cat?" in original_question:
+            return "Based on the facts, a cat is an animal."
+        if isinstance(structured_facts, list) and "fact1" in structured_facts:
+            return "Fact1 and Fact2 are related."
+        if (
+            isinstance(structured_facts, str)
+            and "a cat is an animal" in structured_facts
+        ):
+            return "A cat is an animal"
+
+        # Fallback for other tests
         if isinstance(structured_facts, list):
             return ". ".join(map(str, structured_facts)) + "."
         return str(structured_facts)
@@ -47,13 +64,20 @@ class MockUniversalInterpreter:
 
         if "gibberish" in user_input:
             return None
+        # A more realistic response for other tests
         return InterpretData(
-            intent="unknown",
+            intent="statement_of_fact",
             entities=[],
-            relation=None,
-            key_topics=[],
-            full_text_rephrased="",
+            relation={"subject": "a", "verb": "is", "object": "b"},
+            key_topics=["a", "b"],
+            full_text_rephrased="A is B.",
         )
+
+    def decompose_sentence_to_relations(self, *args, **kwargs) -> list:
+        return [{"subject": "mock", "verb": "is", "object": "mocked"}]
+
+    def resolve_context(self, history: list[str], new_input: str) -> str:
+        return new_input
 
 
 @pytest.fixture(scope="session")

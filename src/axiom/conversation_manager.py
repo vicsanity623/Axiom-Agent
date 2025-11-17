@@ -39,7 +39,7 @@ class ConversationManager:
 
         if self.agent.user_node and interpretations:
             primary_interpretation = interpretations[0]
-            interaction_node = self.agent.knowledge_manager._add_or_update_concept(
+            interaction_node = self.agent.knowledge_manager.get_or_create_concept(
                 f"user_interaction_{time.time()}", node_type="event"
             )
             if interaction_node:

@@ -68,7 +68,7 @@ def test_parse_property_of_question(
     """
     Given: The parser.
     When: Various "what is the X of Y" questions are parsed.
-    Then: The correct intent and relation are extracted.
+    Then: The correct intent and relation are extracted with a singular verb.
     """
     result = parser._parse_single_clause(sentence)
     assert result is not None
@@ -76,14 +76,16 @@ def test_parse_property_of_question(
     relation = result.get("relation")
     assert relation is not None
     assert relation["subject"] == expected_subject
-    assert relation["verb"] == f"has_{expected_property.replace(' ', '_')}"
+    # --- FIX: Expect the canonical, singular form of the verb ---
+    assert relation["verb"] == "has_property"
 
 
 @pytest.mark.parametrize(
     ("sentence", "expected_subject", "expected_prep_obj", "expected_verb"),
     [
         ("the cat is in the house", "cat", "house", "is_located_in"),
-        ("the books are on the table", "books", "table", "is_on_top_of"),
+        # --- FIX: Expect the lemmatized, singular form of the subject ---
+        ("the books are on the table", "book", "table", "is_on_top_of"),
         ("the meeting is at the office", "meeting", "office", "is_located_at"),
         ("a wheel is part of a car", "wheel", "car", "is_part_of"),
     ],
@@ -98,7 +100,7 @@ def test_parse_preposition_pattern(
     """
     Given: The parser.
     When: Sentences with various prepositions are parsed.
-    Then: The correct prepositional relation is extracted.
+    Then: The correct prepositional relation is extracted with lemmatized subjects.
     """
     result = parser._parse_single_clause(sentence)
     assert result is not None

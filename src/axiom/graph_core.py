@@ -232,24 +232,32 @@ class ConceptGraph:
         weight: float = 0.5,
         properties: PropertyData | None = None,
     ) -> RelationshipEdge | None:
-        """Add a directed edge (relationship) between two nodes."""
+        """
+        Add a directed edge (relationship) between two nodes, correctly handling
+        duplicates in a MultiDiGraph.
+        """
         if not all([source_node, target_node]):
             raise ValueError("Source or target node missing")
 
         self.add_node(source_node)
         self.add_node(target_node)
 
-        if self.graph.has_edge(source_node.id, target_node.id):
-            for data in self.graph.get_edge_data(
-                source_node.id, target_node.id
-            ).values():
-                if data.get("type") == relation_type:
-                    data["weight"] = max(data["weight"], weight)
+        # We must check all outgoing edges from the source to find a true duplicate.
+        for edge in self.get_edges_from_node(source_node.id):
+            if edge.type == relation_type:
+                # Check if this edge points to the same target node.
+                if edge.target == target_node.id:
+                    # A true duplicate was found. Update its properties and return.
+                    edge_data = self.graph.edges[edge.source, edge.target, edge.id]
+                    edge_data["weight"] = max(edge_data["weight"], weight)
                     if properties:
-                        data["properties"].update(properties)
-                    full_edge_data = data.copy()
+                        edge_data.setdefault("properties", {}).update(properties)
+
+                    # Return the updated edge object
+                    full_edge_data = edge_data.copy()
                     return RelationshipEdge.from_dict(full_edge_data)
 
+        # If the loop completes, no exact duplicate was found. Create a new edge.
         new_edge = RelationshipEdge(
             source_node.id,
             target_node.id,

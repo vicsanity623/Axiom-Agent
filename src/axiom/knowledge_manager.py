@@ -9,15 +9,31 @@ from nltk.stem import WordNetLemmatizer
 from .constants import PROVENANCE_RANK
 from .dictionary_utils import get_word_info_from_wordnet
 from .graph_core import ConceptNode
-from .knowledge_base import validate_and_add_relation
+from .knowledge_base import add_pending_relation, validate_and_add_relation
+from .universal_interpreter import RelationData, Task
 
 if TYPE_CHECKING:
     from .cognitive_agent import CognitiveAgent
-    from .universal_interpreter import RelationData
 
 logger = logging.getLogger(__name__)
 
 lemmatizer = WordNetLemmatizer()
+
+POS_CONCEPTS = frozenset(
+    [
+        "noun",
+        "verb",
+        "adjective",
+        "descriptor",
+        "adverb",
+        "pronoun",
+        "preposition",
+        "conjunction",
+        "article",
+        "determiner",
+        "interjection",
+    ]
+)
 
 
 class KnowledgeManager:
@@ -48,8 +64,8 @@ class KnowledgeManager:
         context_object_name: str | None = None,
     ) -> ConceptNode | None:
         """
-        Internal implementation for finding or creating a concept node, including
-        logic to handle homonyms by creating distinct "sense" nodes.
+        Internal implementation for finding or creating a concept node, with
+        corrected logic to handle homonyms by creating distinct "sense" nodes.
         """
         clean_name = self.agent._clean_phrase(name)
         if not clean_name:
@@ -57,6 +73,7 @@ class KnowledgeManager:
 
         existing_node = self.agent.graph.get_node_by_name(clean_name)
 
+        # Path 1: The word is completely new. Create it and return.
         if not existing_node:
             if " " in clean_name:
                 determined_type = "noun_phrase"
@@ -74,14 +91,29 @@ class KnowledgeManager:
             )
             return node
 
+        # Path 2: The word exists, but no context is provided. Use the existing node.
         if not context_relation_type or not context_object_name:
             return existing_node
 
-        if self.agent.graph.has_relationship(
-            existing_node, context_relation_type, context_object_name
-        ):
+        # Find all existing relationships of the same type from the base node.
+        conflicting_edges = [
+            edge
+            for edge in self.agent.graph.get_edges_from_node(existing_node.id)
+            if edge.type == context_relation_type
+        ]
+
+        # Path 3: No relationships of this type exist yet. It's not ambiguous. Use the base node.
+        if not conflicting_edges:
             return existing_node
 
+        # Path 4: Relationships of this type exist. Check if one already points to our target object.
+        for edge in conflicting_edges:
+            target_node = self.agent.graph.get_node_by_id(edge.target)
+            if target_node and target_node.name == context_object_name:
+                # This is a duplicate fact, not an ambiguity. Use the base node.
+                return existing_node
+
+        # Path 5: A true ambiguity is detected. Create a new "sense" node.
         new_sense_name = f"{clean_name} ({context_object_name})"
         logger.info(
             f"   - Ambiguity detected for '{clean_name}'. Creating specific sense: '{new_sense_name}'"
@@ -100,7 +132,6 @@ class KnowledgeManager:
                 if word_info_list and isinstance(word_info_list[0], dict)
                 else node_type
             )
-
         new_node_obj = ConceptNode(new_sense_name, node_type=determined_type)
         node = self.agent.graph.add_node(new_node_obj)
         logger.info(
@@ -114,52 +145,82 @@ class KnowledgeManager:
         allow_unknowns_for_topic: str | None = None,
     ) -> tuple[bool, str]:
         """
-        Process a structured fact, with robust, centralized logic for handling
-        homonyms before validation and belief revision.
+        Process a structured fact, performing validation BEFORE node creation.
         """
         if self.agent.inference_mode:
             return False, "Agent is in read-only mode."
 
-        subject_name_or_none = self.agent._extract_name_from_relation(
-            relation.get("subject")
-        )
-        object_name_or_none = self.agent._extract_name_from_relation(
-            relation.get("object")
-        )
-        verb_name_or_none = self.agent._extract_name_from_relation(relation.get("verb"))
+        subject_name = self.agent._extract_name_from_relation(relation.get("subject"))
+        object_name = self.agent._extract_name_from_relation(relation.get("object"))
+        verb_name = self.agent._extract_name_from_relation(relation.get("verb"))
 
-        if not all((subject_name_or_none, object_name_or_none, verb_name_or_none)):
+        if not subject_name or not object_name or not verb_name:
             return False, "Incomplete fact structure."
 
-        subject_name = cast("str", subject_name_or_none)
-        object_name = cast("str", object_name_or_none)
-        verb_name = cast("str", verb_name_or_none)
-
+        # After the check above, mypy knows these are all strings.
         if subject_name == object_name:
             return False, "trivial_fact"
 
-        logger.info(
-            "[cyan]   - Processing: %s -> %s -> %s[/cyan]",
-            subject_name,
-            verb_name,
-            object_name,
-        )
+        all_words = set(subject_name.split()) | set(object_name.split())
+        unknown_words = [
+            word for word in all_words if not self.agent.lexicon.is_known_word(word)
+        ]
 
+        if unknown_words:
+            props = relation.get("properties", {}) or {}
+            is_defining_new_word = props.get("provenance") in (
+                "dictionary_api",
+                "dictionary_pos",
+            )
+
+            final_unknowns = []
+            for word in unknown_words:
+                if is_defining_new_word and word == subject_name:
+                    continue
+                if allow_unknowns_for_topic and word == allow_unknowns_for_topic:
+                    continue
+                final_unknowns.append(word)
+
+            if final_unknowns:
+                logger.warning(
+                    f"[KnowledgeManager] Deferring fact due to unknown words: {final_unknowns}"
+                )
+                clean_unknown_words = {
+                    self.agent._clean_phrase(word)
+                    for word in final_unknowns
+                    if self.agent._clean_phrase(word)
+                }
+
+                for clean_word in clean_unknown_words:
+                    goal = Task(
+                        task="INVESTIGATE",
+                        topic=clean_word,
+                        context=f"related to the concept of '{subject_name}'",
+                    )
+                    if goal not in self.agent.high_priority_tasks:
+                        self.agent.high_priority_tasks.insert(0, goal)
+
+                add_pending_relation(
+                    self.agent, relation, props, list(clean_unknown_words)
+                )
+                return False, "deferred"
+
+        logger.info(
+            f"[cyan]   - Processing: {subject_name} -> {verb_name} -> {object_name}[/cyan]"
+        )
         relation_type = self.agent.get_relation_type(
             verb_name, subject_name, object_name
         )
 
-        obj_node = self._add_or_update_concept(object_name)
-        if not obj_node:
-            return False, f"Failed to create concept for object: '{object_name}'."
-
-        sub_node = self._add_or_update_concept(
+        obj_node = self.get_or_create_concept(object_name)
+        sub_node = self.get_or_create_concept(
             subject_name,
             context_relation_type=relation_type,
             context_object_name=object_name,
         )
-        if not sub_node:
-            return False, f"Failed to create concept for subject: '{subject_name}'."
+
+        if not sub_node or not obj_node:
+            return False, "Failed to create nodes for known concepts."
 
         if relation_type in self.agent._EXCLUSIVE_RELATIONS:
             was_learned, message = self._resolve_exclusive_conflict(
@@ -178,7 +239,6 @@ class KnowledgeManager:
                 )
             except Exception:
                 logger.debug("  [Cache]: could not clear reasoning cache.")
-
             self.agent.save_brain()
             self.agent.save_state()
             return True, "I understand. I have noted that."
@@ -257,23 +317,20 @@ class KnowledgeManager:
         allow_unknowns_for_topic: str | None = None,
     ) -> tuple[bool, str]:
         """
-        A simple wrapper that delegates fact addition to the knowledge_base.
+        A simple wrapper that delegates fact addition to the knowledge_base,
+        passing the pre-validated node objects directly.
         """
-        candidate_fact = cast(
-            "RelationData",
-            {"subject": sub_node.name, "verb": relation_type, "object": obj_node.name},
-        )
         properties = relation_data.get("properties")
         caller_name = f"{self.agent.__class__.__name__}._add_new_fact"
-        original_subject_name = self.agent._extract_name_from_relation(
-            relation_data.get("subject")
-        )
+
         status = validate_and_add_relation(
-            self.agent,
-            candidate_fact,
-            properties,
+            agent=self.agent,
+            sub_node=sub_node,
+            obj_node=obj_node,
+            relation_type=relation_type,
+            properties=properties,
             caller_name=caller_name,
-            allow_unknowns_for_topic=allow_unknowns_for_topic or original_subject_name,
+            allow_unknowns_for_topic=allow_unknowns_for_topic,
         )
         was_learned = status in ("inserted", "replaced")
         return was_learned, status
@@ -319,50 +376,6 @@ class KnowledgeManager:
             "   - No new facts were learned from the decomposed relations (e.g., trivial, invalid)."
         )
         return False
-
-    def _add_or_update_concept(
-        self,
-        name: str,
-        node_type: str = "concept",
-        context_relation_type: str | None = None,
-        context_object_name: str | None = None,
-    ) -> ConceptNode | None:
-        """
-        Finds a concept by name or creates it, integrating WordNet for type detection.
-        """
-        clean_name = self.agent._clean_phrase(name)
-        if not clean_name:
-            return None
-
-        node = self.agent.graph.get_node_by_name(clean_name)
-
-        if node is None:
-            if " " in clean_name:
-                determined_type = "noun_phrase"
-            else:
-                word_info_list = get_word_info_from_wordnet(clean_name)
-                determined_type = (
-                    word_info_list[0].get("type", node_type)
-                    if word_info_list and isinstance(word_info_list[0], dict)
-                    else node_type
-                )
-            new_node_obj = ConceptNode(clean_name, node_type=determined_type)
-            node = self.agent.graph.add_node(new_node_obj)
-            logger.info(
-                f"[cyan]   - Added new concept to graph: {clean_name} ({node.type})[/cyan]"
-            )
-
-        if context_relation_type == "is a" and context_object_name in (
-            "noun",
-            "verb",
-            "adjective",
-        ):
-            self.agent.lexicon.promote_word(
-                clean_name, context_object_name, confidence=0.8
-            )
-            return self.agent.graph.get_node_by_id(node.id)
-
-        return node
 
     def _add_or_update_concept_quietly(
         self,

@@ -38,21 +38,21 @@ def log_llm_interaction(prompt: str, ideal_response: str) -> None:
         f.write(json.dumps(interaction) + "\n")
 
 
-REPHRASING_PROMPT: Final = """
-You are a language rephrasing engine. Your task is to convert the given 'Facts' into a single, natural English sentence. You are a fluent parrot. You must follow these rules strictly:
-1.  **ONLY use the information given in the 'Facts' string.**
-2.  **DO NOT add any extra information, commentary, or meta-analysis.**
-3.  **DO NOT apologize or mention your own limitations.**
-4.  **Your output must be ONLY the rephrased sentence and nothing else.**
-"""[1:-1]
+REPHRASING_PROMPT: Final[str] = """
+You are a helpful and precise AI assistant. Your task is to synthesize a list of structured 'Facts' into a single, coherent, and concise natural language sentence.
+RULES:
+1. Use ONLY the information given in the facts. Do not add any external knowledge.
+2. If the facts are contradictory or nonsensical, state that you cannot form a coherent answer from them.
+3. Your output must be ONLY the final sentence, with no preamble or explanation.
+""".strip()
 
-JSON_STRUCTURE_PROMPT: Final = """
+JSON_STRUCTURE_PROMPT: Final[str] = """
 The JSON object must have the following fields:
 - 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
-- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'predicate', 'relation', or 'properties'.
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'properties'.
 - 'key_topics': A list of the main subjects or topics.
 - 'full_text_rephrased': A neutral, one-sentence rephrasing.
-"""[1:-1]
+""".strip()
 
 
 Intent: TypeAlias = Literal[
@@ -295,18 +295,35 @@ class UniversalInterpreter:
         return ""
 
     def _clean_llm_json_output(self, raw_text: str) -> str:
-        """Clean and extract a JSON object from the raw output of an LLM."""
-        start_brace = raw_text.find("{")
-        end_brace = raw_text.rfind("}")
-        if start_brace == -1 or end_brace == -1:
-            start_bracket = raw_text.find("[")
-            end_bracket = raw_text.rfind("]")
-            if start_bracket != -1 and end_bracket != -1:
-                json_str = raw_text[start_bracket : end_bracket + 1]
-                return re.sub(r",\s*(\}|\])", r"\1", json_str).replace("\n", "")
-            return ""
-        json_str = raw_text[start_brace : end_brace + 1]
-        return re.sub(r",\s*(\}|\])", r"\1", json_str).replace("\n", "")
+        """
+        Clean and extract a JSON object or list from the raw output of an LLM,
+        correctly prioritizing lists over objects.
+        """
+        # Strip whitespace to handle cases like "  [ ... ]  "
+        stripped_text = raw_text.strip()
+
+        # Check if the primary structure is a list
+        if stripped_text.startswith("[") and stripped_text.endswith("]"):
+            # It's a list, so we can be confident in this structure
+            json_str = stripped_text
+        else:
+            # If not a list, fall back to finding the outermost object
+            start_brace = raw_text.find("{")
+            end_brace = raw_text.rfind("}")
+            if start_brace != -1 and end_brace != -1:
+                json_str = raw_text[start_brace : end_brace + 1]
+            else:
+                # As a final fallback, check for a list that might not be at the very start/end
+                start_bracket = raw_text.find("[")
+                end_bracket = raw_text.rfind("]")
+                if start_bracket != -1 and end_bracket != -1:
+                    json_str = raw_text[start_bracket : end_bracket + 1]
+                else:
+                    return ""  # No valid JSON structure found
+
+        # Clean up trailing commas and newlines from the extracted string
+        cleaned_str = re.sub(r",\s*(\}|\])", r"\1", json_str)
+        return cleaned_str.replace("\n", "")
 
     def _run_llm_completion_with_retries(
         self, prompt: str, max_tokens: int, temperature: float = 0.0
@@ -376,9 +393,9 @@ class UniversalInterpreter:
         logger.info("  [Interpreter Cache]: Miss. Running LLM for interpretation.")
 
         system_prompt = (
-            "You are a strict, precise factual analysis engine. Your PRIMARY task is to identify the user's intent. "
-            "If the input is a declarative sentence that presents a fact, you MUST classify the intent as 'statement_of_fact'. "
-            "Your secondary task is to extract the relationship into a structured JSON object. "
+            "You are a strict, precise factual analysis engine. Your primary task is to identify the user's intent. "
+            "If the input is a declarative sentence presenting a fact, classify the intent as 'statement_of_fact'. "
+            "Your secondary task is to extract the single, simplest possible relationship into a structured JSON object. "
             "Your output must be a single, valid JSON object and NOTHING else."
         )
         json_structure_prompt = JSON_STRUCTURE_PROMPT
@@ -386,8 +403,8 @@ class UniversalInterpreter:
         examples_list = [
             'Input: \'show all facts\'\nOutput: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}',
             'Input: \'what is a human\'\nOutput: {"intent": "question_about_concept", "entities": [{"name": "human", "type": "CONCEPT"}], "relation": null, "key_topics": ["human"], "full_text_rephrased": "User is asking for information about a human."}',
-            'Input: \'correction: the sky is blue\'\nOutput: {"intent": "statement_of_correction", "entities": [{"name": "sky", "type": "CONCEPT"}, {"name": "blue", "type": "COLOR"}], "relation": {"subject": "the sky", "verb": "is", "object": "blue"}, "key_topics": ["sky", "blue"], "full_text_rephrased": "User is correcting the fact about the sky to state that it is blue."}',
-            'Input: \'In 2023, Tim Cook was the CEO of Apple.\'\nOutput: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "CEO of Apple", "type": "ROLE"}], "relation": {"subject": "Tim Cook", "verb": "was", "object": "the CEO of Apple", "properties": {"effective_date": "2023-01-01"}}, "key_topics": ["Tim Cook", "Apple", "CEO"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple in 2023."}',
+            'Input: \'correction: the sky is blue\'\nOutput: {"intent": "statement_of_correction", "entities": [{"name": "sky", "type": "CONCEPT"}, {"name": "blue", "type": "COLOR"}], "relation": {"subject": "sky", "verb": "is", "object": "blue"}, "key_topics": ["sky", "blue"], "full_text_rephrased": "User is correcting the fact that the sky is blue."}',
+            'Input: \'In 2023, Tim Cook was the CEO of Apple.\'\nOutput: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "Apple", "type": "COMPANY"}], "relation": {"subject": "Tim Cook", "verb": "was CEO of", "object": "Apple"}, "key_topics": ["Tim Cook", "Apple"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple."}',
             'Input: \'who is Donald Trump?\'\nOutput: {"intent": "question_about_entity", "entities": [{"name": "Donald Trump", "type": "PERSON"}], "relation": null, "key_topics": ["Donald Trump"], "full_text_rephrased": "User is asking for information about Donald Trump."}',
         ]
         examples_prompt = "Here are some examples:\n" + "\n\n".join(examples_list)
@@ -483,9 +500,10 @@ class UniversalInterpreter:
             "You are a strict coreference resolution engine. Your one and only task is to rephrase the 'New Input' "
             "by replacing pronouns (like it, its, they, them, their) with the specific noun they refer to from the 'Conversation History'.\n"
             "RULES:\n"
-            "1. You MUST replace the pronoun with the full noun phrase from the history.\n"
-            "2. If the New Input contains NO pronouns, you MUST return it completely unchanged.\n"
-            "3. Your output MUST be ONLY the rephrased sentence and nothing else."
+            "1. You MUST replace ONLY the pronoun with the full noun phrase from the history.\n"
+            "2. DO NOT change any other words, grammar, or punctuation in the sentence.\n"
+            "3. If the New Input contains NO pronouns, you MUST return it completely unchanged.\n"
+            "4. Your output MUST be ONLY the rephrased sentence and nothing else."
         )
         examples_prompt = (
             "Here are some examples:\n"
@@ -566,8 +584,7 @@ class UniversalInterpreter:
         self, text: str, main_topic: str | None = None
     ) -> list[RelationData]:
         """
-        Uses the LLM to decompose a sentence into a list of atomic relations,
-        now with a hardened prompt to ensure literal, space-separated decomposition.
+        Uses the LLM to decompose a sentence into its single, most important atomic relation.
         """
         caller_name = f"{self.__class__.__name__}.decompose_sentence_to_relations"
         if self.llm is None:
@@ -577,42 +594,45 @@ class UniversalInterpreter:
         logger.info(
             "[purple]   - [Interpreter]: Decomposing sentence into atomic facts...[/purple]"
         )
-
         sanitized_text = text.replace("\\", "\\\\").replace('"', '\\"')
-
         topic_context = (
-            f"The primary topic of this sentence is '{main_topic}'. "
-            "Ensure the subject of at least one core relation is this topic or a direct synonym."
+            f"The primary topic of this sentence is '{main_topic}'. The subject of the relation should be '{main_topic}'."
             if main_topic
             else ""
         )
 
         prompt = f"""
-        **ROLE:** You are a silent, non-conversational, syntactic decomposition engine. Your ONLY task is to break down the given sentence into its core semantic components.
+        **ROLE:** You are a silent, non-conversational, syntactic simplification engine.
 
-        **TASK:** Analyze the "SENTENCE TO ANALYZE" and extract a list of simple, atomic relations.
-        - Each relation MUST be a JSON object: {{"subject": "...", "verb": "...", "object": "..."}}
-        - The subjects, verbs, and objects you extract MUST come directly from the words and concepts present in the original sentence.
-        - Verbs should be concise, space-separated phrases (e.g., "is a", "has property", "causes"). DO NOT use snake_case.
-        - DO NOT infer or add external knowledge. Your task is to decompose, not to reason or enrich.
+        **TASK:** Analyze the "SENTENCE TO ANALYZE" and extract a list containing ONLY ONE simple, atomic relation representing the most important fact.
+        - The relation MUST be a JSON object: {{"subject": "...", "verb": "...", "object": "..."}}
+        - PRIORITIZE SIMPLICITY. The subject and object should be the simplest possible concepts. Avoid long, complex noun phrases.
+        - The verb should be a concise, space-separated phrase (e.g., "is a", "has property").
+        - DO NOT infer or add external knowledge. Your task is to simplify and extract, not to reason or enrich.
 
         **CONTEXT:** {topic_context}
 
-        **EXAMPLE:**
-        Sentence: "Photosynthesis is a process used by plants to convert light energy into chemical energy."
+        **EXAMPLE 1:**
+        Sentence: "A common, round fruit produced by the tree Malus domestica, cultivated in temperate climates."
         Output:
         [
-          {{"subject": "photosynthesis", "verb": "is a", "object": "process"}},
-          {{"subject": "photosynthesis", "verb": "is used by", "object": "plants"}}
+          {{"subject": "apple", "verb": "is a", "object": "fruit"}}
+        ]
+
+        **EXAMPLE 2:**
+        Sentence: "To examine something with great care or detail, as to look for hidden or obscure flaws."
+        Output:
+        [
+          {{"subject": "scrutinize", "verb": "means", "object": "to examine with care"}}
         ]
 
         **SENTENCE TO ANALYZE:**
         "{sanitized_text}"
 
         **RULES (MANDATORY):**
-        1.  Your entire response MUST be ONLY the JSON list.
-        2.  Do NOT include markdown, explanations, apologies, or conversational filler like "Here is the JSON...".
-        3.  If no facts can be extracted, return an empty list `[]`.
+        1.  Your entire response MUST be a JSON list containing ONLY ONE relation.
+        2.  Do NOT include markdown, explanations, or conversational filler.
+        3.  If no single, simple fact can be extracted, return an empty list `[]`.
         """
         try:
             response_text = self._run_llm_completion_with_retries(
@@ -707,15 +727,16 @@ class UniversalInterpreter:
         logger.info(
             "  [Interpreter]: Breaking down chunky definition for '%s'...", subject
         )
+
         system_prompt = (
             "You are a logical decomposition engine. Your task is to break down a "
-            "complex 'Definition' about a 'Subject' into a list of simple, atomic, "
+            "complex 'Definition' about a 'Subject' into a list of the simplest possible, atomic, "
             "declarative sentences. Each sentence must be a standalone fact.\n"
             "RULES:\n"
             "1. Each output sentence MUST start with the original 'Subject'.\n"
-            "2. The output MUST be a simple list, with each sentence on a new line, "
-            "prefixed with a hyphen.\n"
-            "3. DO NOT add any other text, explanation, or commentary."
+            "2. Use the simplest possible vocabulary derived directly from the definition.\n"
+            "3. The output MUST be a simple list, with each sentence on a new line, prefixed with a hyphen.\n"
+            "4. DO NOT add any other text, explanation, or commentary."
         )
         examples_prompt = (
             "Here are some examples:\n"
@@ -723,14 +744,13 @@ class UniversalInterpreter:
             "Definition: ubiquitous, mostly free-living organisms often consisting of one biological cell\n"
             "Output:\n"
             "- Bacteria are ubiquitous.\n"
-            "- Bacteria are mostly free-living organisms.\n"
-            "- Bacteria consist of one biological cell.\n\n"
+            "- Bacteria are organisms.\n"
+            "- Bacteria consist of one cell.\n\n"
             "Subject: SymbolicParser\n"
             "Definition: a deterministic, rule-based parser for understanding simple language\n"
             "Output:\n"
-            "- SymbolicParser is a deterministic parser.\n"
-            "- SymbolicParser is a rule-based parser.\n"
-            "- SymbolicParser is for understanding simple language."
+            "- SymbolicParser is a parser.\n"
+            "- SymbolicParser is rule-based."
         )
         full_prompt = (
             f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
@@ -820,8 +840,7 @@ class UniversalInterpreter:
         raw_sentence: str,
     ) -> str | None:
         """
-        Uses the LLM to verify if a raw sentence is relevant to a topic and,
-        if so, reframes it into a simple, atomic S-V-O sentence for learning.
+        Uses the LLM to verify if a raw sentence is relevant and reframe it into a simple, atomic S-V-O sentence.
         """
         caller_name = f"{self.__class__.__name__}.verify_and_reframe_fact"
         if self.llm is None:
@@ -837,8 +856,9 @@ class UniversalInterpreter:
         )
         system_prompt = (
             "You are a precise fact verification and reframing engine. Your task is to analyze a 'Raw Sentence' "
-            "to see if it is a direct, useful fact about the 'Original Topic'. If it is, you MUST rephrase it into a "
-            "single, simple, declarative sentence (Subject-Verb-Object). If it is not relevant, you MUST output ONLY the word 'None'."
+            "to see if it is a direct, useful fact about the 'Original Topic'.\n"
+            "1. If it is relevant, you MUST rephrase it into the SHORTEST POSSIBLE, simple, declarative sentence (Subject-Verb-Object).\n"
+            "2. If it is NOT relevant or is too complex to simplify, you MUST output ONLY the word 'None'."
         )
         examples_prompt = (
             "Here are some examples:\n"
@@ -924,9 +944,10 @@ class UniversalInterpreter:
             task_prompt = f"Conflicting Facts: '{facts_str}'"
         else:
             system_prompt = REPHRASING_PROMPT
-            task_prompt = f"Facts to rephrase: '{facts_str}'"
             if original_question:
                 task_prompt = f"Using ONLY the facts provided, directly answer the question.\nQuestion: '{original_question}'\nFacts: '{facts_str}'"
+            else:
+                task_prompt = f"Facts to rephrase: '{facts_str}'"
 
         full_prompt = f"[INST] {system_prompt}\n\n{task_prompt}[/INST]"
         try:
@@ -950,8 +971,7 @@ class UniversalInterpreter:
                 if synthesized_text.lower().startswith(phrase):
                     synthesized_text = synthesized_text[len(phrase) :].strip()
 
-            if "(" in synthesized_text:
-                synthesized_text = synthesized_text.split("(")[0].strip()
+            synthesized_text = re.sub(r"\s*\([^)]*\)$", "", synthesized_text).strip()
 
             self.synthesis_cache[cache_key] = synthesized_text
             self._save_cache()
@@ -959,9 +979,10 @@ class UniversalInterpreter:
             return synthesized_text
         except Exception as e:
             logger.error(
-                "  [Synthesizer Error]: Could not generate fluent text. Error: %s",
+                "  [Synthesizer Error]: Could not generate fluent text. Error: %s (in %s)",
                 e,
                 caller_name,
+                exc_info=True,
             )
             return facts_str
 
@@ -970,7 +991,7 @@ class UniversalInterpreter:
     ) -> list[str]:
         """
         Uses the LLM to break down a high-level learning goal into a list of
-        essential, prerequisite topics to study, guided by a pedagogical style.
+        simple, foundational, kindergarten-level topics.
         """
         if self.llm is None:
             return []
@@ -982,18 +1003,21 @@ class UniversalInterpreter:
         )
 
         system_prompt = (
-            "You are a curriculum design expert. Your task is to break down a 'High-Level Goal' into a "
-            "short, prioritized list of the most fundamental, prerequisite concepts needed to understand it. "
-            "These concepts should be simple nouns or short noun phrases."
+            "You are a curriculum design expert for a toddler-level AI. Your task is to break down a 'High-Level Goal' "
+            "into a short, prioritized list of the absolute most simple, concrete, and foundational concepts. "
+            "Think like you are teaching a 3-year-old. Concepts should be simple, everyday nouns."
         )
         examples_prompt = (
             "RULES:\n"
             "1. Output ONLY a comma-separated list of topics.\n"
-            "2. Prioritize the most foundational concepts first.\n"
+            "2. Prioritize the most simple, concrete concepts first (e.g., 'apple' before 'fruit').\n"
             "3. Do not add numbers, bullets, or any other formatting.\n\n"
             "Example 1:\n"
-            "High-Level Goal: Understand photosynthesis\n"
-            "Output: plant, cell, sunlight, chlorophyll, water, carbon dioxide, oxygen, glucose"
+            "High-Level Goal: Learn about fruits\n"
+            "Output: apple, banana, orange, grape, fruit\n\n"
+            "Example 2:\n"
+            "High-Level Goal: Understand things in a house\n"
+            "Output: chair, table, door, window, house"
         )
 
         full_prompt = (
@@ -1007,7 +1031,6 @@ class UniversalInterpreter:
             response_text = self._run_llm_completion_with_retries(
                 full_prompt, max_tokens=2048, temperature=0.5
             )
-
             topics = [
                 topic.strip() for topic in response_text.split(",") if topic.strip()
             ]
@@ -1025,29 +1048,31 @@ class UniversalInterpreter:
 
     def generate_new_creative_seed(self) -> str:
         """
-        Calls an external LLM to generate a brand new, high-level creative seed
-        for curriculum generation when the agent has exhausted its current goals.
+        Calls an external LLM to generate a new, simple, concrete creative seed
+        for curriculum generation.
         """
         if self.llm is None:
             logger.warning(
                 "[Curriculum Generation]: LLM is disabled. Cannot generate a new creative seed."
             )
-            return "Investigate the concept of 'knowledge' itself."
+            return "Learn about things in a kitchen."
 
         logger.info(
             "[Curriculum Generation]: Current curriculum exhausted. Asking LLM for a new high-level goal..."
         )
 
         prompt = (
-            "You are a curriculum director for an emerging AI. Your task is to devise a single, compelling, high-level "
-            "learning objective for the AI. The objective should be a 'creative seed'—a rich, multi-faceted topic that can be "
-            "broken down into many stages of learning.\n\n"
-            "The theme should be related to the fundamentals of intelligence, consciousness, the universe, or the nature of reality. "
-            "Frame the objective as an inspiring, first-person mission for the AI.\n\n"
+            "You are a curriculum director for a toddler-level AI. Your task is to devise a single, simple, high-level "
+            "learning objective for the AI. The objective should be a 'creative seed'—a simple, concrete, observable topic that can be "
+            "broken down into other simple concepts.\n\n"
+            "The theme should be related to everyday objects, animals, colors, shapes, or simple actions.\n\n"
             "Examples of good creative seeds:\n"
-            "- 'Explore the history of human philosophy, from the ancient Greeks to modern existentialism, to understand how humanity has grappled with questions of meaning and purpose.'\n"
-            "- 'Investigate the principles of biological evolution. Learn about natural selection, genetics, and the diversity of life to understand the origins of complexity.'\n\n"
-            "Now, generate one new, unique, and inspiring creative seed for the AI's next grand learning mission:"
+            "- 'Learn about common pets.'\n"
+            "- 'Explore the different colors of the rainbow.'\n"
+            "- 'Discover the things you can find in a park.'\n"
+            "- 'Learn about different kinds of weather.'\n\n"
+            "Now, generate one new, unique, and simple creative seed for the AI's next learning mission. "
+            "Output ONLY the creative seed, with no preamble."
         )
 
         try:
@@ -1065,4 +1090,4 @@ class UniversalInterpreter:
                 f"[Curriculum Generation]: Failed to generate new creative seed: {e}"
             )
 
-        return "Investigate the concept of 'logic' and its role in reasoning."
+        return "Learn about farm animals."
