@@ -55,12 +55,38 @@ class CycleManager:
             self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=4)
             self.CYCLE_DELAY_SECONDS = 2
 
-    def start(self) -> None:
-        """Start the first phase and the high-level phase management job."""
+    def start(self, duration_hours: float | None = None) -> None:
+        """
+        Start the first phase, the high-level phase management job, and
+        optionally schedule a shutdown job for benchmarking.
+        """
         self._start_learning_phase()
         self.scheduler.add_job(
             self._manage_phases, "interval", minutes=1, id="cycle_manager_job"
         )
+
+        if duration_hours is not None and duration_hours > 0:
+            end_time = datetime.now() + timedelta(hours=duration_hours)
+            self.scheduler.add_job(
+                self.shutdown,
+                "date",
+                run_date=end_time,
+                id="shutdown_job",
+            )
+            logger.warning(
+                f"--- [CYCLE MANAGER]: Benchmark mode enabled. System will shut down at {end_time.strftime('%Y-%m-%d %H:%M:%S')} ---"
+            )
+
+    # --- FIX: Add the missing shutdown method ---
+    def shutdown(self) -> None:
+        """
+        Cleanly shuts down the scheduler. This will cause the main loop in
+        the autonomous_trainer to exit.
+        """
+        logger.info("--- [CYCLE MANAGER]: Shutdown initiated by job or signal. ---")
+        if self.scheduler.running:
+            self.scheduler.shutdown()
+            logger.info("--- [CYCLE MANAGER]: Scheduler has been shut down. ---")
 
     def _run_and_reschedule_cycle(
         self,

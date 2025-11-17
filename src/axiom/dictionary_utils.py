@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 try:
     import spacy
 
-    nlp: Language | None = spacy.load("en-core-web-lg")
+    nlp: Language | None = spacy.load("en-core-web-sm")
 except ImportError:
     nlp = None
 

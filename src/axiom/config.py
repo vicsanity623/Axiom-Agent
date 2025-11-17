@@ -21,6 +21,7 @@ BRAIN_DIR: Final = AXIOM_DIR / "brain"
 RENDERED_DIR: Final = AXIOM_DIR / "rendered"
 
 DEFAULT_BRAIN_FILE: Final = BRAIN_DIR / "my_agent_brain.json"
+MASTER_BRAIN_FILE: Final = BRAIN_DIR / "master_brain.json"
 DEFAULT_STATE_FILE: Final = BRAIN_DIR / "my_agent_state.json"
 DEFAULT_CACHE_FILE: Final = BRAIN_DIR / "interpreter_cache.json"
 MODEL_VERSION_FILE: Final = BRAIN_DIR / "model_version.txt"

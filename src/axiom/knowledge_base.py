@@ -963,7 +963,10 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         file=tqdm_out,
         mininterval=1,
     ):
-        agent_instance.lexicon.add_linguistic_knowledge_quietly(concept, concept_type)
+        # --- FIX: Use the new, correct method ---
+        agent_instance.lexicon.add_linguistic_knowledge(
+            concept, concept_type, provenance="seed"
+        )
 
     for subject, s_type, relation, obj, weight in tqdm(
         ALL_KNOWLEDGE,
@@ -2309,7 +2312,10 @@ def seed_core_vocabulary(agent_instance: CognitiveAgent) -> None:
         mininterval=1,
     ):
         for pos in pos_list:
-            agent_instance.lexicon.add_linguistic_knowledge_quietly(word, pos)
+            # --- FIX: Use the new, correct method ---
+            agent_instance.lexicon.add_linguistic_knowledge(
+                word, pos, provenance="seed"
+            )
 
     logger.info("     - Core vocabulary seeding complete.")
 

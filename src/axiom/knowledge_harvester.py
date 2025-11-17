@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
     from axiom.cognitive_agent import CognitiveAgent
     from axiom.graph_core import ConceptNode, RelationshipEdge
+
 logger = logging.getLogger(__name__)
 wikipedia.set_user_agent("AxiomAgent/1.0 (https://github.com/vicsanity623/Axiom-Agent)")
 RESEARCH_CACHE_PATH: Final = Path("data/research_cache.json")
@@ -140,21 +141,23 @@ class KnowledgeHarvester:
                 f"Received goal with no valid topic after cleaning: {goal}. Discarding."
             )
             return False
+
         logger.info(
             f"[Study Cycle]: Prioritizing learning goal: To define '{term_to_learn}' (from '{raw_term}')."
         )
+
         is_single_word = " " not in term_to_learn
         if is_single_word:
-            logger.info(
-                f"   - Term is a single word. Attempting Dictionary API first for '{term_to_learn}'."
-            )
             api_result = self.get_definition_from_api(term_to_learn)
             if api_result:
                 part_of_speech, definition = api_result
                 was_learned = False
                 with self.lock:
-                    self.agent.lexicon.promote_word(
-                        term_to_learn, part_of_speech, confidence=0.9, quiet=True
+                    self.agent.lexicon.add_linguistic_knowledge(
+                        term_to_learn,
+                        part_of_speech,
+                        confidence=0.9,
+                        provenance="dictionary_api",
                     )
                     sub_node = self.agent.knowledge_manager.get_or_create_concept(
                         term_to_learn
@@ -188,12 +191,16 @@ class KnowledgeHarvester:
                     logger.info(
                         f"[green]   - Successfully learned '{term_to_learn}' from Dictionary API.[/green]"
                     )
-                    return True
+                    return True  # <-- This return is now correctly hit
             else:
                 logger.warning(
                     f"   - Dictionary API failed for '{term_to_learn}'. Falling back to web search."
                 )
-        logger.info(f"   - Using web search for '{term_to_learn}'.")
+
+        # --- FIX: Separate the search loop from the learning logic ---
+
+        # Phase 1: Search for a valid web fact
+        web_fact: str | None = None
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}"]
         for query in queries:
             result = self.get_fact_from_wikipedia(
@@ -201,19 +208,23 @@ class KnowledgeHarvester:
             ) or self.get_fact_from_duckduckgo(query)
             if result:
                 _source, web_fact = result
-                with self.lock:
-                    if self.agent.knowledge_manager.learn_new_fact_autonomously(
-                        web_fact, term_to_learn
-                    ):
-                        self.agent.lexicon.promote_word(
-                            term_to_learn, "noun", confidence=0.7, quiet=True
-                        )
-                        logger.info(
-                            f"[green]   - Agent successfully learned '{term_to_learn}' from web.[/green]"
-                        )
-                        return True
-                break
+                break  # Found a result, stop searching
             time.sleep(1)
+
+        # Phase 2: Attempt to learn from the fact, if one was found
+        if web_fact:
+            with self.lock:
+                if self.agent.knowledge_manager.learn_new_fact_autonomously(
+                    web_fact, term_to_learn
+                ):
+                    self.agent.lexicon.add_linguistic_knowledge(
+                        term_to_learn, "noun", confidence=0.7, provenance="web_search"
+                    )
+                    logger.info(
+                        f"[green]   - Agent successfully learned '{term_to_learn}' from web.[/green]"
+                    )
+                    return True
+
         logger.warning(
             f"[yellow]   - All learning attempts failed for '{term_to_learn}'. (in {caller_name})[/yellow]"
         )
@@ -448,7 +459,7 @@ class KnowledgeHarvester:
     def refinement_cycle(self) -> None:
         """
         Periodically reviews and improves the quality of the knowledge graph by
-        decomposing complex facts and promoting observed words in the lexicon.
+        decomposing complex facts.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.console.rule(
@@ -459,6 +470,7 @@ class KnowledgeHarvester:
         chunky_fact = None
         with self.lock:
             chunky_fact = self._find_chunky_fact()
+
         if chunky_fact:
             actions_taken += 1
             source_node, target_node, edge = chunky_fact
@@ -473,13 +485,10 @@ class KnowledgeHarvester:
                 subject=source_node.name, chunky_definition=full_sentence
             )
             if atomic_sentences:
-                logger.info(
-                    "  [Refinement]: Decomposed into %d new atomic facts.",
-                    len(atomic_sentences),
-                )
                 facts_learned_count = 0
                 for sentence in atomic_sentences:
                     with self.lock:
+                        # --- FIX: Correctly handle the single boolean return value ---
                         if self.agent.knowledge_manager.learn_new_fact_autonomously(
                             sentence
                         ):
@@ -490,9 +499,9 @@ class KnowledgeHarvester:
                             edge, {"revision_status": "superseded"}
                         )
                         self.agent.save_brain()
-                        logger.info(
-                            "  [Refinement]: Marked original fact as refined by superseding it."
-                        )
+                    logger.info(
+                        "  [Refinement]: Marked original fact as refined by superseding it."
+                    )
                 else:
                     logger.warning(
                         "  [Refinement]: Failed to learn any new atomic facts from the decomposition."
@@ -501,15 +510,12 @@ class KnowledgeHarvester:
             logger.info(
                 "[Refinement]: No chunky facts found for refinement this cycle."
             )
-        promoted_count = self.agent.lexicon.review_and_promote_observed_words()
-        if promoted_count > 0:
-            actions_taken += promoted_count
-        pruned_count = self.agent.lexicon.prune_low_confidence_observations()
-        if pruned_count > 0:
-            actions_taken += pruned_count
+
         self._prune_research_cache()
+
         if actions_taken == 0:
             logger.info("   - No refinement actions were necessary in this cycle.")
+
         self.console.rule(
             "[bold magenta]Refinement Cycle Complete.[/bold magenta]", style="magenta"
         )
@@ -605,7 +611,6 @@ class KnowledgeHarvester:
 
         for attempt in range(max_attempts):
             if not eligible_names:
-                # Stop if we've run out of words to try
                 break
 
             random_node_name = random.choice(eligible_names)
@@ -631,7 +636,6 @@ class KnowledgeHarvester:
                 # If we successfully find and process a fact, our job is done.
                 return True
 
-            # If this attempt failed, remove the name from our list for this cycle and try another
             eligible_names.remove(random_node_name)
 
         logger.warning(

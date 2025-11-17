@@ -458,27 +458,22 @@ class ConversationManager:
     def _learn_from_introspection(
         self, final_response: str, original_interpretation: InterpretData
     ) -> None:
-        """Analyzes the agent's own synthesized response to learn new facts."""
-        intent = original_interpretation.get("intent", "")
-        context_subject: str | None = None
-        if intent.startswith("question"):
-            if relation := original_interpretation.get("relation"):
-                subject_raw = relation.get("subject")
-                if isinstance(subject_raw, str):
-                    context_subject = subject_raw
-            elif entities := original_interpretation.get("entities"):
-                name_raw = entities[0].get("name")
-                if isinstance(name_raw, str):
-                    context_subject = name_raw
-        if context_subject:
-            logger.info(
-                "  [Introspection]: Analyzing synthesized response for new knowledge..."
-            )
-            new_interpretations = self.agent.parser.parse(
-                final_response, context_subject=context_subject
-            )
-            if new_interpretations:
-                self._learn_from_extra_clauses(new_interpretations)
+        """
+        Analyzes the agent's own synthesized response to learn new facts using
+        the context-free symbolic parser.
+        """
+        # --- FIX: The entire block for calculating context_subject is removed ---
+        # The new, more powerful parser does not require a context subject to be
+        # passed to it, so we can simplify this method significantly.
+
+        logger.info(
+            "  [Introspection]: Analyzing synthesized response for new knowledge..."
+        )
+
+        new_interpretations = self.agent.parser.parse(final_response)
+
+        if new_interpretations:
+            self._learn_from_extra_clauses(new_interpretations)
 
     def _resolve_references(self, text: str) -> str:
         """
