@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import logging
+import os
+import threading
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from apscheduler.schedulers.base import BaseScheduler
+    from rich.console import Console
 
     from ..knowledge_harvester import KnowledgeHarvester
     from ..metacognitive_engine import MetacognitiveEngine
@@ -14,119 +19,207 @@ logger = logging.getLogger(__name__)
 
 
 class CycleManager:
-    """Manages the agent's phased cognitive cycles (learning vs. refinement)."""
+    """
+    Manages the agent's phased cognitive cycles using a responsive,
+    event-driven, chained-execution model with a phase lock to prevent overlaps.
+    """
 
     def __init__(
         self,
         scheduler: BaseScheduler,
         harvester: KnowledgeHarvester,
         metacognitive_engine: MetacognitiveEngine,
+        console: Console,
     ) -> None:
         self.scheduler = scheduler
         self.harvester = harvester
         self.metacognitive_engine = metacognitive_engine
+        self.console = console
 
-        # TESTING DURATIONS
-        self.LEARNING_PHASE_DURATION = timedelta(hours=2.8)
-        self.DISCOVERY_PHASE_DURATION = timedelta(minutes=35.2)
-        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=5)
-        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=5)
+        self.phase_lock = threading.Lock()
 
+        self.LEARNING_PHASE_DURATION = timedelta(hours=5)
+        self.DISCOVERY_PHASE_DURATION = timedelta(minutes=3.2)
+        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=3)
+        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
+
+        self.CYCLE_DELAY_SECONDS = 60
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
 
+        fast_mode = os.getenv("AXIOM_FAST_TEST") == "1"
+        if fast_mode:
+            self.LEARNING_PHASE_DURATION = timedelta(minutes=5)
+            self.DISCOVERY_PHASE_DURATION = timedelta(seconds=5)
+            self.REFINEMENT_PHASE_DURATION = timedelta(minutes=5)
+            self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=4)
+            self.CYCLE_DELAY_SECONDS = 2
+
     def start(self) -> None:
-        """Start the first phase and schedule all cognitive cycles."""
+        """Start the first phase and the high-level phase management job."""
         self._start_learning_phase()
+        self.scheduler.add_job(
+            self._manage_phases, "interval", minutes=1, id="cycle_manager_job"
+        )
+
+    def _run_and_reschedule_cycle(
+        self,
+        cycle_func: Callable[..., bool],
+        job_id: str,
+        phase_name: str,
+        **kwargs: object,
+    ) -> None:
+        """
+        Generic wrapper to run a cycle function and reschedule it only if progress was made.
+
+        Args:
+            cycle_func: The function to execute (e.g., harvester.study_cycle).
+                        Must return True if progress was made, False otherwise.
+            job_id: The unique ID for the scheduler job.
+            phase_name: The name of the phase this job belongs to.
+            **kwargs: Arguments to pass to the cycle_func.
+        """
+        with self.phase_lock:
+            progress_made = False
+            try:
+                progress_made = cycle_func(**kwargs)
+            finally:
+                if self.current_phase == phase_name and progress_made:
+                    next_run = datetime.now() + timedelta(
+                        seconds=self.CYCLE_DELAY_SECONDS
+                    )
+                    self.scheduler.add_job(
+                        self._run_and_reschedule_cycle,
+                        "date",
+                        run_date=next_run,
+                        id=job_id,
+                        args=[cycle_func, job_id, phase_name],
+                        kwargs=kwargs,
+                        max_instances=1,
+                        misfire_grace_time=None,
+                    )
+                elif not progress_made:
+                    logger.warning(
+                        f"Cycle '{job_id}' reported no progress. Pausing execution until next phase."
+                    )
+
+    def _start_learning_phase(self) -> None:
+        """Start the Learning Phase by scheduling the first study cycle."""
+        hours = self.LEARNING_PHASE_DURATION.total_seconds() / 3600
+        self.console.rule(
+            f"[bold cyan]Starting {hours:.1f}-hour LEARNING phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold cyan]",
+            style="border",
+        )
+        self._clear_all_jobs()
+        self.current_phase = "learning"
+        self.phase_start_time = datetime.now()
+        phase_end_time = self.phase_start_time + self.LEARNING_PHASE_DURATION
 
         self.scheduler.add_job(
-            self._manage_phases,
-            "interval",
-            minutes=1,
-            id="cycle_manager_job",
+            self._run_and_reschedule_cycle,
+            "date",
+            run_date=datetime.now(),
+            id="study_cycle_job",
+            args=[self.harvester.study_cycle, "study_cycle_job", "learning"],
+            kwargs={"phase_end_time": phase_end_time},
+            max_instances=1,
+        )
+
+    def _start_discovery_phase(self) -> None:
+        """Start the Discovery Phase by scheduling the first discover cycle."""
+        minutes = self.DISCOVERY_PHASE_DURATION.total_seconds() / 60
+        self.console.rule(
+            f"[bold cyan]Starting {minutes:.1f}-minute DISCOVERY phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold cyan]",
+            style="border",
+        )
+        self._clear_all_jobs()
+        self.current_phase = "discovery"
+        self.phase_start_time = datetime.now()
+        self.scheduler.add_job(
+            self._run_and_reschedule_cycle,
+            "date",
+            run_date=datetime.now(),
+            id="discover_cycle_job",
+            args=[self.harvester.discover_cycle, "discover_cycle_job", "discovery"],
+            max_instances=1,
+        )
+
+    def _start_refinement_phase(self) -> None:
+        """Start the Refinement Phase by scheduling the first refinement cycle."""
+        minutes = self.REFINEMENT_PHASE_DURATION.total_seconds() / 60
+        self.console.rule(
+            f"[bold blue]Starting {minutes:.1f}-minute REFINEMENT phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold blue]",
+            style="border",
+        )
+        self._clear_all_jobs()
+        self.current_phase = "refinement"
+        self.phase_start_time = datetime.now()
+        self.scheduler.add_job(
+            self._run_and_reschedule_cycle,
+            "date",
+            run_date=datetime.now(),
+            id="refinement_cycle_job",
+            args=[
+                self.harvester.refinement_cycle,
+                "refinement_cycle_job",
+                "refinement",
+            ],
+            max_instances=1,
+        )
+
+    def _start_metacognitive_phase(self) -> None:
+        """Start the Metacognitive Phase by scheduling the first metacognitive cycle."""
+        minutes = self.METACOGNITIVE_PHASE_DURATION.total_seconds() / 60
+        self.console.rule(
+            f"[bold blue]Starting {minutes:.1f}-minute METACOGNITIVE phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold blue]",
+            style="border",
+        )
+        self._clear_all_jobs()
+        self.current_phase = "metacognitive"
+        self.phase_start_time = datetime.now()
+        self.scheduler.add_job(
+            self._run_and_reschedule_cycle,
+            "date",
+            run_date=datetime.now(),
+            id="metacognitive_cycle_job",
+            args=[
+                self.metacognitive_engine.run_introspection_cycle,
+                "metacognitive_cycle_job",
+                "metacognitive",
+            ],
+            max_instances=1,
         )
 
     def _manage_phases(self) -> None:
         """The main heartbeat, called every interval to check for phase transitions."""
-        if not self.phase_start_time:
-            return
-        now = datetime.now()
-        elapsed_time = now - self.phase_start_time
-        if (
-            self.current_phase == "learning"
-            and elapsed_time >= self.LEARNING_PHASE_DURATION
-        ):
-            self._start_discovery_phase()
-        elif (
-            self.current_phase == "discovery"
-            and elapsed_time >= self.DISCOVERY_PHASE_DURATION
-        ):
-            self._start_refinement_phase()
-        elif (
-            self.current_phase == "refinement"
-            and elapsed_time >= self.REFINEMENT_PHASE_DURATION
-        ):
-            self._start_metacognitive_phase()
-        elif (
-            self.current_phase == "metacognitive"
-            and elapsed_time >= self.METACOGNITIVE_PHASE_DURATION
-        ):
-            self._start_learning_phase()
+        with self.phase_lock:
+            if not self.phase_start_time:
+                return
+            now = datetime.now()
+            elapsed_time = now - self.phase_start_time
+            if (
+                self.current_phase == "learning"
+                and elapsed_time >= self.LEARNING_PHASE_DURATION
+            ):
+                self._start_discovery_phase()
+            elif (
+                self.current_phase == "discovery"
+                and elapsed_time >= self.DISCOVERY_PHASE_DURATION
+            ):
+                self._start_refinement_phase()
+            elif (
+                self.current_phase == "refinement"
+                and elapsed_time >= self.REFINEMENT_PHASE_DURATION
+            ):
+                self._start_metacognitive_phase()
+            elif (
+                self.current_phase == "metacognitive"
+                and elapsed_time >= self.METACOGNITIVE_PHASE_DURATION
+            ):
+                self._start_learning_phase()
 
     def _clear_all_jobs(self) -> None:
         """Remove all existing cognitive cycle jobs from the scheduler."""
         for job in self.scheduler.get_jobs():
             if job.id != "cycle_manager_job":
                 job.remove()
-
-    def _start_learning_phase(self) -> None:
-        """Configure the scheduler to run the Learning Phase cycles."""
-        logger.info("--- [CYCLE MANAGER]: Starting 5-minute LEARNING phase. ---")
-        self._clear_all_jobs()
-        self.scheduler.add_job(
-            self.harvester.study_cycle,
-            "interval",
-            minutes=1,
-            id="study_cycle_job",
-        )
-        self.current_phase = "learning"
-        self.phase_start_time = datetime.now()
-
-    def _start_discovery_phase(self) -> None:
-        """Configure the scheduler to run the Discovery Phase cycles."""
-        logger.info("--- [CYCLE MANAGER]: Starting 5-minute DISCOVERY phase. ---")
-        self._clear_all_jobs()
-        self.scheduler.add_job(
-            self.harvester.discover_cycle,
-            "interval",
-            minutes=5,
-            id="discover_cycle_job",
-        )
-        self.current_phase = "discovery"
-        self.phase_start_time = datetime.now()
-
-    def _start_refinement_phase(self) -> None:
-        """Configure the scheduler to run the Refinement Phase cycles."""
-        logger.info("--- [CYCLE MANAGER]: Starting 5-minute REFINEMENT phase. ---")
-        self._clear_all_jobs()
-        self.scheduler.add_job(
-            self.harvester.refinement_cycle,
-            "interval",
-            minutes=2,
-            id="refinement_cycle_job",
-        )
-        self.current_phase = "refinement"
-        self.phase_start_time = datetime.now()
-
-    def _start_metacognitive_phase(self) -> None:
-        """Configure the scheduler to run the Metacognitive Phase cycles."""
-        logger.info("--- [CYCLE MANAGER]: Starting 5-minute METACOGNITIVE phase. ---")
-        self._clear_all_jobs()
-        self.scheduler.add_job(
-            self.metacognitive_engine.run_introspection_cycle,
-            "interval",
-            minutes=2,
-            id="metacognitive_cycle_job",
-        )
-        self.current_phase = "metacognitive"
-        self.phase_start_time = datetime.now()

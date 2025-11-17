@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
+import time
 import zipfile
 from datetime import UTC, datetime
 
@@ -12,6 +14,8 @@ from ..config import (
     MODEL_VERSION_FILE,
     RENDERED_DIR,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def get_next_version() -> str:
@@ -28,7 +32,9 @@ def get_next_version() -> str:
             if match:
                 major, minor = map(int, match.groups())
         except Exception:
-            print("   - Warning: Could not parse version file. Starting from 0.0.")
+            logger.warning(
+                "   - Could not parse version file. Starting from 0.0.", exc_info=True
+            )
 
     minor += 1
     if minor >= 10:
@@ -45,7 +51,7 @@ def get_next_version() -> str:
 def clear_old_models(current_version_str: str) -> None:
     """Deletes all .axm files in the rendered folder EXCEPT the current one."""
     current_filename = RENDERED_DIR / f"Axiom_{current_version_str}.axm"
-    print(f"   - Cleaning up old models in '{RENDERED_DIR}'...")
+    logger.info("   - Cleaning up old models in '%s'...", RENDERED_DIR)
 
     if not RENDERED_DIR.exists():
         return
@@ -54,34 +60,67 @@ def clear_old_models(current_version_str: str) -> None:
         if file_path.resolve() != current_filename.resolve():
             try:
                 file_path.unlink()
-                print(f"     - Deleted old model: {file_path.name}")
+                logger.info("     - Deleted old model: %s", file_path.name)
             except OSError as e:
-                print(f"     - Warning: Could not delete {file_path.name}. Error: {e}")
+                logger.warning(
+                    "     - Could not delete %s. Error: %s", file_path.name, e
+                )
 
 
 def render_axiom_model() -> None:
     """
     Package the agent's current brain and cache into a single, versioned .axm model.
-    This script ensures only the latest rendered model exists in the 'rendered/' directory.
+    This hardened version includes validation and locking to prevent corrupt models.
     """
     brain_file = DEFAULT_BRAIN_FILE
     cache_file = DEFAULT_CACHE_FILE
+    lock_file = BRAIN_DIR / f"{brain_file.name}.lock"
+
+    version_str = get_next_version()
+    logger.info("--- Starting Axiom Mind Renderer [Version: %s] ---", version_str)
+
+    max_wait_seconds = 10
+    wait_interval = 1
+    waited_time = 0
+    while lock_file.exists():
+        if waited_time >= max_wait_seconds:
+            logger.critical(
+                "Lock file '%s' persisted for over %d seconds. An 'axiom-train' process may be stuck. Aborting render.",
+                lock_file,
+                max_wait_seconds,
+            )
+            return
+        logger.info("   - Waiting for lock file '%s' to be released...", lock_file.name)
+        time.sleep(wait_interval)
+        waited_time += wait_interval
 
     if not brain_file.exists():
-        print(f"❌ CRITICAL ERROR: Source file '{brain_file}' not found.")
-        print(
-            "   Please ensure the agent has been run at least once to generate its brain.",
+        logger.critical("Source file '%s' not found.", brain_file)
+        logger.critical(
+            "   Please ensure the agent has been run at least once to generate its brain."
         )
         return
 
-    version_str = get_next_version()
-    print(f"--- Starting Axiom Mind Renderer [Version: {version_str}] ---")
+    try:
+        brain_content = brain_file.read_text(encoding="utf-8")
+        if not brain_content.strip():
+            logger.critical("Brain file '%s' is empty. Aborting render.", brain_file)
+            return
+
+        brain_data = json.loads(brain_content)
+        logger.info("✅ Brain file is valid and contains data.")
+
+    except json.JSONDecodeError:
+        logger.critical(
+            "Brain file '%s' contains invalid JSON. Aborting render.", brain_file
+        )
+        return
+    except Exception as e:
+        logger.critical("Failed to read or validate brain file. Error: %s", e)
+        return
 
     RENDERED_DIR.mkdir(exist_ok=True)
     output_filename = RENDERED_DIR / f"Axiom_{version_str}.axm"
-
-    print("✅ Found required source files.")
-
     version_data = {
         "model_format": "AxiomMind",
         "version": version_str,
@@ -90,26 +129,26 @@ def render_axiom_model() -> None:
 
     try:
         with zipfile.ZipFile(output_filename, "w", zipfile.ZIP_DEFLATED) as zf:
-            zf.write(brain_file, arcname="brain.json")
-            print(f"   - Compressing {brain_file}...")
+            zf.writestr("brain.json", json.dumps(brain_data))
+            logger.info("   - Compressing validated brain data...")
 
             if cache_file.exists():
                 zf.write(cache_file, arcname="cache.json")
-                print(f"   - Compressing {cache_file}...")
+                logger.info("   - Compressing %s...", cache_file)
             else:
                 empty_cache: dict[str, list] = {"interpretations": [], "synthesis": []}
                 zf.writestr("cache.json", json.dumps(empty_cache))
-                print("   - Cache file not found. Packaging an empty cache.")
+                logger.info("   - Cache file not found. Packaging an empty cache.")
 
             zf.writestr("version.json", json.dumps(version_data, indent=2))
-            print("   - Compressing version.json...")
+            logger.info("   - Compressing version.json...")
 
-        print(f"\n✅ Successfully rendered model: {output_filename}")
+        logger.info("\n✅ Successfully rendered model: %s", output_filename)
 
         clear_old_models(version_str)
 
     except Exception as e:
-        print(f"❌ CRITICAL ERROR: Failed to create the .axm package. Error: {e}")
+        logger.critical("Failed to create the .axm package. Error: %s", e)
 
 
 def main() -> None:

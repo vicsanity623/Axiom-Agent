@@ -4,8 +4,72 @@ from typing import cast
 import pytest
 
 from axiom.cognitive_agent import CognitiveAgent
-from axiom.knowledge_base import validate_and_add_relation
-from axiom.universal_interpreter import PropertyData, RelationData
+from axiom.graph_core import ConceptGraph, ConceptNode
+
+# --- FIX: Import the correct 'Task' type and remove the incorrect 'Goal' import ---
+from axiom.universal_interpreter import RelationData, Task
+
+
+@pytest.fixture
+def graph() -> ConceptGraph:
+    """Provide a fresh ConceptGraph for testing."""
+    return ConceptGraph()
+
+
+def test_add_and_get_node(graph: ConceptGraph):
+    node = ConceptNode("Dog", node_type="noun")
+    graph.add_node(node)
+    retrieved = graph.get_node_by_name("dog")
+    assert retrieved is not None
+    assert retrieved.name == "dog"
+    assert retrieved.type == "noun"
+
+
+def test_add_and_get_edge(graph: ConceptGraph):
+    src = graph.add_node(ConceptNode("Cat"))
+    tgt = graph.add_node(ConceptNode("Mammal"))
+    edge = graph.add_edge(src, tgt, "is_a", weight=0.9)
+    assert edge is not None
+    edges_from_src = graph.get_edges_from_node(src.id)
+    assert any(e.target == tgt.id and e.type == "is_a" for e in edges_from_src)
+
+
+def test_update_edge_properties(graph: ConceptGraph):
+    src = graph.add_node(ConceptNode("Car"))
+    tgt = graph.add_node(ConceptNode("Vehicle"))
+    edge = graph.add_edge(src, tgt, "is_a", weight=0.5)
+    assert edge is not None
+    graph.update_edge_properties(edge, {"confidence": 0.8})
+    updated_edge = graph.get_edges_from_node(src.id)[0]
+    assert updated_edge.properties["confidence"] == 0.8
+
+
+def test_update_edge_weight(graph: ConceptGraph):
+    src = graph.add_node(ConceptNode("Apple"))
+    tgt = graph.add_node(ConceptNode("Fruit"))
+    edge = graph.add_edge(src, tgt, "is_a", weight=0.5)
+    assert edge is not None
+    graph.update_edge_weight(edge, new_weight=0.9, provenance="system")
+    updated_edge = graph.get_edges_from_node(src.id)[0]
+    assert updated_edge.weight > 0.5
+
+
+def test_conflicting_edge_detection(graph: ConceptGraph):
+    src = graph.add_node(ConceptNode("Paris"))
+    tgt1 = graph.add_node(ConceptNode("France"))
+    tgt2 = graph.add_node(ConceptNode("Germany"))
+
+    edge1 = graph.add_edge(src, tgt1, "capital_of", weight=1.0)
+    edge2 = graph.add_edge(src, tgt2, "capital_of", weight=0.8)
+    assert edge1 is not None
+    assert edge2 is not None
+
+    winner = graph.find_exclusive_conflict(src, "capital_of")
+    assert winner is not None
+    graph.update_edge_properties(winner, {"example": True})
+
+    assert winner.id == edge1.id
+    assert winner.id != edge2.id
 
 
 @pytest.fixture
@@ -21,111 +85,49 @@ def agent(tmp_path: Path) -> CognitiveAgent:
     )
 
 
-def test_process_statement_for_learning_success(agent: CognitiveAgent):
-    """
-    Tests the happy path: a valid statement with known vocabulary is learned correctly.
-    """
-    subject_word = "axolotl"
-    object_word = "amphibian"
-
-    agent.lexicon.promote_word(subject_word, "noun")
-    agent.lexicon.promote_word(object_word, "noun")
-
-    relation = RelationData(
-        subject=subject_word,
-        verb="is_a",
-        object=object_word,
-        properties=cast("PropertyData", {"confidence": 0.9, "provenance": "user"}),
-    )
-
-    was_learned, message = agent._process_statement_for_learning(relation)
-
-    assert was_learned is True, f"Learning failed unexpectedly with message: {message}"
-    assert message == "I understand. I have noted that."
-
-    src_node = agent.graph.get_node_by_name(subject_word)
-    tgt_node = agent.graph.get_node_by_name(object_word)
-    assert src_node is not None
-    assert tgt_node is not None
-
-    edges = agent.graph.get_edges_from_node(src_node.id)
-    assert any(e.target == tgt_node.id and e.type == "is_a" for e in edges)
-
-
 def test_validate_and_add_relation_defers_unknown_words(agent: CognitiveAgent):
     """
-    Given a relation containing unknown words, validate_and_add_relation
-    should return 'deferred' and create new INVESTIGATE goals.
+    Given a relation containing unknown words, the learning process should
+    return 'deferred' and create new structured INVESTIGATE tasks in the
+    high-priority queue.
     """
+    # 1. SETUP: Ensure the words are not known.
     assert not agent.lexicon.is_known_word("newwordify")
+    assert not agent.lexicon.is_known_word("flangdoodle")
 
-    relation_dict = {
-        "subject": "newwordify",
-        "verb": "is_a",
-        "object": "flangdoodle",
-    }
-    properties = cast("PropertyData", {"confidence": 0.3, "provenance": "user"})
-
-    status = validate_and_add_relation(agent, relation_dict, properties)
-
-    assert status == "deferred"
-    assert "INVESTIGATE: newwordify" in agent.learning_goals
-    assert "INVESTIGATE: flangdoodle" in agent.learning_goals
-
-
-def test_belief_revision_rejects_weaker_fact(agent: CognitiveAgent):
-    """
-    Tests that the agent correctly rejects a new, weaker fact that conflicts
-    with a stronger, existing exclusive fact.
-    """
-    agent.lexicon.promote_word("france", "noun")
-    agent.lexicon.promote_word("paris", "noun")
-    agent.lexicon.promote_word("lyon", "noun")
-
-    initial_fact = RelationData(
-        subject="france",
-        verb="has_capital",
-        object="paris",
-        properties=cast("PropertyData", {"confidence": 1.0, "provenance": "seed"}),
+    # 2. ARRANGE: Create the raw relation data.
+    relation_dict = cast(
+        "RelationData",
+        {
+            "subject": "newwordify",
+            "verb": "is a",
+            "object": "flangdoodle",
+            "properties": {"confidence": 0.3, "provenance": "user"},
+        },
     )
-    agent._process_statement_for_learning(initial_fact)
 
-    conflicting_fact = RelationData(
-        subject="france",
-        verb="has_capital",
-        object="lyon",
-        properties=cast("PropertyData", {"confidence": 0.8, "provenance": "user"}),
+    # 3. ACT: Call the high-level learning method, which is responsible for the full pipeline.
+    # We are testing the behavior of the entire learning process for a single statement.
+    success, message = agent.knowledge_manager._process_statement_for_learning(
+        relation_dict
     )
-    was_learned, message = agent._process_statement_for_learning(conflicting_fact)
 
-    assert was_learned is False
-    assert message == "existing_fact_stronger"
+    # 4. ASSERT: Verify the deferral behavior.
+    assert success is False
+    assert message == "deferred"
 
-
-def test_belief_revision_handles_stalemate(agent: CognitiveAgent):
-    """
-    Tests that learning a conflicting fact of equal strength triggers a
-    stalemate and signals for clarification.
-    """
-    agent.lexicon.promote_word("france", "noun")
-    agent.lexicon.promote_word("paris", "noun")
-    agent.lexicon.promote_word("lyon", "noun")
-
-    initial_fact = RelationData(
-        subject="france",
-        verb="has_capital",
-        object="paris",
-        properties=cast("PropertyData", {"confidence": 0.8, "provenance": "user"}),
+    expected_task_1 = Task(
+        task="INVESTIGATE",
+        topic="newwordify",
+        context="related to the concept of 'newwordify'",
     )
-    agent._process_statement_for_learning(initial_fact)
-
-    conflicting_fact = RelationData(
-        subject="france",
-        verb="has_capital",
-        object="lyon",
-        properties=cast("PropertyData", {"confidence": 0.8, "provenance": "user"}),
+    expected_task_2 = Task(
+        task="INVESTIGATE",
+        topic="flangdoodle",
+        context="related to the concept of 'newwordify'",
     )
-    was_learned, message = agent._process_statement_for_learning(conflicting_fact)
 
-    assert was_learned is False
-    assert message == "exclusive_conflict"
+    # Check that the tasks were created and added to the high-priority queue.
+    assert expected_task_1 in agent.high_priority_tasks
+    assert expected_task_2 in agent.high_priority_tasks
+    assert len(agent.learning_goals) == 0

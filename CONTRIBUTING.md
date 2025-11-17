@@ -46,7 +46,7 @@ source .venv/bin/activate
 
 ### 3️⃣ Download the Local LLM
 
-The agent's `UniversalInterpreter` relies on a local GGUF-formatted language model (large context window). You can download the recommended model using the built-in CLI command:
+The agent's `UniversalInterpreter` relies on a local GGUF-formatted language model. You can download the recommended model using the built-in CLI command:
 
 ```bash
 axiom-llm
@@ -80,17 +80,27 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 
 | Command | Description |
 |---|---|
+| **Core Workflow** | |
 | `axiom-train` | **(Primary Workflow)** Starts the agent's autonomous learning cycles. |
 | `axiom-webui` | Launches an interactive web UI to chat with the agent. |
-| `axiom-teach` | Teach the agent facts directly via the terminal. |
-| `axiom-render` | Generate a snapshot of the brain (axiom.axm)for inference chat used in axiom-webui. |
+| `axiom-teach` | (Continuous Narrative Training) Teach the agent facts directly via the terminal. |
+| **Analysis & Debugging** | |
+| `axiom-reset` | **(Essential for Debugging)** Wipes the agent's brain, state, and logs for a fresh start. |
+| `axiom-render` | Generates a static snapshot of the brain for the web UI. |
+| `axiom-visualize` | Creates an interactive HTML visualization of the agent's knowledge graph. |
+| **Metacognition** | |
+| `axiom-analyze` | Runs a standalone analysis of `axiom.log` to find optimization targets. |
+| `axiom-inspect` | Runs a deep, opinionated code quality analysis on a specific file. |
+## full list of commands found in [**pyproject.toml**](pyproject.toml).
+
+
 
 **Typical Debugging Session:**
 
 1.  **Start with a clean slate:**
     ```bash
-    # This command safely removes only the agent's brain and state files.
-    rm -f src/axiom/brain/* data/*
+    # This command safely removes the agent's brain, state, and log files.
+    axiom-reset
     ```
 2.  **Run the trainer and watch the logs:**
     ```bash
@@ -103,13 +113,10 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 
 Axiom's most advanced feature is its ability to analyze its own performance and suggest improvements. After a `MetacognitiveEngine` cycle, it generates a `code_suggestion.json` file.
 
-To apply a suggestion:
-1.  **Extract the code:** A utility script is provided to cleanly extract the suggested code.
-    ```bash
-    ./extract_suggestion.py
-    ```
-2.  **Review the diff:** This creates a `code.py` file. Use your IDE or `diff` to compare it with the original source file.
-3.  **Apply and commit:** If you approve (CODE REVIEW the `suggested_solution` is a MUST!! as LLMs can and will usually make mistakes), manually copy the new code into the project, run `./check.sh` one last time, restart `axiom-train`, verify stability and improvements and finally commit the change.
+To work with a suggestion:
+1.  **Review the `code_suggestion.json` file:** This file contains the identified problem, the suggested code, and whether the automated verification passed or failed.
+2.  **Manually Apply and Test:** The self-improvement loop is currently in "Verified Advisory Mode." You are the human-in-the-loop. If you approve of the suggestion, manually copy the new code into the project.
+3.  **Verify and Commit:** Run `./check.sh` one last time to ensure compliance, restart `axiom-train` to verify stability, and then commit the change.
 
 ---
 
@@ -129,7 +136,7 @@ A great first contribution is to improve the agent's ability to normalize concep
     ```
 2.  Locate the `_clean_phrase` method in `src/axiom/cognitive_agent.py`.
 3.  **Add new logic** to handle other cases, such as removing possessives (e.g., `"word's"` → `"word"`) or stripping leading/trailing articles more effectively.
-4.  **Add a new test** to `tests/test_core_behavior.py` that specifically validates your new cleaning logic.
+4.  **Add a new test** to `tests/test_core_functionality.py` that specifically validates your new cleaning logic.
 5.  Run `./check.sh` to ensure all checks pass.
 6.  Submit a Pull Request with a clear description of the improvement.
 
@@ -140,7 +147,7 @@ A great first contribution is to improve the agent's ability to normalize concep
 1.  **Read the Roadmap:** See the current phase in [**ROADMAP.md**](ROADMAP.md).
 2.  **Find or Propose a Task:** Choose an issue or open a new one to discuss your idea.
 3.  **Fork and Branch:** Use a descriptive branch name (e.g., `fix/memory-leak`, `feature/concept-merging`).
-4.  **Code & Test:** Make your changes and ensure you add or update tests to cover them. (source code currently at `60%+ total coverage` as of `Oct, 27, 2025`)
+4.  **Code & Test:** Make your changes and ensure you add or update tests to cover them.
 5.  **Check & Submit:** Run `./check.sh` and then submit a Pull Request with details on what you changed and why.
 
 ---

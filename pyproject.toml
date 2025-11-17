@@ -9,7 +9,7 @@ package = true
 
 [project]
 name = "axiom"
-version = "0.5.7"
+version = "0.6.0"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
@@ -24,24 +24,36 @@ dependencies = [
     "google-generativeai",
     "llama-cpp-python",
     "networkx~=3.5.0",
+    "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
     "nltk",
     "python-Levenshtein>=0.25.1",
     "requests",
     "rich",
+    "pyvis",
+    "spacy>=3.7.0",
     "thefuzz>=0.22.1",
     "tqdm",
     "typer",
     "wikipedia",
+    "scipy",
+    "blis>=0.9.0",
+    "neo4j",
 ]
+
+# if you want the small version of en core web use this:
+    # en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 [project.optional-dependencies]
 dev = [
     "mypy>=1.18.1",
     "pyngrok",
-    "pytest-cov>=6.0.0",
+    "pytest-cov>=4.0.0",
     "pytest>=6.0.0",
+    "pytest-xdist",
     "ruff>=0.9.2",
     "types-requests",
+    "matplotlib",
+    "pytest-mock",
 ]
 
 [project.urls]
@@ -50,11 +62,20 @@ dev = [
 
 [project.scripts]
 axiom-llm = "axiom.scripts.download_model:main"
+axiom-reset = "axiom.scripts.reset_agent:main"
 axiom-train = "axiom.scripts.autonomous_trainer:main"
 axiom-render = "axiom.scripts.render_model:main"
 axiom-teach = "axiom.scripts.cnt:main"
-axiom-webui_app = "axiom.scripts.app:main"
+axiom-visualize = "axiom.scripts.visualize_brain:main"
+axiom-galaxy1 = "axiom.scripts.visualize_fibonacci_galaxy:main"
+axiom-galaxy2 = "axiom.scripts.visualize_seed_of_life:main"
 axiom-webui = "axiom.scripts.app_model:main"
+axiom-webui_app = "axiom.scripts.app:main"
+axiom-metatest = "axiom.scripts.test_metacog:main"
+axiom-extract = "axiom.scripts.extract_code_suggestion:main"
+axiom-analyze = "axiom.scripts.analyze_logs:main"
+axiom-inspect = "axiom.scripts.code_inspector:main"
+axiom-trends = "axiom.scripts.graph_deferred_trends:main"
 
 
 # --- Tool Configurations ---
@@ -109,12 +130,13 @@ warn_unreachable = true
 minversion = "6.0"
 # Add options here to avoid typing them in check.sh
 # -v for verbose, --cov for coverage report
-addopts = "-v --cov-report=term-missing --cov=axiom"
+addopts = "--cov-report=term-missing --cov=axiom"
 testpaths = [
     "tests",
 ]
 filterwarnings = [
-        "ignore::FutureWarning:networkx",
+    # click API depracation warning for `parser.split_arg_string` warning still present
+    # APIScheduler - no longer a present warning
 ]
 markers = [
     "introspection: tests that require a live LLM model and are skipped in standard CI",
@@ -125,13 +147,16 @@ axiom = ["static/*", "templates/*"]
 
 [tool.coverage.run]
 branch = true
-source_pkgs = ["axiom"]
-omit = []
 parallel = true
 relative_files = true
-source = ["."]
+source = ["src/axiom"]
+concurrency = ["multiprocessing", "thread"]
+omit = ["*/tests/*"]
 
 [tool.coverage.report]
+fail_under = 45
+show_missing = true
+skip_empty = true
 precision = 1
 skip_covered = true
 exclude_also = [

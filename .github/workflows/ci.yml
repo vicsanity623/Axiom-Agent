@@ -22,16 +22,20 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
 
-      - name: Install dependencies
-        run: pip install -e '.[dev]'
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v1
+        with:
+          cache-key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/uv.lock') }}
 
-      - name: Run quality checks
-        run: ./check.sh
+      - name: Install dependencies with uv
+        run: uv sync --extra dev
 
-      - name: Run tests
-        run: pytest -q --cov=axiom --cov-report=term-missing --cov-report=xml
+      - name: Download NLTK Data
+        run: uv run python -m nltk.downloader wordnet averaged_perceptron_tagger
+
+      - name: Run quality checks and tests
+        run: uv run ./check.sh
 
       - name: Upload coverage artifact
         if: success()

@@ -1,45 +1,23 @@
-"""
-Axiom Brain Visualizer (Advanced & High-Performance)
-----------------------------------------------------
-
-Visualizes the Axiom agent's knowledge graph with advanced features and
-optimizations for large brains. This script is designed to be run from the
-project root.
-
-Features:
-- Correctly locates the brain file using the central config.
-- Renders a directed graph to show relationship flow.
-- Scales node size based on connectivity.
-- Scales edge width based on confidence score.
-- Styles negated relationships differently (dashed, red).
-- Provides detailed tooltips for both nodes and edges with all properties.
-- **Performance:** Culls the graph to the most connected nodes for fast loading.
-- **Performance:** Disables physics on load and provides an interactive toggle button.
-"""
-
 import json
+import logging
 from pathlib import Path
 
 import networkx as nx
 from pyvis.network import Network
 
-brain_file_path: Path
-try:
-    from axiom.config import DEFAULT_BRAIN_FILE
+from axiom.config import DEFAULT_BRAIN_FILE
 
-    brain_file_path = DEFAULT_BRAIN_FILE
-except ImportError:
-    PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-    brain_file_path = PROJECT_ROOT / "src" / "axiom" / "brain" / "my_agent_brain.json"
+logger = logging.getLogger(__name__)
 
 
 def visualize_brain():
     """
-    Loads the agent's brain and generates an interactive HTML visualization.
+    Loads the agent's brain and generates a high-performance, interactive
+    HTML visualization of its core concepts.
     """
     core_node_threshold = 750
+    brain_file_path = DEFAULT_BRAIN_FILE
 
-    # Use the locally resolved brain_file_path variable
     print(f"🔍 Searching for brain file at:\n   {brain_file_path}")
 
     if not brain_file_path.exists():
@@ -50,6 +28,7 @@ def visualize_brain():
 
     with open(brain_file_path, encoding="utf-8") as f:
         brain_data = json.load(f)
+
     nodes = brain_data.get("nodes", [])
     edges = brain_data.get("links", [])
 
@@ -222,7 +201,7 @@ def main():
     try:
         visualize_brain()
     except (FileNotFoundError, ValueError) as e:
-        print(str(e))
+        logger.error(str(e))
 
 
 if __name__ == "__main__":
