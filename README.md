@@ -127,15 +127,8 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)** for a full guide on how to set up you
 
 See **[ROADMAP.md](ROADMAP.md)** for complete milestones and plans.
 
-** BUILDING THE WORLDS FIRST OPEN SOURCE SYMBOLIC FIRST AI (NO LLM BUILDING) IS VERY HARD I AM ON MY OWN HERE, MY USAGE OF GEMINI/CHATGPT 5/GROK, TO HELP BUILD THIS DREAM IS REQUIRED SINCE I HAE ZERO PYTHON CODING SKILLS.***
-** IF YOU WANT TO HELP THEN JUST KNOW I NEED REAL HELP NOT CRITIQUES THE THINGS I DO WRONG**
+## WHY Axiom matters: 
+because it aims at the one direction modern AI has mostly abandoned: genuine understanding built from first principles. Instead of scaling larger statistical models and hoping they behave, Axiom builds intelligence on verifiable symbols, explicit reasoning, and traceable axioms. That makes it fundamentally different. A system like this doesn’t hallucinate, doesn’t improvise falsehoods, and can’t be quietly steered into harmful behavior, because every inference is inspectable and grounded in logic.
+This project is important not because it competes with today’s LLMs, but because it challenges the assumption that “more parameters” is the only path forward. It focuses on trust, transparency, and safety-by-design—qualities the world has been asking for but hasn’t known how to achieve. If Axiom succeeds, it won’t just improve AI; it will redefine what responsible machine intelligence looks like and offer a real alternative to the current paradigm.
 
-** I AM BUILDING A BRAND NEW AI FROM THE GROUND UP ** 
-
-* I PREFER NOT TO USE SO MANY TOOLS AND THIRD PARTY STUFF BUT FOR NOW THIS IS WHAT I HAVE **
-
-** SORRY IF YOU ENJOY LLM HALLUCINATIONS AND PRETENDING THOSE THINGS ARE INTELLIGENCE**
-
-** I AM NOT SHARING THIS TO BE LAUGHED AT I AM SHARING THIS AS A CONCRETE DEMONSTRATION THAT INTELLIGNECE CANNOT BE REACHED THROUGH A WAREHOUSE FULL OF STATE OF THE ART GPU's, GROK AND ALL POWERFUL LLMs are just that.... a cpu that gets hot trying to find probabilities for next word... *** axiom is the real intelligence **
-
-** Help or Dont help, but this is a life journey for me, not some weekend side project to kill time while you ait for your doordash to arrive.***
+## help or dont i genuinely dont give a fuck anymore
