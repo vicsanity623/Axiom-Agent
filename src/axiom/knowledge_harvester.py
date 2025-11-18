@@ -14,7 +14,7 @@ import requests
 import wikipedia
 from nltk.stem import WordNetLemmatizer
 
-from axiom.universal_interpreter import PropertyData, Task
+from axiom.universal_interpreter import Task
 
 from .knowledge_base import validate_and_add_relation
 from .logging_config import console
@@ -135,12 +135,19 @@ class KnowledgeHarvester:
             raw_term = match.group(1)
         else:
             raw_term = goal.get("topic", "")
+
         term_to_learn = self.agent._clean_phrase(raw_term)
         if not term_to_learn:
             logger.warning(
                 f"Received goal with no valid topic after cleaning: {goal}. Discarding."
             )
             return False
+
+        if term_to_learn.isdigit():
+            logger.warning(
+                f"Cannot learn the definition of a number ('{term_to_learn}'). Discarding task as invalid."
+            )
+            return True
 
         logger.info(
             f"[Study Cycle]: Prioritizing learning goal: To define '{term_to_learn}' (from '{raw_term}')."
@@ -151,7 +158,6 @@ class KnowledgeHarvester:
             api_result = self.get_definition_from_api(term_to_learn)
             if api_result:
                 part_of_speech, definition = api_result
-                was_learned = False
                 with self.lock:
                     self.agent.lexicon.add_linguistic_knowledge(
                         term_to_learn,
@@ -159,47 +165,23 @@ class KnowledgeHarvester:
                         confidence=0.9,
                         provenance="dictionary_api",
                     )
-                    sub_node = self.agent.knowledge_manager.get_or_create_concept(
-                        term_to_learn
+                    # Process the definition. We don't care if it succeeds or defers.
+                    # The act of finding the definition and creating a task for its
+                    # blockers is considered progress.
+                    self.agent.knowledge_manager.learn_new_fact_autonomously(
+                        definition, term_to_learn
                     )
-                    obj_node = self.agent.knowledge_manager.get_or_create_concept(
-                        part_of_speech
-                    )
-                    if sub_node and obj_node:
-                        pos_properties: PropertyData = {
-                            "provenance": "dictionary_api",
-                            "confidence": 0.95,
-                        }
-                        status = validate_and_add_relation(
-                            agent=self.agent,
-                            sub_node=sub_node,
-                            obj_node=obj_node,
-                            relation_type="is a",
-                            properties=pos_properties,
-                            caller_name=caller_name,
-                        )
-                        if status != "deferred":
-                            was_learned = True
-                    if (
-                        definition
-                        and self.agent.knowledge_manager.learn_new_fact_autonomously(
-                            definition, term_to_learn
-                        )
-                    ):
-                        was_learned = True
-                if was_learned:
-                    logger.info(
-                        f"[green]   - Successfully learned '{term_to_learn}' from Dictionary API.[/green]"
-                    )
-                    return True  # <-- This return is now correctly hit
-            else:
-                logger.warning(
-                    f"   - Dictionary API failed for '{term_to_learn}'. Falling back to web search."
+
+                # --- FIX: Return True regardless of whether the fact was deferred ---
+                logger.info(
+                    f"[green]   - Successfully processed '{term_to_learn}' from Dictionary API.[/green]"
                 )
+                return True
+            logger.warning(
+                f"   - Dictionary API failed for '{term_to_learn}'. Falling back to web search."
+            )
 
-        # --- FIX: Separate the search loop from the learning logic ---
-
-        # Phase 1: Search for a valid web fact
+        # Your original, correct web search logic is preserved here.
         web_fact: str | None = None
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}"]
         for query in queries:
@@ -208,10 +190,9 @@ class KnowledgeHarvester:
             ) or self.get_fact_from_duckduckgo(query)
             if result:
                 _source, web_fact = result
-                break  # Found a result, stop searching
+                break
             time.sleep(1)
 
-        # Phase 2: Attempt to learn from the fact, if one was found
         if web_fact:
             with self.lock:
                 if self.agent.knowledge_manager.learn_new_fact_autonomously(

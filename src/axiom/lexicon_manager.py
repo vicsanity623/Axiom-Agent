@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from .graph_core import ConceptNode
 from .knowledge_base import validate_and_add_relation
 from .universal_interpreter import PropertyData
 
@@ -61,35 +62,59 @@ class LexiconManager:
         part_of_speech: str,
         confidence: float = 0.9,
         provenance: str = "seed",
-    ) -> None:
+    ) -> ConceptNode | None:
         """
-        Adds a new linguistic fact directly to the knowledge graph as a
-        standard 'is_a' relationship. This is the primary method for
-        updating the lexicon.
+        The single, authoritative method for creating or updating a concept in the
+        knowledge graph. It ensures that every concept has lexical properties.
         """
         clean_word = self.agent._clean_phrase(word)
-        pos_lower = part_of_speech.lower()
-        if not clean_word:
-            return
+        pos_lower = self.agent._clean_phrase(part_of_speech)
+        if not clean_word or not pos_lower:
+            return None
 
-        word_node = self.agent.knowledge_manager.get_or_create_concept(
-            clean_word, node_type=pos_lower
-        )
-        pos_node = self.agent.knowledge_manager.get_or_create_concept(
-            pos_lower, node_type="part_of_speech"
-        )
-
-        if word_node and pos_node:
-            # Add the fact directly to the graph
-            validate_and_add_relation(
-                agent=self.agent,  # Pass the agent instance
-                sub_node=word_node,
-                obj_node=pos_node,
-                relation_type="is_a",
-                properties=PropertyData(provenance=provenance, confidence=confidence),
+        # Step 1: Get or Create the main word node
+        node = self.agent.graph.get_node_by_name(clean_word)
+        if node is None:
+            node = self.agent.graph.add_node(
+                ConceptNode(name=clean_word, node_type=pos_lower)
             )
             logger.info(
-                "    [Lexicon]: Learned that '%s' is a '%s'.",
-                clean_word,
-                pos_lower,
+                "   - Added new concept to graph: %s (%s)", clean_word, pos_lower
             )
+
+        # Ensure the main node has its lexical property
+        props = self.agent.graph.graph.nodes[node.id].setdefault("properties", {})
+        promoted_as = props.setdefault("lexical_promoted_as", {})
+        if isinstance(promoted_as, dict):
+            promoted_as[pos_lower] = max(promoted_as.get(pos_lower, 0.0), confidence)
+
+        # Step 2: Get or Create the part-of-speech node itself
+        pos_node: ConceptNode | None
+        if clean_word == pos_lower:
+            pos_node = node
+        else:
+            pos_node = self.agent.graph.get_node_by_name(pos_lower)
+            if pos_node is None:
+                # Recursively call this function to create the POS node
+                self.add_linguistic_knowledge(
+                    pos_lower, "part_of_speech", confidence=1.0, provenance="system"
+                )
+                pos_node = self.agent.graph.get_node_by_name(pos_lower)
+
+        if pos_node is None:
+            logger.error("Failed to create part-of-speech node '%s'.", pos_lower)
+            return node
+
+        # Step 3: Add the 'is_a' relationship
+        validate_and_add_relation(
+            agent=self.agent,
+            sub_node=node,
+            obj_node=pos_node,
+            relation_type="is_a",
+            properties=PropertyData(provenance=provenance, confidence=confidence),
+        )
+        logger.info(
+            "    [Lexicon]: Learned that '%s' is a '%s'.", clean_word, pos_lower
+        )
+
+        return node
