@@ -35,18 +35,21 @@ def _launch_graph_monitor_terminal() -> None:
     graph_deferred_trends.py live alongside axiom-train.
     """
 
-    command = f"""
+    project_root = str(PROJECT_ROOT)
+    graph_script = str(GRAPH_SCRIPT)
+    venv_activate = str(VENV_ACTIVATE)
+
+    # QUOTE EVERYTHING to handle spaces in paths
+    command = f'''
         tell application "Terminal"
             activate
-            do script "cd {PROJECT_ROOT} && source {VENV_ACTIVATE} && python3 {GRAPH_SCRIPT}"
+            do script "cd \\"{project_root}\\" && source \\"{venv_activate}\\" && python3 \\"{graph_script}\\""
         end tell
-    """
+    '''
 
     try:
         subprocess.Popen(["osascript", "-e", command])
-        logger.info(
-            "[AUTONOMOUS TRAINER]: Live graph monitor launched in new Terminal."
-        )
+        logger.info("[AUTONOMOUS TRAINER]: Live graph monitor launched in new Terminal.")
     except Exception as e:
         logger.error(f"Failed to launch graph monitor terminal: {e}")
 
