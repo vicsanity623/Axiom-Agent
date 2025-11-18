@@ -7,17 +7,14 @@ from ..logging_config import setup_logging
 
 logger = logging.getLogger(__name__)
 
-# Define all target files relative to a potential project root.
-# This makes the script runnable from any directory within the project.
+# --- FIX: Define only the files for a SOFT reset ---
+# This list intentionally OMITS my_agent_brain.json
 FILES_TO_DELETE: list[str] = [
     "code_suggestion.json",
     "axiom.log",
     "data/research_cache.json",
     "src/axiom/brain/my_agent_state.json",
-    "src/axiom/brain/my_agent_brain.json",
     "src/axiom/brain/interpreter_cache.json",
-    "src/axiom/brain/model_version.txt",
-    "src/axiom/rendered/Axiom_0.3.axm",
 ]
 
 
@@ -32,22 +29,28 @@ def find_project_root(start_path: Path) -> Path | None:
 
 
 def main() -> None:
-    """Entry point for the axiom-reset command."""
+    """
+    Entry point for the axiom-reset command. Performs a SOFT reset, preserving
+    the agent's long-term knowledge (the brain file).
+    """
     setup_logging()
 
     project_root = find_project_root(Path.cwd())
     if not project_root:
         logger.error(
-            "Could not find project root (containing 'pyproject.toml'). "
-            "Please run this command from within the Axiom-Agent project directory."
+            "Could not find project root. Please run from within the project directory."
         )
         return
 
-    logger.warning(
-        "[bold yellow]This command will permanently delete the agent's brain, state, logs, and caches.[/bold yellow]"
+    logger.info("[bold yellow]Performing a SOFT reset.[/bold yellow]")
+    logger.info(
+        "This will reset the agent's current state, goals, and caches, but will PRESERVE its learned knowledge."
     )
-    logger.warning("This action cannot be undone.")
+    logger.info(
+        "To perform a full factory reset, use the 'axiom-factory-reset' command."
+    )
 
+    # A soft reset is less destructive, so we can make the confirmation simpler.
     try:
         confirm = input("Are you sure you want to continue? (yes/no): ")
     except (KeyboardInterrupt, EOFError):
@@ -58,7 +61,7 @@ def main() -> None:
         logger.info("Reset cancelled.")
         return
 
-    logger.info("\n--- [Axiom Reset]: Wiping the slate clean... ---")
+    logger.info("\n--- [Axiom Soft Reset]: Resetting agent state... ---")
     deleted_count = 0
     for file_str in FILES_TO_DELETE:
         file_path = project_root / file_str
@@ -73,7 +76,7 @@ def main() -> None:
             logger.debug("   - Not found, skipping: %s", file_path)
 
     logger.info(
-        "\n[bold green]✅ Reset complete. Deleted %d file(s).[/bold green]",
+        "\n[bold green]✅ Soft Reset complete. Deleted %d file(s).[/bold green]",
         deleted_count,
     )
 

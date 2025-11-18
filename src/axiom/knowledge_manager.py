@@ -338,14 +338,36 @@ class KnowledgeManager:
     def learn_new_fact_autonomously(
         self, fact_sentence: str, source_topic: str | None = None
     ) -> bool:
-        """Learns from a sentence by decomposing it into atomic facts and processing them."""
+        """
+        Learns from a sentence by trying the fast SymbolicParser first, then
+        falling back to the UniversalInterpreter's decomposition.
+        """
         caller_name = f"{self.agent.__class__.__name__}.learn_new_fact_autonomously"
         logger.info(
             "[yellow]   - Attempting to learn fact: '%s'[/yellow]", fact_sentence
         )
-        atomic_relations = self.agent.interpreter.decompose_sentence_to_relations(
-            text=fact_sentence, main_topic=source_topic
-        )
+
+        # --- FIX: Try the SymbolicParser first ---
+        symbolic_interpretations = self.agent.parser.parse(fact_sentence)
+
+        atomic_relations: list[RelationData] = []
+        provenance = "symbolic_parser"
+
+        if symbolic_interpretations:
+            logger.info("   - ✅ Understood via Symbolic Parser.")
+            for interp in symbolic_interpretations:
+                if relation := interp.get("relation"):
+                    atomic_relations.append(relation)
+        else:
+            # --- Fallback to the UniversalInterpreter ---
+            logger.warning(
+                "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter."
+            )
+            atomic_relations = self.agent.interpreter.decompose_sentence_to_relations(
+                text=fact_sentence, main_topic=source_topic
+            )
+            provenance = "llm_decomposition"
+
         if not atomic_relations:
             logger.warning(
                 "[warning]Interpreter could not extract any atomic facts from the sentence.[/warning] (in %s)",
@@ -356,9 +378,12 @@ class KnowledgeManager:
         facts_learned_count = 0
         for relation_data in atomic_relations:
             props = relation_data.setdefault("properties", {})
-            props.setdefault("confidence", 0.8)
-            props.setdefault("provenance", "llm_decomposition")
+            props.setdefault(
+                "confidence", 0.9 if provenance == "symbolic_parser" else 0.8
+            )
+            props.setdefault("provenance", provenance)
             logger.info("[green]   - Interpreted Relation: %s[/green]", relation_data)
+
             success, _ = self._process_statement_for_learning(
                 relation_data, allow_unknowns_for_topic=source_topic
             )

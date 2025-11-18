@@ -53,16 +53,17 @@ class DatasetGenerator:
         }
         all_nodes = [self.agent.graph.get_node_by_id(node_id) for node_id in node_ids]
 
+        # --- FIX: Use the new, correct is_part_of_speech method ---
         self.concepts = [
             node.name
             for node in all_nodes
             if node is not None
-            and "noun" in self.agent.lexicon.get_promoted_pos(node.name)
+            and self.agent.lexicon.is_part_of_speech(node.name, "noun")
         ]
 
         if not self.concepts:
             raise ValueError(
-                "Agent brain lacks sufficient promoted nouns to use as seeds. Please run axiom-train for longer."
+                "Agent brain lacks sufficient 'noun' concepts to use as seeds. Please run axiom-train for longer."
             )
 
         print(
@@ -111,6 +112,9 @@ class DatasetGenerator:
         Executes a single, chained sequence of generation tasks to create
         interconnected, high-quality data.
         """
+        if not self.concepts:
+            return
+
         topic = random.choice(self.concepts)
         node = self.agent.graph.get_node_by_name(topic)
         if not node:
@@ -149,7 +153,9 @@ class DatasetGenerator:
 
         if len(edges) > 1:
             facts_to_synth = []
-            for edge in random.sample(edges, min(len(edges), 2)):
+            # Use a sample size that is safe for lists with fewer than 2 edges
+            sample_size = min(len(edges), 2)
+            for edge in random.sample(edges, sample_size):
                 tn = self.agent.graph.get_node_by_id(edge.target)
                 if tn:
                     facts_to_synth.append(

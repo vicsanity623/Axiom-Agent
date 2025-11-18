@@ -10,7 +10,6 @@ from typing import Final
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from .. import knowledge_base
 from ..cognitive_agent import CognitiveAgent
 from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, GEMINI_API_KEY
 from ..logging_config import console, setup_logging
@@ -64,40 +63,27 @@ def _generate_or_set_initial_goal(
 
     while True:
         creative_seeds = [
-            # -------------------------------------- CHANGE OR CUSTOMIZE WHT AXIOM LEARNS HERE --------------------------------------
-            # --- Basic Objects & The World ---
-            "Learn about the things in a house. Start with 'chair' and 'table.' Then, learn about 'door' and 'window.' Finally, understand what a 'roof' is.",
-            "Explore the kitchen. Learn about a 'cup,' a 'plate,' and a 'spoon.' Then, find out what a 'fork' and a 'knife' are used for.",
-            "Learn about things you can wear. Start with 'shirt' and 'pants.' Then, learn about 'shoes' and 'socks.' Finally, understand what a 'hat' is.",
-            "Discover things in a classroom. Learn about a 'book,' a 'pencil,' and 'paper.' Then, understand what a 'desk' and a 'blackboard' are.",
-            "Learn about toys. Start with 'ball' and 'doll.' Then, learn about 'blocks' and 'crayons.'",
-            # --- Colors & Shapes ---
-            "Build a model of colors. First, learn the primary colors: 'red,' 'blue,' and 'yellow.' Then, learn the secondary colors: 'green,' 'orange,' and 'purple.'",
-            "Learn to identify basic shapes. Start with 'circle' and 'square.' Then, learn about 'triangle' and 'star.'",
-            "Explore the colors of nature. Learn that the 'sky' is 'blue' and 'grass' is 'green.' Then, learn that a 'sunflower' is 'yellow.'",
-            # --- Animals ---
-            "Learn about common pets. Start with 'dog' and 'cat.' Then, learn about 'fish' and 'bird.'",
-            "Discover farm animals. Learn about a 'cow,' a 'pig,' and a 'sheep.' Then, find out what a 'chicken' and a 'horse' are.",
-            "Explore wild animals. Learn about a 'lion,' a 'tiger,' and a 'bear.' Then, learn about an 'elephant' and a 'monkey.'",
-            # --- Simple Actions & Verbs ---
-            "Understand basic actions. Learn the meaning of 'walk' and 'run.' Then, learn about 'jump' and 'sleep.'",
-            "Learn about how we interact with objects. Start with 'eat' and 'drink.' Then, learn about 'play' and 'read.'",
-            "Explore verbs of creation. Learn the meaning of 'draw' and 'build.'",
-            # --- People & Family ---
-            "Build a model of a family. Learn the concepts of 'mother' and 'father.' Then, learn about 'brother' and 'sister.' Finally, understand 'baby.'",
-            "Learn about people in the community. Start with 'teacher' and 'doctor.' Then, learn about 'firefighter' and 'police officer.'",
-            # --- Nature & The Outdoors ---
-            "Learn about the sky. Start with the 'sun' and the 'moon.' Then, learn about 'stars' and 'clouds.'",
-            "Explore the weather. Learn the difference between 'rain' and 'snow.' Then, understand what 'wind' is.",
-            "Discover plants. Learn about a 'tree,' a 'flower,' and 'grass.'",
-            # --- Food ---
-            "Learn about fruits. Start with 'apple' and 'banana.' Then, learn about 'orange' and 'grape.'",
-            "Discover vegetables. Learn about 'carrot' and 'pea.' Then, learn about 'broccoli' and 'corn.'",
-            "Learn about simple meals. Start with 'bread' and 'cheese.' Then, learn about 'milk' and 'water.'",
-            # --- Basic Concepts ---
-            "Understand opposites. Learn the difference between 'big' and 'small.' Then, learn about 'hot' and 'cold,' and 'up' and 'down.'",
-            "Learn to count. Start with the numbers 'one,' 'two,' and 'three.' Then, learn 'four' and 'five.'",
-            "Explore the senses. Learn about 'seeing,' 'hearing,' and 'touching.' Then, learn about 'smelling' and 'tasting.'",
+            # -------------------------------------- AXIOM "CONCEPTUAL" CURRICULUM SEEDS --------------------------------------
+            # --- Foundational Physics & Causality ---
+            "Model the physics of a thrown ball. A person can throw a ball. A ball is a round object. Gravity is a force that pulls the ball down. The ball will fall to the ground.",
+            "Explore the concept of temperature. Fire is hot. Ice is cold. Water can be hot or cold. Hot things can burn you. Cold things can freeze water.",
+            "Understand the states of matter. Water is a liquid. Ice is a solid. Steam is a gas. Heat can turn ice into water. Heat can turn water into steam.",
+            # --- Simple Biology & Taxonomies ---
+            "Build a model of a simple ecosystem. A cat is an animal. A dog is an animal. A bird is an animal. A cat eats a mouse. A bird eats a worm. Animals need to eat food to live.",
+            "Learn about the parts of a plant. A tree is a plant. A tree has roots, a trunk, and leaves. The roots are in the ground. The leaves grow on branches.",
+            "Discover the life cycle of a butterfly. A caterpillar is an insect. A caterpillar turns into a chrysalis. A chrysalis becomes a butterfly. A butterfly has wings.",
+            # --- Social Structures & Roles ---
+            "Model a simple family unit. A family can have a mother and a father. A mother is a parent. A father is a parent. Parents take care of a child.",
+            "Understand community helpers. A doctor is a person who helps sick people. A firefighter is a person who puts out fires. A teacher is a person who teaches students.",
+            "Explore the concept of a city. A city is a place where many people live. A city has buildings, roads, and parks. Cars drive on roads.",
+            # --- Abstract Concepts & Properties ---
+            "Learn about colors and their associations. The sun is yellow. The sky is blue. An apple is red. Red can mean stop. Green can mean go.",
+            "Understand the concept of size and scale. An elephant is big. A mouse is small. A mountain is very big. A building is bigger than a house.",
+            "Explore the concept of time. The day has a morning, an afternoon, and a night. The sun is in the sky during the day. The moon is in the sky at night.",
+            # --- Tools & Purpose ---
+            "Model the purpose of simple tools. A hammer is a tool used to hit nails. A pencil is a tool used to write. A spoon is a tool used to eat soup.",
+            "Understand simple machines. A wheel is a simple machine that can roll. A lever is a simple machine that can lift heavy things.",
+            "Explore the concept of a container. A box is a container. A cup is a container. A bottle is a container. A container is used to hold things.",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(
@@ -163,7 +149,10 @@ def _generate_or_set_initial_goal(
 
 
 def start_autonomous_training(
-    brain_file: Path, state_file: Path, initial_goal: str | None = None
+    brain_file: Path,
+    state_file: Path,
+    initial_goal: str | None = None,
+    duration_hours: float | None = None,
 ) -> None:
     """Initialize the agent and run its autonomous learning cycles indefinitely."""
 
@@ -188,19 +177,17 @@ def start_autonomous_training(
             state_file=state_file,
             inference_mode=False,
         )
-
         axiom_agent.load_state()
 
         if axiom_agent.harvester is None:
             logger.critical(
-                "!!! CRITICAL ERROR: Harvester was not initialized by the agent. Halting. !!!"
+                "!!! CRITICAL ERROR: Harvester not initialized. Halting. !!!"
             )
             return
         harvester = axiom_agent.harvester
 
         metacognitive_engine = MetacognitiveEngine(
-            agent=axiom_agent,
-            gemini_api_key=GEMINI_API_KEY,
+            agent=axiom_agent, gemini_api_key=GEMINI_API_KEY
         )
 
         scheduler = BackgroundScheduler(daemon=True)
@@ -213,34 +200,28 @@ def start_autonomous_training(
 
         _generate_or_set_initial_goal(axiom_agent, initial_goal)
 
-        manager.start()
+        # FIX: Pass the duration to the manager's start method
+        manager.start(duration_hours=duration_hours)
         scheduler.start()
 
-        while True:
+        # The main loop now just waits for the scheduler to be shut down
+        while scheduler.running:
             time.sleep(1)
 
     except (KeyboardInterrupt, SystemExit):
         logger.info(
             "[border]\n--- [AUTONOMOUS TRAINER]: Shutdown signal received. Saving final state... ---[/border]",
         )
-        if axiom_agent:
-            axiom_agent.save_state()
-            logger.info("--- [AUTONOMOUS TRAINER]: Final state saved. Exiting. ---")
-
     except Exception as exc:
         logger.critical(
-            "!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: %s !!!",
-            exc,
-            exc_info=True,
+            "!!! [AUTONOMOUS TRAINER]: CRITICAL ERROR: %s !!!", exc, exc_info=True
         )
         traceback.print_exc()
-        if axiom_agent:
-            logger.info(
-                "--- [AUTONOMOUS TRAINER]: Attempting to save state after critical error... ---"
-            )
-            axiom_agent.save_state()
-
     finally:
+        if axiom_agent:
+            logger.info("--- [AUTONOMOUS TRAINER]: Attempting to save state... ---")
+            axiom_agent.save_state()
+            logger.info("--- [AUTONOMOUS TRAINER]: Final state saved. Exiting. ---")
         if scheduler and scheduler.running:
             scheduler.shutdown()
         logger.info("--- [AUTONOMOUS TRAINER]: Process terminated. ---")
@@ -260,6 +241,13 @@ def main() -> None:
         default=None,
         help="A specific, high-level learning goal to start with.",
     )
+    # --- FIX: Add the new --duration argument ---
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=None,
+        help="An optional duration in hours to run the training. e.g., 1.5 for 90 minutes.",
+    )
 
     parser.add_argument(
         "brain_file",
@@ -278,8 +266,13 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    knowledge_base.initialize_linguistic_resources()
-    start_autonomous_training(args.brain_file, args.state_file, initial_goal=args.goal)
+    # FIX: Pass the new duration argument to the training function
+    start_autonomous_training(
+        args.brain_file,
+        args.state_file,
+        initial_goal=args.goal,
+        duration_hours=args.duration,
+    )
 
 
 if __name__ == "__main__":

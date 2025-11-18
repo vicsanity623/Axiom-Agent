@@ -6,7 +6,9 @@ This roadmap documents the evolution of the Axiom Agent, from its foundational a
 
 The Axiom Agent has successfully evolved through its foundational phases. It began with the **"Genesis Engine,"** establishing a stable knowledge graph and basic parsing. It then became an **"Intelligent Learner"** with autonomous discovery, a **"Conversational Mind"** with contextual understanding, and underwent a critical **"Stabilization & Hardening"** phase to build a resilient and testable core.
 
-Following this, the agent has now achieved a new level of intelligence in the **"Autonomous Scholar"** phase. It has moved beyond simple learning to **strategic, goal-oriented research**, driven by a formal `GoalManager`. Most significantly, it now possesses a **`MetacognitiveEngine`**, allowing it to analyze its own performance logs, suggest improvements to its own source code, and verify those fixes in a secure sandbox. This suite of capabilities marks a transition to true autonomy, setting the stage for the next leaps into deeper semantic understanding and procedural reasoning.
+Following this, the agent achieved a new level of intelligence in the **"Autonomous Scholar"** and **"Foundational Bootstrapping"** phases. It moved beyond simple learning to **strategic, goal-oriented research**, driven by a formal `GoalManager` and a powerful, recursive `study_cycle`. Most significantly, it now possesses a **`MetacognitiveEngine`**, allowing it to analyze its own performance logs and suggest improvements to its own source code.
+
+The agent has now completed its most critical architectural evolution to date in the **"Symbolic Core Revolution"** phase. This has fundamentally re-architected the agent's "mind" to be **Symbolic-First**, setting the stage for true intellectual escape velocity.
 
 ---
 
@@ -24,7 +26,7 @@ Following this, the agent has now achieved a new level of intelligence in the **
 
 ### Key Features
 *   `ConceptGraph` implemented using NetworkX for in-memory knowledge storage.
-*   Basic `SymbolicParser` for simple sentence structures.
+*   <!-- Basic `SymbolicParser` for simple sentence structures. --> (Superseded by Phase 6)
 *   Initial brain seeding process to provide foundational knowledge.
 *   Core `CognitiveAgent` class to orchestrate the basic chat loop.
 
@@ -61,7 +63,7 @@ Following this, the agent has now achieved a new level of intelligence in the **
 ### Key Features
 *   **Centralized & Robust Architecture:** Refactored the entire project to use a central `config.py` for all file paths.
 *   **LLM-Powered Fact Verification:** Implemented an LLM-driven "quality gate" (`verify_and_reframe_fact`) that critically evaluates facts found on the web.
-*   **Intelligent Lexicon Promotion:** Created a formal "promotion" system for the lexicon, allowing the agent to distinguish between observing a word and trusting its definition.
+*   <!-- **Intelligent Lexicon Promotion:** Created a formal "promotion" system for the lexicon, allowing the agent to distinguish between observing a word and trusting its definition. --> (Superseded by Phase 6)
 *   **Comprehensive Test Suite:** Achieved a fully passing, clean CI/CD pipeline (Ruff, MyPy, Pytest).
 *   **Streamlined User Experience:** Refactored developer scripts into professional command-line entry points (`axiom-train`, `axiom-webui`, `axiom-llm`).
 
@@ -85,54 +87,58 @@ Following this, the agent has now achieved a new level of intelligence in the **
 **Goal:** Dramatically accelerate the agent's initial learning, establish a robust belief system, and handle linguistic ambiguity.
 
 ### Key Features
-*   **Recursive Self-Unblocking Study Cycle:** The `study_cycle` was re-architected into a powerful, recursive loop. It can now autonomously identify its own knowledge gaps ("blockers") and create high-priority tasks to resolve them, allowing it to solve deep dependency chains in a single, persistent cycle.
-*   **Innate Foundational Knowledge:** The slow, active "foundational curriculum" was replaced with a much more efficient "innate" knowledge system. Hundreds of fundamental concepts are now pre-loaded directly into the `seed_core_vocabulary`, making the agent's bootstrapping process orders of magnitude faster.
+*   **Recursive Self-Unblocking Study Cycle:** The `study_cycle` was re-architected into a powerful, recursive loop. It can now autonomously identify its own knowledge gaps ("blockers") and create high-priority tasks to resolve them.
+*   **Innate Foundational Knowledge:** The slow, active "foundational curriculum" was replaced with a much more efficient "innate" knowledge system, pre-loading hundreds of fundamental concepts.
 *   **Knowledge Provenance & Confidence:** The `PropertyData` structure and `validate_and_add_relation` function were enhanced to track the `provenance` (source) and `confidence` of every learned fact.
-*   **Belief Revision System:** A formal belief revision system was implemented. The `_resolve_exclusive_conflict` method now uses `PROVENANCE_RANK` to intelligently decide whether to accept a new fact, reject it, or ask for clarification, allowing the agent to update its beliefs based on more trustworthy information.
+*   **Belief Revision System:** A formal belief revision system was implemented, using `PROVENANCE_RANK` to intelligently decide whether to accept, reject, or clarify new, conflicting information.
 
 ---
 
-# Phase 6 — Semantic Mastery
+# Phase 6 — The Symbolic Core Revolution (COMPLETE)
 
-**Goal:** Deepen the agent's understanding of language nuance, context, and complex relationships.
+**Goal:** Fundamentally re-architect the agent's core intelligence to be "Symbolic-First," dramatically increasing speed, efficiency, and accuracy, and setting the stage for "Intellectual Escape Velocity."
 
 ### Key Features
-*   **Homonym & Polysemy Disambiguation:** Enhance the `_add_or_update_concept` method and `ConceptGraph` to create and manage distinct "sense" nodes for words with multiple meanings (e.g., "one" the number vs. "one" the pronoun).
+*   **"Knowledge-First" Lexicon:** The `LexiconManager` was completely refactored. The complex, slow "observation/promotion" system was removed. Grammatical facts (e.g., `(cat)-[is_a]->(noun)`) are now first-class knowledge, stored directly in the main graph and available in real-time.
+*   **`spaCy`-Powered Symbolic Parser:** The old, brittle "regex waterfall" parser was replaced with a new, powerful `SymbolicParser` built on `spaCy`'s dependency parsing. This allows the agent to understand the true grammatical structure of sentences, not just simple string patterns.
+*   **"Symbolic-First" Cognitive Pipeline:** The `KnowledgeManager` and `ConversationManager` were updated to always try the fast, internal `SymbolicParser` first, only falling back to the slow, expensive `UniversalInterpreter` (LLM) when a sentence is too complex.
+*   **Tiered Reset & Checkpointing System:** The old `axiom-reset` command was replaced with a new, safer system:
+    *   `axiom-reset`: A "soft reset" that clears the agent's state but preserves its learned knowledge.
+    *   `axiom-factory-reset`: A "hard reset" that completely wipes the agent's brain, returning it to its factory state.
+
+---
+
+# Phase 7 — Semantic Mastery & The Symbolic Synthesizer (CURRENT PHASE)
+
+**Goal:** Complete the end-to-end symbolic loop by building a "fast path" for language generation, and deepen the agent's understanding of language nuance.
+
+### Key Features
+*   **Symbolic Synthesizer:** Create a fast, template-based `SymbolicSynthesizer` to handle the generation of simple, factual responses. This will be the mirror image of the `SymbolicParser` and will complete the "Symbolic-First" architecture, allowing for entire conversations with zero LLM calls.
+*   **Homonym & Polysemy Disambiguation:** Enhance the `KnowledgeManager` and `ConceptGraph` to create and manage distinct "sense" nodes for words with multiple meanings (e.g., "bank" the financial institution vs. "bank" the river's edge).
 *   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and the `ConceptGraph` to represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
-*   **Sentiment and Tone Analysis:** Implement a mechanism to track the sentiment of the user's input and adjust the tone of synthesized responses accordingly, making conversation feel more empathetic and natural.
 *   **Temporal Reasoning:** Upgrade the `_filter_facts_for_temporal_query` to handle a wider range of date/time formats and relative queries (e.g., "before 2020," "last year").
 
 ---
 
-# Phase 7 — The Logical Reasoner (Procedural Thought)
+# Phase 8 — The Logical Reasoner (Procedural Thought)
 
 **Goal:** Evolve beyond semantic knowledge to incorporate procedural and logical reasoning by introducing "Tools."
 
 ### Key Features
 *   **CAUTION: This phase introduces significant security risks (e.g., prompt injection, arbitrary code execution). Proceed with extreme caution and a focus on sandboxing.**
-*   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use. Each tool will be a specialized function for tasks the knowledge graph cannot perform.
+*   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use.
 *   **Mathematical Capability (First Tool):** A `MathTool` that integrates a symbolic math library like `SymPy`.
 *   **Real-Time Data (Second Tool):** A `WebSearchTool` and a `CurrentDateTool` to fetch live data from the internet.
 *   **Code Execution (Advanced Tool):** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
 
 ---
 
-# Phase 8 — The Autonomous Operator
+# Phase 9 — The Autonomous Operator
 
 **Goal:** Grant the agent the agency to act upon its own conclusions, evolving from a "Verified Advisor" to a "Human-in-the-Loop Operator."
 
 ### Key Features
-*   **Action Proposal System:** Enhance the `MetacognitiveEngine` to not only suggest code changes but also to generate `git patch` files and open draft Pull Requests in a repository.
-*   **Interactive Review:** Develop a conversational interface (CLI or web) where a human developer can review a proposed action (like applying a patch) and give a simple "approve" or "deny" command.
+*   **Action Proposal System:** Enhance the `MetacognitiveEngine` to not only suggest code changes but also to generate `git patch` files and open draft Pull Requests.
+*   **Interactive Review:** Develop a conversational interface where a human developer can review a proposed action and give a simple "approve" or "deny" command.
 *   **Automated Execution:** Upon approval, the agent will be granted the ability to execute the verified action (e.g., `git apply patch.diff`, `git commit`, `git push`).
 *   **Rollback Capability:** Implement a safety protocol where the agent can automatically revert its last action if post-deployment monitoring detects a critical failure.
-
----
-
-# Phase 9 — Distributed Mind
-
-**Goal:** Prepare the agent for massive scalability and collaborative learning.
-
-### Key Features
-*   **Pluggable Graph Backends:** Refactor `ConceptGraph` to be an interface with options for graph databases (e.g., Neo4j).
-*   **Agent Federation:** Design a protocol that allows multiple Axiom Agents to query each other's knowledge and collaborate.

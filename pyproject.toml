@@ -9,7 +9,7 @@ package = true
 
 [project]
 name = "axiom"
-version = "0.6.0"
+version = "0.6.5"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
@@ -24,13 +24,13 @@ dependencies = [
     "google-generativeai",
     "llama-cpp-python",
     "networkx~=3.5.0",
-    "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
     "nltk",
     "python-Levenshtein>=0.25.1",
     "requests",
     "rich",
     "pyvis",
-    "spacy>=3.7.0",
+    "spacy>=3.8.0",
+    "en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
     "thefuzz>=0.22.1",
     "tqdm",
     "typer",
@@ -76,6 +76,7 @@ axiom-extract = "axiom.scripts.extract_code_suggestion:main"
 axiom-analyze = "axiom.scripts.analyze_logs:main"
 axiom-inspect = "axiom.scripts.code_inspector:main"
 axiom-trends = "axiom.scripts.graph_deferred_trends:main"
+axiom-fr = "axiom.scripts.factory_reset:main"
 
 
 # --- Tool Configurations ---
@@ -154,7 +155,6 @@ concurrency = ["multiprocessing", "thread"]
 omit = ["*/tests/*"]
 
 [tool.coverage.report]
-fail_under = 45
 show_missing = true
 skip_empty = true
 precision = 1

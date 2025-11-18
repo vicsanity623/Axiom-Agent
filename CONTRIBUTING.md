@@ -37,16 +37,24 @@ This command automatically creates a `.venv` directory and performs two critical
 1.  Installs all core and development dependencies (`ruff`, `mypy`, `pytest`).
 2.  Installs the `axiom` package itself in **editable mode** (`-e`), which means changes you make in the `src/` directory are immediately available when you run any scripts.
 
-> 💡 **Important:** You no longer need `setup.sh` or manual `sys.path` modifications in your tests. The editable install handles everything.
-
 To activate the environment in a new terminal:
 ```bash
 source .venv/bin/activate
 ```
 
-### 3️⃣ Download the Local LLM
+### 3️⃣ Download Required NLP Data
 
-The agent's `UniversalInterpreter` relies on a local GGUF-formatted language model. You can download the recommended model using the built-in CLI command:
+The agent's `SymbolicParser` relies on data packages from the `nltk` library. A helper script is provided to download and install these resources correctly into your virtual environment.
+
+**Run this script once after setting up your environment:**
+
+```bash
+./download_resources.sh
+```
+
+### 4️⃣ Download the Local LLM
+
+The agent's `UniversalInterpreter` (the "slow path" fallback) relies on a local GGUF-formatted language model. You can download the recommended model using the built-in CLI command:
 
 ```bash
 axiom-llm
@@ -82,61 +90,59 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 |---|---|
 | **Core Workflow** | |
 | `axiom-train` | **(Primary Workflow)** Starts the agent's autonomous learning cycles. |
+| `axiom-train --duration 1.5` | Runs the agent for a fixed duration (e.g., 1.5 hours), essential for benchmarking. |
 | `axiom-webui` | Launches an interactive web UI to chat with the agent. |
 | `axiom-teach` | (Continuous Narrative Training) Teach the agent facts directly via the terminal. |
 | **Analysis & Debugging** | |
-| `axiom-reset` | **(Essential for Debugging)** Wipes the agent's brain, state, and logs for a fresh start. |
-| `axiom-render` | Generates a static snapshot of the brain for the web UI. |
+| `axiom-reset` | **(Soft Reset)** Wipes the agent's state and caches but **preserves its learned knowledge**. Use this to start a new curriculum. |
+| `axiom-factory-reset` | **(Hard Reset)** Wipes **everything**, including the agent's brain, returning it to its factory state. |
+| `axiom-trends` | Launches a live, auto-refreshing graph of the agent's high-priority tasks during training. |
 | `axiom-visualize` | Creates an interactive HTML visualization of the agent's knowledge graph. |
-| **Metacognition** | |
-| `axiom-analyze` | Runs a standalone analysis of `axiom.log` to find optimization targets. |
-| `axiom-inspect` | Runs a deep, opinionated code quality analysis on a specific file. |
-## full list of commands found in [**pyproject.toml**](pyproject.toml).
+| **Benchmarking** | |
+| `axiom-bench` | Runs an automated analysis on the agent's brain and logs after a training run to score its learning efficiency. |
+| `axiom-evaluate` | Runs a "golden question" set against the trained agent to score its reasoning ability. |
 
-
+A full list of commands can be found in [**pyproject.toml**](pyproject.toml).
 
 **Typical Debugging Session:**
 
 1.  **Start with a clean slate:**
     ```bash
-    # This command safely removes the agent's brain, state, and log files.
-    axiom-reset
+    # This performs a HARD reset, wiping the brain, state, and logs.
+    axiom-factory-reset
     ```
-2.  **Run the trainer and watch the logs:**
+2.  **Run the trainer and the trend graph in separate terminals:**
     ```bash
+    # Terminal 1
     axiom-train
     ```
-3.  **Make your code changes** in a separate terminal.
-4.  **Restart the trainer** to see how your changes affect the agent's learning behavior.
-
-### 🤖 3. Working with the Metacognitive Engine
-
-Axiom's most advanced feature is its ability to analyze its own performance and suggest improvements. After a `MetacognitiveEngine` cycle, it generates a `code_suggestion.json` file.
-
-To work with a suggestion:
-1.  **Review the `code_suggestion.json` file:** This file contains the identified problem, the suggested code, and whether the automated verification passed or failed.
-2.  **Manually Apply and Test:** The self-improvement loop is currently in "Verified Advisory Mode." You are the human-in-the-loop. If you approve of the suggestion, manually copy the new code into the project.
-3.  **Verify and Commit:** Run `./check.sh` one last time to ensure compliance, restart `axiom-train` to verify stability, and then commit the change.
+    ```bash
+    # Terminal 2
+    axiom-trends
+    ```
+3.  **Observe the logs and the graph** to understand the agent's behavior.
+4.  **Make your code changes.**
+5.  **Restart the process** with a `axiom-reset` (soft reset) or `axiom-factory-reset` (hard reset) depending on the nature of your changes.
 
 ---
 
 ## 🚀 How to Contribute
 
-We are currently in **Phase 5: Semantic Mastery**. Our focus is on deepening the agent's understanding of language nuance and complex relationships.
+We are currently in **Phase 6: Symbolic Core Mastery**. Our focus is on making the `SymbolicParser` and `LexiconManager` as intelligent and robust as possible to minimize reliance on the LLM.
 
-### Your First Contribution: Enhance the `_clean_phrase` function
+### Your First Contribution: Enhance the `SymbolicParser`
 
-A great first contribution is to improve the agent's ability to normalize concepts. The `_clean_phrase` method in `cognitive_agent.py` is responsible for cleaning text before it becomes a concept in the knowledge graph. It currently handles parentheses but could be much more robust.
+A great first contribution is to improve the agent's "fast path" thinking. The `SymbolicParser` in `symbolic_parser.py` is responsible for understanding simple sentences. It currently handles basic SVO ("Subject-Verb-Object") patterns and questions but could be much more powerful.
 
 **Steps:**
 
 1.  Fork the repository and create a branch:
     ```bash
-    git checkout -b feature/robust-phrase-cleaning
+    git checkout -b feature/parser-handles-adverbs
     ```
-2.  Locate the `_clean_phrase` method in `src/axiom/cognitive_agent.py`.
-3.  **Add new logic** to handle other cases, such as removing possessives (e.g., `"word's"` → `"word"`) or stripping leading/trailing articles more effectively.
-4.  **Add a new test** to `tests/test_core_functionality.py` that specifically validates your new cleaning logic.
+2.  Locate the `_handle_svo_statement` method in `src/axiom/symbolic_parser.py`.
+3.  **Add new logic** to handle a new grammatical pattern. For example, you could try to identify adverbs (`RB` tag from `nltk`) and add them as a `property` to the extracted `RelationData`.
+4.  **Add a new test** to a relevant test file (e.g., `tests/test_symbolic_parser.py`) that specifically validates your new parsing logic.
 5.  Run `./check.sh` to ensure all checks pass.
 6.  Submit a Pull Request with a clear description of the improvement.
 

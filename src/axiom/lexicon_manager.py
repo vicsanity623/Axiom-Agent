@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from .graph_core import ConceptNode
+from .knowledge_base import validate_and_add_relation
 from .universal_interpreter import PropertyData
 
 if TYPE_CHECKING:
@@ -12,7 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 class LexiconManager:
-    """Manage the agent's knowledge about words (its internal dictionary)."""
+    """
+    Manages the agent's knowledge about words using the main knowledge graph.
+    This "Knowledge-First" approach treats grammatical facts (e.g., 'cat is a noun')
+    as first-class knowledge, making them instantly available and reason-able.
+    """
 
     __slots__ = ("agent",)
 
@@ -30,250 +36,85 @@ class LexiconManager:
 
     def is_part_of_speech(self, word: str, pos: str) -> bool:
         """
-        Check if a word has been promoted as a specific part of speech.
+        Checks if the word has a direct 'is_a' relationship to the given
+        part of speech in the knowledge graph.
         """
-        promoted_parts = self.get_promoted_pos(word)
-        return pos.lower() in promoted_parts
+        clean_word = self.agent._clean_phrase(word)
+        pos_lower = pos.lower()
+        if not clean_word:
+            return False
 
-    def add_linguistic_knowledge_quietly(
+        word_node = self.agent.graph.get_node_by_name(clean_word)
+        if not word_node:
+            return False
+
+        # Query the graph directly for the relationship
+        for edge in self.agent.graph.get_edges_from_node(word_node.id):
+            if edge.type == "is_a":
+                target_node = self.agent.graph.get_node_by_id(edge.target)
+                if target_node and target_node.name == pos_lower:
+                    return True
+        return False
+
+    def add_linguistic_knowledge(
         self,
         word: str,
         part_of_speech: str,
-        definition: str | None = None,
-    ) -> None:
-        """Add a new word and its linguistic properties during seeding."""
-        clean_word = self.agent._clean_phrase(word)
-        if not clean_word:
-            return
-
-        word_node = self.agent.knowledge_manager._add_or_update_concept_quietly(
-            clean_word
-        )
-        pos_node = self.agent.knowledge_manager._add_or_update_concept_quietly(
-            part_of_speech
-        )
-
-        if word_node and pos_node:
-            self.agent.graph.add_edge(
-                word_node,
-                pos_node,
-                "is_a",
-                weight=0.95,
-                properties=PropertyData(provenance="seed", confidence=0.95),
-            )
-            self.promote_word(clean_word, part_of_speech, confidence=0.95, quiet=True)
-
-            if part_of_speech == "adjective":
-                property_node = (
-                    self.agent.knowledge_manager._add_or_update_concept_quietly(
-                        "property"
-                    )
-                )
-                if property_node:
-                    self.agent.graph.add_edge(
-                        pos_node, property_node, "is_a", weight=0.9
-                    )
-
-        if definition:
-            def_node = self.agent.knowledge_manager._add_or_update_concept_quietly(
-                definition
-            )
-            if word_node and def_node:
-                self.agent.graph.add_edge(
-                    word_node, def_node, "has_definition", weight=0.9
-                )
-
-    def observe_word_pos(self, word: str, pos: str, confidence: float = 0.5) -> None:
-        """Record a POS observation for a word."""
-        clean_word = self.agent._clean_phrase(word)
-        if not clean_word:
-            return
-        node = self.agent.knowledge_manager._add_or_update_concept_quietly(clean_word)
-        if not node:
-            return
-
-        props = self.agent.graph.graph.nodes[node.id].setdefault("properties", {})
-        observations = props.setdefault("lexical_observations", {})
-        if isinstance(observations, dict):
-            pos_obs = observations.setdefault(pos, [])
-            pos_obs.append(confidence)
-
-    def is_promoted_word(self, word: str) -> bool:
-        """Return True if the word has at least one trusted part of speech."""
-        promoted_pos = self.get_promoted_pos(word)
-        return bool(promoted_pos)
-
-    def get_promoted_pos(self, word: str) -> dict[str, float]:
-        """Returns a dictionary of promoted parts of speech for a word."""
-        clean = self.agent._clean_phrase(word)
-        if not clean:
-            return {}
-        node = self.agent.graph.get_node_by_name(clean)
-        if not node:
-            return {}
-        props = self.agent.graph.graph.nodes[node.id].get("properties", {})
-        promoted_as = props.get("lexical_promoted_as", {})
-        if isinstance(promoted_as, dict):
-            return promoted_as
-        return {}
-
-    def promote_word(
-        self,
-        word: str,
-        pos: str,
-        confidence: float = 0.95,
-        quiet: bool = False,
-    ) -> None:
+        confidence: float = 0.9,
+        provenance: str = "seed",
+    ) -> ConceptNode | None:
         """
-        Directly promotes a word to a given part of speech by updating its
-        node properties in the graph. This is the final step in lexical learning.
+        The single, authoritative method for creating or updating a concept in the
+        knowledge graph. It ensures that every concept has lexical properties.
         """
         clean_word = self.agent._clean_phrase(word)
-        if not clean_word:
-            return
+        pos_lower = self.agent._clean_phrase(part_of_speech)
+        if not clean_word or not pos_lower:
+            return None
 
+        # Step 1: Get or Create the main word node
         node = self.agent.graph.get_node_by_name(clean_word)
-        if not node:
-            node = self.agent.knowledge_manager.get_or_create_concept(
-                clean_word, node_type=pos
+        if node is None:
+            node = self.agent.graph.add_node(
+                ConceptNode(name=clean_word, node_type=pos_lower)
             )
-            if not node:
-                if not quiet:
-                    logger.warning(
-                        "[Lexicon]: Cannot create or find node for '%s' to promote.",
-                        clean_word,
-                    )
-                return
+            logger.info(
+                "   - Added new concept to graph: %s (%s)", clean_word, pos_lower
+            )
 
+        # Ensure the main node has its lexical property
         props = self.agent.graph.graph.nodes[node.id].setdefault("properties", {})
-
         promoted_as = props.setdefault("lexical_promoted_as", {})
         if isinstance(promoted_as, dict):
-            current_confidence = promoted_as.get(pos, 0.0)
-            promoted_as[pos] = max(current_confidence, confidence)
+            promoted_as[pos_lower] = max(promoted_as.get(pos_lower, 0.0), confidence)
+
+        # Step 2: Get or Create the part-of-speech node itself
+        pos_node: ConceptNode | None
+        if clean_word == pos_lower:
+            pos_node = node
         else:
-            if not quiet:
-                logger.error(
-                    "[Lexicon]: 'lexical_promoted_as' property for '%s' is not a dict. Cannot promote.",
-                    clean_word,
+            pos_node = self.agent.graph.get_node_by_name(pos_lower)
+            if pos_node is None:
+                # Recursively call this function to create the POS node
+                self.add_linguistic_knowledge(
+                    pos_lower, "part_of_speech", confidence=1.0, provenance="system"
                 )
+                pos_node = self.agent.graph.get_node_by_name(pos_lower)
 
-        props.pop("lexical_observations", None)
+        if pos_node is None:
+            logger.error("Failed to create part-of-speech node '%s'.", pos_lower)
+            return node
 
-        if not quiet:
-            logger.info(
-                "    [Lexicon]: Promoted '%s' as a '%s' (confidence: %.2f).",
-                clean_word,
-                pos,
-                promoted_as.get(pos, confidence)
-                if isinstance(promoted_as, dict)
-                else confidence,
-            )
-
-    def prune_low_confidence_observations(self, threshold: float = 0.3) -> int:
-        """
-        Iterate through all concepts and remove lexical observations below a threshold.
-        """
-        pruned_count = 0
-        for node_id in list(self.agent.graph.graph.nodes()):
-            data = self.agent.graph.graph.nodes[node_id]
-            props = data.get("properties", {})
-            observations = props.get("lexical_observations")
-            if isinstance(observations, dict):
-                for pos, confidences in list(observations.items()):
-                    surviving_confidences = [
-                        conf for conf in confidences if conf >= threshold
-                    ]
-                    if surviving_confidences:
-                        if len(surviving_confidences) < len(confidences):
-                            pruned_count += len(confidences) - len(
-                                surviving_confidences
-                            )
-                            observations[pos] = surviving_confidences
-                    else:
-                        pruned_count += len(confidences)
-                        del observations[pos]
-        if pruned_count > 0:
-            logger.info(
-                "[Refinement]: Pruned %d low-confidence lexical observations.",
-                pruned_count,
-            )
-        return pruned_count
-
-    def _promote_word_for_test(self, word: str, pos: str) -> None:
-        """A helper method ONLY for tests to directly promote a word."""
-        node = self.agent.knowledge_manager._add_or_update_concept_quietly(word)
-        if not node:
-            return
-
-        props = self.agent.graph.graph.nodes[node.id].setdefault("properties", {})
-        promoted_as = props.setdefault("lexical_promoted_as", {})
-        if isinstance(promoted_as, dict):
-            promoted_as[pos] = 1.0
-
-    def review_and_promote_observed_words(
-        self, promotion_threshold: float = 0.7
-    ) -> int:
-        """
-        Iterates through all nodes with lexical observations, calculates the most
-        likely part of speech, and promotes the word if confidence exceeds a threshold.
-        This is a key part of the Refinement Cycle.
-        """
-        promoted_count = 0
-        nodes_to_review = [
-            node_id
-            for node_id, data in self.agent.graph.graph.nodes(data=True)
-            if "lexical_observations" in data.get("properties", {})
-        ]
-
-        if not nodes_to_review:
-            return 0
-
+        # Step 3: Add the 'is_a' relationship
+        validate_and_add_relation(
+            agent=self.agent,
+            sub_node=node,
+            obj_node=pos_node,
+            relation_type="is_a",
+            properties=PropertyData(provenance=provenance, confidence=confidence),
+        )
         logger.info(
-            "[Refinement]: Reviewing %d words for lexical promotion...",
-            len(nodes_to_review),
+            "    [Lexicon]: Learned that '%s' is a '%s'.", clean_word, pos_lower
         )
 
-        for node_id in nodes_to_review:
-            node = self.agent.graph.get_node_by_id(node_id)
-            if not node:
-                continue
-
-            props = self.agent.graph.graph.nodes[node.id].get("properties", {})
-            observations = props.get("lexical_observations")
-            if not isinstance(observations, dict):
-                continue
-
-            total_votes = 0
-            pos_scores: dict[str, float] = {}
-            for pos, confidences in observations.items():
-                if isinstance(confidences, list):
-                    score = sum(confidences)
-                    pos_scores[pos] = score
-                    total_votes += score
-
-            if not pos_scores or total_votes == 0:
-                continue
-
-            winner_pos = max(pos_scores, key=lambda pos: pos_scores[pos])
-            winner_score = pos_scores[winner_pos]
-            confidence = winner_score / total_votes
-
-            if confidence >= promotion_threshold:
-                logger.info(
-                    "   - Promoting '%s' to '%s' with confidence %.2f.",
-                    node.name,
-                    winner_pos,
-                    confidence,
-                )
-                self.promote_word(
-                    node.name, winner_pos, confidence=confidence, quiet=True
-                )
-                promoted_count += 1
-
-        if promoted_count > 0:
-            logger.info(
-                "[Refinement]: Promoted %d new words to the lexicon.", promoted_count
-            )
-
-        return promoted_count
+        return node
