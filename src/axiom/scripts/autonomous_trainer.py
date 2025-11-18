@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import random
+import subprocess
 import time
 import traceback
 from pathlib import Path
@@ -11,12 +12,44 @@ from typing import Final
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from ..cognitive_agent import CognitiveAgent
-from ..config import DEFAULT_BRAIN_FILE, DEFAULT_STATE_FILE, GEMINI_API_KEY
+from ..config import (
+    DEFAULT_BRAIN_FILE,
+    DEFAULT_STATE_FILE,
+    GEMINI_API_KEY,
+    PROJECT_ROOT,
+)
 from ..logging_config import console, setup_logging
 from ..metacognitive_engine import MetacognitiveEngine
 from .cycle_manager import CycleManager
 
 logger = logging.getLogger(__name__)
+
+
+GRAPH_SCRIPT = PROJECT_ROOT / "src" / "axiom" / "scripts" / "graph_deferred_trends.py"
+VENV_ACTIVATE = PROJECT_ROOT / ".venv" / "bin" / "activate"
+
+
+def _launch_graph_monitor_terminal() -> None:
+    """
+    Opens a new macOS Terminal window, activates the venv, and runs
+    graph_deferred_trends.py live alongside axiom-train.
+    """
+
+    command = f"""
+        tell application "Terminal"
+            activate
+            do script "cd {PROJECT_ROOT} && source {VENV_ACTIVATE} && python3 {GRAPH_SCRIPT}"
+        end tell
+    """
+
+    try:
+        subprocess.Popen(["osascript", "-e", command])
+        logger.info(
+            "[AUTONOMOUS TRAINER]: Live graph monitor launched in new Terminal."
+        )
+    except Exception as e:
+        logger.error(f"Failed to launch graph monitor terminal: {e}")
+
 
 CURRICULUM_GENERATION_PROMPT: Final[str] = """
 You are a curriculum design expert for an AI. Your task is to generate a single, high-level, multi-stage learning goal for an AI that is starting from scratch. The goal is to achieve deep, foundational curriculum comprehension.
@@ -167,6 +200,9 @@ def start_autonomous_training(
         "[bold green]All learning cycles are active. Press CTRL+C to stop.[/bold green]",
         style="border",
     )
+
+    # Launch the trends graph in a separate macOS Terminal window
+    _launch_graph_monitor_terminal()
 
     axiom_agent: CognitiveAgent | None = None
     scheduler: BackgroundScheduler | None = None

@@ -323,12 +323,10 @@ class KnowledgeHarvester:
             if self.agent.pending_relations:
                 logger.info("   - Priority 1: Attempting knowledge consolidation.")
                 num_pending_at_start = len(self.agent.pending_relations)
-
                 with self.lock:
                     while self.agent.pending_relations:
                         if not self._consolidate_pending_knowledge():
                             break
-
                 consolidated_count = num_pending_at_start - len(
                     self.agent.pending_relations
                 )
@@ -372,6 +370,7 @@ class KnowledgeHarvester:
                         )
                         progress_made_in_cycle = True
                         continue
+
                     logger.warning(
                         f"   - ❌ Task '{task_topic}' failed. Deprioritizing."
                     )
@@ -429,6 +428,31 @@ class KnowledgeHarvester:
             if self._deepen_knowledge_of_random_concept():
                 progress_made_in_cycle = True
                 continue
+
+            # --- FIX: If we reach here, the agent is truly idle. Clean up failed tasks. ---
+            if self.agent.learning_goals:
+                original_count = len(self.agent.learning_goals)
+                with self.lock:
+                    # FIX: Use direct access goal["topic"] because we know it's a required key.
+                    surviving_goals = [
+                        goal
+                        for goal in self.agent.learning_goals
+                        if (
+                            topic := (
+                                goal["topic"] if isinstance(goal, dict) else str(goal)
+                            )
+                        )
+                        and topic not in self._failed_tasks
+                    ]
+                    self.agent.learning_goals = surviving_goals
+
+                discarded_count = original_count - len(self.agent.learning_goals)
+                if discarded_count > 0:
+                    logger.error(
+                        f"   - ☠️ End of curriculum: Permanently discarded {discarded_count} lingering failed tasks."
+                    )
+                    progress_made_in_cycle = True
+                    continue
 
             logger.info("   - No progress made in iteration. Study cycle is complete.")
             break
