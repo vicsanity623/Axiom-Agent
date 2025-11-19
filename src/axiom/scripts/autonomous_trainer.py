@@ -49,7 +49,9 @@ def _launch_graph_monitor_terminal() -> None:
 
     try:
         subprocess.Popen(["osascript", "-e", command])
-        logger.info("[AUTONOMOUS TRAINER]: Live graph monitor launched in new Terminal.")
+        logger.info(
+            "[AUTONOMOUS TRAINER]: Live graph monitor launched in new Terminal."
+        )
     except Exception as e:
         logger.error(f"Failed to launch graph monitor terminal: {e}")
 
@@ -99,27 +101,19 @@ def _generate_or_set_initial_goal(
 
     while True:
         creative_seeds = [
-            # -------------------------------------- AXIOM "CONCEPTUAL" CURRICULUM SEEDS --------------------------------------
-            # --- Foundational Physics & Causality ---
-            "Model the physics of a thrown ball. A person can throw a ball. A ball is a round object. Gravity is a force that pulls the ball down. The ball will fall to the ground.",
-            "Explore the concept of temperature. Fire is hot. Ice is cold. Water can be hot or cold. Hot things can burn you. Cold things can freeze water.",
-            "Understand the states of matter. Water is a liquid. Ice is a solid. Steam is a gas. Heat can turn ice into water. Heat can turn water into steam.",
-            # --- Simple Biology & Taxonomies ---
-            "Build a model of a simple ecosystem. A cat is an animal. A dog is an animal. A bird is an animal. A cat eats a mouse. A bird eats a worm. Animals need to eat food to live.",
-            "Learn about the parts of a plant. A tree is a plant. A tree has roots, a trunk, and leaves. The roots are in the ground. The leaves grow on branches.",
-            "Discover the life cycle of a butterfly. A caterpillar is an insect. A caterpillar turns into a chrysalis. A chrysalis becomes a butterfly. A butterfly has wings.",
-            # --- Social Structures & Roles ---
-            "Model a simple family unit. A family can have a mother and a father. A mother is a parent. A father is a parent. Parents take care of a child.",
-            "Understand community helpers. A doctor is a person who helps sick people. A firefighter is a person who puts out fires. A teacher is a person who teaches students.",
-            "Explore the concept of a city. A city is a place where many people live. A city has buildings, roads, and parks. Cars drive on roads.",
-            # --- Abstract Concepts & Properties ---
-            "Learn about colors and their associations. The sun is yellow. The sky is blue. An apple is red. Red can mean stop. Green can mean go.",
-            "Understand the concept of size and scale. An elephant is big. A mouse is small. A mountain is very big. A building is bigger than a house.",
-            "Explore the concept of time. The day has a morning, an afternoon, and a night. The sun is in the sky during the day. The moon is in the sky at night.",
-            # --- Tools & Purpose ---
-            "Model the purpose of simple tools. A hammer is a tool used to hit nails. A pencil is a tool used to write. A spoon is a tool used to eat soup.",
-            "Understand simple machines. A wheel is a simple machine that can roll. A lever is a simple machine that can lift heavy things.",
-            "Explore the concept of a container. A box is a container. A cup is a container. A bottle is a container. A container is used to hold things.",
+            "Develop a core capacity for sensorimotor integration, learning to associate raw sensory inputs with motor commands to build a grounded model of physical reality.",
+            "Establish a foundational ontology and categorization system to parse the continuous flow of experience into discrete, relatable objects, agents, and events.",
+            "Approach this from the perspective of a linguist, focusing on the formal structures of language.",
+            "Design this curriculum as if teaching a child, starting with concrete objects and moving to abstract ideas.",
+            "Frame the learning process through the lens of a computer scientist, treating language as a formal system to be parsed.",
+            "Use a philosophical approach, focusing on the connection between symbols, meaning, and truth.",
+            "Create a practical, goal-oriented curriculum for an AI assistant that needs to complete tasks for a user.",
+            "Focus on the historical evolution of language, from ancient roots to modern dialects.",
+            "Emphasize the social aspect of language, including pragmatics, discourse, and cultural context.",
+            "Learn the principles of cause and effect through intervention, understanding how actions change the state of the environment to achieve desired outcomes.",
+            "Develop a hierarchical reasoning system, moving from simple stimulus-response to multi-step planning and abstract goal decomposition.",
+            "Acquire a theory of mind, inferring the intentions, knowledge, and beliefs of other agents to enable social prediction and collaboration.",
+            "Construct a symbolic reasoning layer on top of subsymbolic data, enabling the manipulation of abstract concepts and logical propositions.",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(

@@ -951,30 +951,29 @@ def initialize_linguistic_resources():
 
 
 def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
-    """Seed the agent's brain with a foundational set of facts using the authoritative, public-facing methods."""
+    """Seed the agent's brain with a foundational set of facts, correctly separating the creation of relationships from the definition of grammatical types."""
     logger.info("   - Seeding a vast initial world knowledge base...")
     tqdm_out = TqdmToLogger(logger, level=logging.INFO)
 
-    # --- Step 1: Create all concepts via the Lexicon Gatekeeper ---
-    # This ensures every single node gets the correct lexical properties.
-    all_concepts: dict[str, str] = {}
-    for subject, s_type, _, obj, _ in ALL_KNOWLEDGE:
-        all_concepts[subject] = s_type
-        if obj not in all_concepts:
-            all_concepts[obj] = "concept"  # Default type if not specified as a subject
+    # --- Step 1: Create all concepts with a SAFE, GENERIC type ---
+    all_concept_names: set[str] = set()
+    for subject, _, _, obj, _ in ALL_KNOWLEDGE:
+        all_concept_names.add(subject)
+        all_concept_names.add(obj)
 
-    for concept, concept_type in tqdm(
-        all_concepts.items(),
-        desc="     - Seeding Concepts via Lexicon",
+    for concept_name in tqdm(
+        sorted(all_concept_names),
+        desc="     - Seeding Concepts",
         file=tqdm_out,
         mininterval=1,
     ):
-        agent_instance.lexicon.add_linguistic_knowledge(
-            concept, concept_type, provenance="seed"
+        # Use the smart constructor directly with a safe default.
+        # The correct grammatical type will be added later by seed_core_vocabulary.
+        agent_instance.knowledge_manager.get_or_create_concept(
+            concept_name, node_type="concept"
         )
 
     # --- Step 2: Create all relationships via the public validation function ---
-    # This uses the nodes that were just created in Step 1.
     for subject, _, relation, obj, weight in tqdm(
         ALL_KNOWLEDGE,
         desc="     - Seeding Relationships     ",
@@ -984,6 +983,7 @@ def seed_domain_knowledge(agent_instance: CognitiveAgent) -> None:
         sub_node = agent_instance.graph.get_node_by_name(subject)
         obj_node = agent_instance.graph.get_node_by_name(obj)
         if sub_node and obj_node:
+            # Here, we are just adding the relationship, not defining the node's type.
             validate_and_add_relation(
                 agent=agent_instance,
                 sub_node=sub_node,

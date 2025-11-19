@@ -99,6 +99,8 @@ class PropertyData(TypedDict, total=False):
     superseded_by: NotRequired[str]
     last_modified: NotRequired[float]
     confidence_updated: NotRequired[bool]
+    aux_verb: NotRequired[str]
+    number: NotRequired[Literal["singular", "plural"]]
 
 
 class RelationData(TypedDict, total=False):

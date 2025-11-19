@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 from typing import TYPE_CHECKING, cast
 
 from nltk.stem import WordNetLemmatizer
@@ -10,7 +11,7 @@ from .constants import PROVENANCE_RANK
 from .dictionary_utils import get_word_info_from_wordnet
 from .graph_core import ConceptNode
 from .knowledge_base import add_pending_relation, validate_and_add_relation
-from .universal_interpreter import RelationData, Task
+from .universal_interpreter import PropertyData, RelationData, Task
 
 if TYPE_CHECKING:
     from .cognitive_agent import CognitiveAgent
@@ -65,13 +66,35 @@ class KnowledgeManager:
     ) -> ConceptNode | None:
         """
         Internal implementation for finding or creating a concept node, with
-        corrected logic to handle homonyms by creating distinct "sense" nodes.
+        corrected logic to handle homonyms and ensure all new nodes have
+        rich default properties.
         """
         clean_name = self.agent._clean_phrase(name)
         if not clean_name:
             return None
 
         existing_node = self.agent.graph.get_node_by_name(clean_name)
+
+        # --- FIX: Change the return type hint and use cast ---
+        def create_default_properties(determined_type: str) -> PropertyData:
+            lexical_info = {}
+            if determined_type not in (
+                "concept",
+                "noun_phrase",
+                "self_identity",
+                "user_identity",
+            ):
+                lexical_info = {determined_type: 0.9}
+
+            return cast(
+                "PropertyData",
+                {
+                    "created_at": datetime.utcnow().isoformat(),
+                    "last_accessed": datetime.utcnow().isoformat(),
+                    "access_count": 1,
+                    "lexical_promoted_as": lexical_info,
+                },
+            )
 
         # Path 1: The word is completely new. Create it and return.
         if not existing_node:
@@ -84,7 +107,12 @@ class KnowledgeManager:
                     if word_info_list and isinstance(word_info_list[0], dict)
                     else node_type
                 )
-            new_node_obj = ConceptNode(clean_name, node_type=determined_type)
+
+            default_props = create_default_properties(determined_type)
+            new_node_obj = ConceptNode(
+                clean_name, node_type=determined_type, properties=default_props
+            )
+
             node = self.agent.graph.add_node(new_node_obj)
             logger.info(
                 f"[cyan]   - Added new concept to graph: {clean_name} ({node.type})[/cyan]"
@@ -95,22 +123,20 @@ class KnowledgeManager:
         if not context_relation_type or not context_object_name:
             return existing_node
 
-        # Find all existing relationships of the same type from the base node.
         conflicting_edges = [
             edge
             for edge in self.agent.graph.get_edges_from_node(existing_node.id)
             if edge.type == context_relation_type
         ]
 
-        # Path 3: No relationships of this type exist yet. It's not ambiguous. Use the base node.
+        # Path 3: No relationships of this type exist yet. Use the base node.
         if not conflicting_edges:
             return existing_node
 
-        # Path 4: Relationships of this type exist. Check if one already points to our target object.
+        # Path 4: Check if a relationship already points to our target object.
         for edge in conflicting_edges:
             target_node = self.agent.graph.get_node_by_id(edge.target)
             if target_node and target_node.name == context_object_name:
-                # This is a duplicate fact, not an ambiguity. Use the base node.
                 return existing_node
 
         # Path 5: A true ambiguity is detected. Create a new "sense" node.
@@ -132,7 +158,12 @@ class KnowledgeManager:
                 if word_info_list and isinstance(word_info_list[0], dict)
                 else node_type
             )
-        new_node_obj = ConceptNode(new_sense_name, node_type=determined_type)
+
+        default_props = create_default_properties(determined_type)
+        new_node_obj = ConceptNode(
+            new_sense_name, node_type=determined_type, properties=default_props
+        )
+
         node = self.agent.graph.add_node(new_node_obj)
         logger.info(
             f"[cyan]   - Added new concept to graph: {new_sense_name} ({node.type})[/cyan]"
@@ -431,15 +462,16 @@ class KnowledgeManager:
     def manual_add_knowledge_quietly(
         self,
         concept_name1: str,
-        concept_type1: str,
+        concept_type1: str,  # This argument is now effectively ignored for node creation
         relation: str,
         concept_name2: str,
         weight: float = 0.5,
     ) -> None:
         """Add a structured fact directly to the knowledge graph WITHOUT logging."""
-        node1 = self._add_or_update_concept_quietly(
-            concept_name1, node_type=concept_type1
-        )
-        node2 = self._add_or_update_concept_quietly(concept_name2)
+        # --- FIX: Use the smart constructor with a default node type ---
+        # This ignores the flawed 'concept_type1' from the seed data for node creation.
+        node1 = self._add_or_update_concept_quietly(concept_name1, node_type="concept")
+        node2 = self._add_or_update_concept_quietly(concept_name2, node_type="concept")
+
         if node1 and node2:
             self.agent.graph.add_edge(node1, node2, relation, weight)
