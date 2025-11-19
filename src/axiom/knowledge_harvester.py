@@ -147,6 +147,8 @@ class KnowledgeHarvester:
             logger.warning(
                 f"Cannot learn the definition of a number ('{term_to_learn}'). Discarding task as invalid."
             )
+            # --- FIX: Add the invalid term to the failed tasks set to break the loop ---
+            self._failed_tasks.add(term_to_learn)
             return True
 
         logger.info(
@@ -165,14 +167,10 @@ class KnowledgeHarvester:
                         confidence=0.9,
                         provenance="dictionary_api",
                     )
-                    # Process the definition. We don't care if it succeeds or defers.
-                    # The act of finding the definition and creating a task for its
-                    # blockers is considered progress.
                     self.agent.knowledge_manager.learn_new_fact_autonomously(
                         definition, term_to_learn
                     )
 
-                # --- FIX: Return True regardless of whether the fact was deferred ---
                 logger.info(
                     f"[green]   - Successfully processed '{term_to_learn}' from Dictionary API.[/green]"
                 )
@@ -181,7 +179,6 @@ class KnowledgeHarvester:
                 f"   - Dictionary API failed for '{term_to_learn}'. Falling back to web search."
             )
 
-        # Your original, correct web search logic is preserved here.
         web_fact: str | None = None
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}"]
         for query in queries:
@@ -322,6 +319,19 @@ class KnowledgeHarvester:
                 logger.warning("   - Study cycle time limit reached. Yielding control.")
                 break
 
+            if not self.agent.high_priority_tasks and not self.agent.learning_goals:
+                active_goal = self.agent.goal_manager.get_active_goal()
+                if active_goal:
+                    self.agent.goal_manager.check_goal_completion(active_goal["id"])
+                    # If check_goal_completion activated a new stage, the learning_goals will
+                    # no longer be empty, and the next iteration will pick them up.
+                    if self.agent.learning_goals:
+                        logger.info(
+                            "   - New stage activated. Continuing to task processing."
+                        )
+                        progress_made_in_cycle = True
+                        continue
+
             # PRIORITY 1: Always try to consolidate first.
             if self.agent.pending_relations:
                 logger.info("   - Priority 1: Attempting knowledge consolidation.")
@@ -438,9 +448,10 @@ class KnowledgeHarvester:
                 break
 
             # PRIORITY 4: If truly idle, attempt proactive deepening.
-            if self._deepen_knowledge_of_random_concept():
-                progress_made_in_cycle = True
-                continue
+            if not self.agent.high_priority_tasks and not self.agent.learning_goals:
+                if self._deepen_knowledge_of_random_concept():
+                    progress_made_in_cycle = True
+                    continue
 
             if self.agent.learning_goals:
                 original_count = len(self.agent.learning_goals)

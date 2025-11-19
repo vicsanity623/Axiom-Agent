@@ -101,19 +101,22 @@ def _generate_or_set_initial_goal(
 
     while True:
         creative_seeds = [
-            "Develop a core capacity for sensorimotor integration, learning to associate raw sensory inputs with motor commands to build a grounded model of physical reality.",
-            "Establish a foundational ontology and categorization system to parse the continuous flow of experience into discrete, relatable objects, agents, and events.",
-            "Approach this from the perspective of a linguist, focusing on the formal structures of language.",
-            "Design this curriculum as if teaching a child, starting with concrete objects and moving to abstract ideas.",
-            "Frame the learning process through the lens of a computer scientist, treating language as a formal system to be parsed.",
-            "Use a philosophical approach, focusing on the connection between symbols, meaning, and truth.",
-            "Create a practical, goal-oriented curriculum for an AI assistant that needs to complete tasks for a user.",
-            "Focus on the historical evolution of language, from ancient roots to modern dialects.",
-            "Emphasize the social aspect of language, including pragmatics, discourse, and cultural context.",
-            "Learn the principles of cause and effect through intervention, understanding how actions change the state of the environment to achieve desired outcomes.",
-            "Develop a hierarchical reasoning system, moving from simple stimulus-response to multi-step planning and abstract goal decomposition.",
-            "Acquire a theory of mind, inferring the intentions, knowledge, and beliefs of other agents to enable social prediction and collaboration.",
-            "Construct a symbolic reasoning layer on top of subsymbolic data, enabling the manipulation of abstract concepts and logical propositions.",
+            # Tier 1: Foundational Physical World
+            "Generate a curriculum about the fundamental properties of the physical world. Start with simple objects, their materials, and their colors. Example topics: ball, wood, red, water, solid, liquid.",
+            "Generate a curriculum about basic spatial relationships and actions. Start with concepts of location and movement. Example topics: in, on, under, push, pull, fall.",
+            "Generate a curriculum about common animals and their characteristics. Start with simple, well-known animals. Example topics: cat, dog, fish, bird, mammal, has fur, can fly.",
+            # Tier 2: Sensory Experience & Simple Abstractions
+            "Generate a curriculum about human senses and perceptions. Example topics: sight, sound, smell, taste, touch, loud, quiet, bright, dark.",
+            "Generate a curriculum about basic emotions and mental states. Example topics: happy, sad, angry, think, know, believe.",
+            "Generate a curriculum about numbers and basic mathematics. Start with counting and simple shapes. Example topics: one, two, three, circle, square, triangle.",
+            # Tier 3: Social & Conceptual World
+            "Generate a curriculum about social structures and roles. Start with the concept of a person and their relationships. Example topics: person, family, friend, job, doctor, teacher.",
+            "Generate a curriculum about common tools and their functions. Example topics: hammer, nail, computer, program, write, calculate.",
+            "Generate a curriculum about fundamental concepts in science. Start with physics and biology. Example topics: force, energy, gravity, cell, DNA, plant, animal.",
+            # Tier 4: Abstract & Philosophical Concepts
+            "Generate a curriculum about abstract concepts of logic and truth. Example topics: logic, reason, true, false, cause, effect.",
+            "Generate a curriculum about concepts of time and history. Example topics: past, present, future, year, day, history, war, peace.",
+            "Generate a curriculum about societal and ethical concepts. Example topics: law, justice, right, wrong, government, society.",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(
