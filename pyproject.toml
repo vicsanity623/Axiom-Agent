@@ -77,6 +77,8 @@ axiom-analyze = "axiom.scripts.analyze_logs:main"
 axiom-inspect = "axiom.scripts.code_inspector:main"
 axiom-trends = "axiom.scripts.graph_deferred_trends:main"
 axiom-fr = "axiom.scripts.factory_reset:main"
+axiom-bench = "axiom.scripts.benchmark_learning:main"
+axiom-eval = "axiom.scripts.evaluate_reasoning:main"
 
 
 # --- Tool Configurations ---

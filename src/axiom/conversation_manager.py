@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import re
-import time
 from datetime import date, datetime
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any
@@ -37,21 +36,20 @@ class ConversationManager:
 
         interpretations = self._get_interpretation(user_input)
 
+        # --- FIX: Create direct, meaningful relationships instead of junk nodes ---
         if self.agent.user_node and interpretations:
             primary_interpretation = interpretations[0]
-            interaction_node = self.agent.knowledge_manager.get_or_create_concept(
-                f"user_interaction_{time.time()}", node_type="event"
-            )
-            if interaction_node:
-                self.agent.graph.add_edge(
-                    self.agent.user_node, interaction_node, "performed_action"
-                )
-                for topic in primary_interpretation.get("key_topics", []):
-                    topic_node = self.agent.graph.get_node_by_name(topic)
-                    if topic_node:
-                        self.agent.graph.add_edge(
-                            interaction_node, topic_node, "is_about"
-                        )
+            # Instead of creating a junk 'interaction' node, we now create a
+            # direct and meaningful 'talked_about' edge from the user to the topic.
+            for topic in primary_interpretation.get("key_topics", []):
+                # Ensure the topic is a valid concept before creating an edge
+                topic_node = self.agent.knowledge_manager.get_or_create_concept(topic)
+                if topic_node:
+                    # This creates a direct link: (current user) --[talked_about]--> (topic)
+                    self.agent.graph.add_edge(
+                        self.agent.user_node, topic_node, "talked_about", weight=0.6
+                    )
+                    logger.info(f"   - Noted user interest in topic: '{topic}'")
 
         if not interpretations:
             reflex_response = self._handle_cognitive_reflex(user_input)
@@ -60,6 +58,7 @@ class ConversationManager:
 
             return "I'm sorry, I was unable to understand that."
 
+        # The rest of your method is correct and unchanged.
         self._update_history(interpretations)
         structured_response = self._process_intent(interpretations[0], user_input)
 
@@ -171,27 +170,34 @@ class ConversationManager:
         if not clean_entity_name:
             return f"I don't have any information about {entity_name}."
 
-        if "agent" in clean_entity_name and "name" in user_input.lower():
-            agent_node = self.agent.graph.get_node_by_name("agent")
-            if agent_node:
-                name_edge = next(
-                    (
-                        edge
-                        for edge in self.agent.graph.get_edges_from_node(agent_node.id)
-                        if edge.type == "has_name"
-                    ),
-                    None,
-                )
-                if name_edge:
-                    name_node = self.agent.graph.get_node_by_id(name_edge.target)
-                    if name_node:
-                        return f"My name is {name_node.name.capitalize()}."
-                    return (
-                        "I know I have a name, but I can't seem to recall it right now."
+        # --- FIX: Create a primary gate for all meta-questions about the agent ---
+        if "agent" in clean_entity_name:
+            # Specific case for "what is your name?"
+            if "name" in user_input.lower():
+                agent_node = self.agent.graph.get_node_by_name("agent")
+                if agent_node:
+                    name_edge = next(
+                        (
+                            edge
+                            for edge in self.agent.graph.get_edges_from_node(
+                                agent_node.id
+                            )
+                            if edge.type == "has_name"
+                        ),
+                        None,
                     )
-                return "I don't have a name yet."
-            return "I don't seem to have a concept of myself right now."
+                    if name_edge:
+                        name_node = self.agent.graph.get_node_by_id(name_edge.target)
+                        if name_node:
+                            return f"My name is {name_node.name.capitalize()}."
+                        return "I know I have a name, but I can't seem to recall it right now."
+                    return "I don't have a name yet."
+                return "I don't seem to have a concept of myself right now."
+            # General case for "who are you?", "what are you?", etc.
+            # Provide a clean, canned response instead of a data dump.
+            return "I am Axiom, a cognitive agent designed to learn, reason, and understand."
 
+        # This logic now only runs for non-agent entities.
         subject_node = self.agent.graph.get_node_by_name(clean_entity_name)
         if not subject_node:
             return f"I don't have any information about {entity_name}."
@@ -213,7 +219,13 @@ class ConversationManager:
         if not facts:
             return f"I dont have any details for {subject_node.name.capitalize()}."
 
-        return ". ".join(sorted(facts)) + "."
+        # For general entities, we can use the synthesizer to create a nice summary.
+        summary = self.agent.interpreter.synthesize(
+            structured_facts=list(facts), original_question=user_input, mode="statement"
+        )
+        return (
+            summary if summary else "I found some facts but could not summarize them."
+        )
 
     def _perform_multi_hop_query(
         self, start_node: ConceptNode, end_node: ConceptNode, max_hops: int = 3
@@ -260,25 +272,60 @@ class ConversationManager:
         return ", and ".join(parts) + "."
 
     def _answer_yes_no_question(self, relation: RelationData) -> str:
-        """Answer a yes/no question by checking for facts and contradictions."""
+        """
+        Answer a yes/no question by checking for direct facts, performing multi-hop
+        inference for hierarchical relationships, and checking for contradictions.
+        """
         subject_raw = relation.get("subject")
         object_raw = relation.get("object")
         if not isinstance(subject_raw, str) or not isinstance(object_raw, str):
             return "I'm not sure how to answer that."
-        subject = subject_raw
-        object_ = object_raw
+
+        subject = self._get_corrected_entity(subject_raw)
+        obj = self._get_corrected_entity(object_raw)
+
         subject_node = self.agent.graph.get_node_by_name(subject)
         if not subject_node:
             return f"I don't have any information about {subject}."
+
+        # --- Multi-Hop Inference for 'is_a' relationships ---
+        if relation.get("verb") == "is_a":
+            queue: list[str] = [subject_node.id]
+            visited: set[str] = {subject_node.id}
+            path_found = False
+            while queue:
+                current_node_id = queue.pop(0)
+                current_node = self.agent.graph.get_node_by_id(current_node_id)
+                if current_node and current_node.name == obj:
+                    path_found = True
+                    break
+
+                for edge in self.agent.graph.get_edges_from_node(current_node_id):
+                    if edge.type == "is_a" and edge.target not in visited:
+                        visited.add(edge.target)
+                        queue.append(edge.target)
+
+            if path_found:
+                return f"Yes, based on what I know, {subject} is a type of {obj}."
+
+        # Step 2: Direct positive match
         for edge in self.agent.graph.get_edges_from_node(subject_node.id):
             target_node = self.agent.graph.get_node_by_id(edge.target)
-            if not target_node:
-                continue
-            if target_node.name == object_:
-                return f"Yes, based on what I know, {subject} is {object_}."
-            if edge.type in ["is_a", "has_property"] and target_node.name != object_:
-                return f"No, based on what I know, {subject} is {target_node.name}, not {object_}."
-        return f"I'm not sure. I don't have any information about whether {subject} is {object_}."
+            if (
+                target_node
+                and target_node.name == obj
+                and edge.type == relation.get("verb")
+            ):
+                return f"Yes, based on what I know, {subject} {edge.type.replace('_', ' ')} {obj}."
+
+        # Step 3: Conflicting fact
+        for edge in self.agent.graph.get_edges_from_node(subject_node.id):
+            if edge.type in ["is_a", "has_property"]:
+                target_node = self.agent.graph.get_node_by_id(edge.target)
+                if target_node and target_node.name != obj:
+                    return f"No, based on what I know, {subject} {edge.type.replace('_', ' ')} {target_node.name}, not {obj}."
+
+        return f"I'm not sure. I don't have any information about whether {subject} has a relationship with {obj}."
 
     def is_concept_well_known(self, concept_name: str, threshold: int = 3) -> bool:
         """
@@ -404,22 +451,58 @@ class ConversationManager:
             self._has_reentered_chat = False
 
     def _get_interpretation(self, user_input: str) -> list[InterpretData] | None:
-        """Pipeline for parsing and interpreting user input."""
-        sanitized_input = self.agent.knowledge_manager._sanitize_sentence_for_learning(
-            user_input
-        )
+        """
+        Pipeline for parsing and interpreting user input, implementing a true
+        "Symbolic First" strategy with a single return path for robustness.
+        """
+        interpretations: list[InterpretData] | None = None
 
-        expanded_input = self.agent._expand_contractions(sanitized_input)
-        contextual_input = self._resolve_references(expanded_input)
-        normalized_input = self.agent._preprocess_self_reference(contextual_input)
-        interpretations = self.agent.parser.parse(normalized_input)
-        if not interpretations:
-            logger.warning(
-                "  [Cognitive Flow]: Symbolic parsing failed. Falling back to LLM interpreter."
+        # --- Step 1: Try the SymbolicParser on the raw input FIRST. ---
+        logger.debug(
+            "  [Cognitive Flow]: Attempting fast-path symbolic parse on raw input..."
+        )
+        interpretations = self.agent.parser.parse(user_input)
+
+        # --- Step 2: If the fast-path fails, run the full pipeline. ---
+        if interpretations is None:
+            logger.debug(
+                "  [Cognitive Flow]: Fast-path failed. Running full preprocessing pipeline."
             )
-            llm_interpretation = self.agent.interpreter.interpret(normalized_input)
-            if llm_interpretation:
-                return [llm_interpretation]
+            sanitized_input = (
+                self.agent.knowledge_manager._sanitize_sentence_for_learning(user_input)
+            )
+            expanded_input = self.agent._expand_contractions(sanitized_input)
+            contextual_input = self._resolve_references(expanded_input)
+            normalized_input = self.agent._preprocess_self_reference(contextual_input)
+
+            # --- Step 2a: Try the SymbolicParser AGAIN with the clean text. ---
+            logger.debug(
+                "  [Cognitive Flow]: Attempting deep-path symbolic parse on normalized text..."
+            )
+            interpretations = self.agent.parser.parse(normalized_input)
+
+            # --- Step 2b: If all symbolic attempts fail, fall back to the LLM. ---
+            if interpretations is None:
+                logger.warning(
+                    "  [Cognitive Flow]: All symbolic parsing failed. Falling back to LLM interpreter."
+                )
+                llm_interpretation = self.agent.interpreter.interpret(normalized_input)
+                if llm_interpretation:
+                    interpretations = [llm_interpretation]
+
+        # --- Final Step: Log success and return the final result. ---
+        if interpretations is not None:
+            # This log is critical for confirming which path succeeded.
+            provenance = (
+                interpretations[0].get("provenance", "unknown")
+                if interpretations
+                else "no_interpretation"
+            )
+            if "symbolic" in provenance:
+                logger.info("   - ✅ Understood via Symbolic Parser.")
+            elif "llm" in provenance:
+                logger.info("   - ✅ Understood via Universal Interpreter.")
+
         return interpretations
 
     def _handle_cognitive_reflex(self, normalized_input: str) -> str | None:
@@ -747,6 +830,12 @@ class ConversationManager:
         self, structured_response: str, user_input: str
     ) -> tuple[str, bool]:
         """Convert a structured, internal response into natural language."""
+        if structured_response.endswith((".", "!", "?")):
+            logger.debug(
+                "  [Synthesizer]: Skipping synthesis for already complete sentence."
+            )
+            return (structured_response, False)
+
         non_synthesize_triggers = [
             "Hello User",
             "Goodbye User",
@@ -766,6 +855,7 @@ class ConversationManager:
         ]
         if any(trigger in structured_response for trigger in non_synthesize_triggers):
             return (structured_response, False)
+
         if re.match(r"^\s*(FACT:|RELATION\()", structured_response):
             logger.debug(
                 "  [Synthesizer]: Structured input detected → %s", structured_response
@@ -775,6 +865,7 @@ class ConversationManager:
             )
             logger.debug("  [Synthesizer]: Output → %s", fluent_response)
             return (fluent_response, True)
+
         logger.debug("  [Structured Response]: %s", structured_response)
         fluent_response = self.agent.interpreter.synthesize(
             structured_response, original_question=user_input

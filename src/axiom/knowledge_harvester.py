@@ -311,6 +311,9 @@ class KnowledgeHarvester:
         progress_made_in_cycle = False
         cycle_iteration = 0
 
+        task_failure_counts: dict[str, int] = {}
+        max_task_failures = 2
+
         while True:
             cycle_iteration += 1
             logger.info(f"--- Starting Study Cycle Iteration #{cycle_iteration} ---")
@@ -370,13 +373,23 @@ class KnowledgeHarvester:
                         )
                         progress_made_in_cycle = True
                         continue
-
                     logger.warning(
                         f"   - ❌ Task '{task_topic}' failed. Deprioritizing."
                     )
                     self._failed_tasks.add(task_topic)
-                    with self.lock:
-                        self.agent.learning_goals.append(task_to_process)
+
+                    # --- FIX: Implement the failure counter logic ---
+                    failure_count = task_failure_counts.get(task_topic, 0) + 1
+                    task_failure_counts[task_topic] = failure_count
+
+                    if failure_count >= max_task_failures:
+                        logger.error(
+                            f"   - ☠️ Task '{task_topic}' has failed {failure_count} times. Permanently discarding."
+                        )
+                    else:
+                        with self.lock:
+                            self.agent.learning_goals.append(task_to_process)
+
                     progress_made_in_cycle = True
                     continue
 
@@ -429,21 +442,26 @@ class KnowledgeHarvester:
                 progress_made_in_cycle = True
                 continue
 
-            # --- FIX: If we reach here, the agent is truly idle. Clean up failed tasks. ---
             if self.agent.learning_goals:
                 original_count = len(self.agent.learning_goals)
                 with self.lock:
-                    # FIX: Use direct access goal["topic"] because we know it's a required key.
-                    surviving_goals = [
-                        goal
-                        for goal in self.agent.learning_goals
-                        if (
-                            topic := (
-                                goal["topic"] if isinstance(goal, dict) else str(goal)
-                            )
-                        )
-                        and topic not in self._failed_tasks
-                    ]
+                    surviving_goals = []
+                    for goal in self.agent.learning_goals:
+                        # FIX: Use a new, locally scoped variable name to avoid type collision.
+                        goal_topic: str | None = None
+                        if isinstance(goal, dict):
+                            # Use direct access for required key, which returns str.
+                            goal_topic = goal["topic"]
+                        elif isinstance(goal, str):
+                            # Handle potential "INVESTIGATE:" prefix.
+                            if goal.startswith("INVESTIGATE:"):
+                                goal_topic = goal.replace("INVESTIGATE:", "").strip()
+                            else:
+                                goal_topic = goal
+
+                        if goal_topic and goal_topic not in self._failed_tasks:
+                            surviving_goals.append(goal)
+
                     self.agent.learning_goals = surviving_goals
 
                 discarded_count = original_count - len(self.agent.learning_goals)
@@ -573,7 +591,7 @@ class KnowledgeHarvester:
     def _deepen_knowledge_of_random_concept(self, max_attempts: int = 5) -> bool:
         """
         Attempts to find and learn a new fact about a randomly chosen existing
-        concept. Tries multiple times if a chosen concept yields no new info.
+        concept, using the correct autonomous learning pathway.
         """
         stop_words = {
             "is",
@@ -626,20 +644,28 @@ class KnowledgeHarvester:
                 random_node_name,
             )
 
-            result = self.get_fact_from_wikipedia(
-                random_node_name
-            ) or self.get_fact_from_duckduckgo(random_node_name)
+            # --- FIX: Add the Dictionary API call back in for efficiency ---
+            fact_sentence: str | None = None
+            api_result = self.get_definition_from_api(random_node_name)
+            if api_result:
+                _part_of_speech, definition = api_result
+                fact_sentence = definition
 
-            if result:
-                _title, fact_sentence = result
+            if not fact_sentence:
+                web_result = self.get_fact_from_wikipedia(
+                    random_node_name
+                ) or self.get_fact_from_duckduckgo(random_node_name)
+                if web_result:
+                    _title, fact_sentence = web_result
+
+            if fact_sentence:
                 with self.lock:
                     logger.info(
                         f"  [Deepen Knowledge]: {LogColors.GREEN}Attempting to learn new fact: '{fact_sentence}'{LogColors.RESET}"
                     )
-                    # Use the chat method as per your original logic
-                    self.agent.conversation_manager.chat(fact_sentence)
-                # If we successfully find and process a fact, our job is done.
-                return True
+                return self.agent.knowledge_manager.learn_new_fact_autonomously(
+                    fact_sentence, source_topic=random_node_name
+                )
 
             eligible_names.remove(random_node_name)
 
