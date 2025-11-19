@@ -1031,7 +1031,7 @@ class UniversalInterpreter:
         )
         try:
             response_text = self._run_llm_completion_with_retries(
-                full_prompt, max_tokens=2048, temperature=0.5
+                full_prompt, max_tokens=4096, temperature=0.5
             )
             topics = [
                 topic.strip() for topic in response_text.split(",") if topic.strip()
