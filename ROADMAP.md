@@ -100,27 +100,36 @@ The agent has now completed its most critical architectural evolution to date in
 
 ### Key Features
 *   **"Knowledge-First" Lexicon:** The `LexiconManager` was completely refactored. The complex, slow "observation/promotion" system was removed. Grammatical facts (e.g., `(cat)-[is_a]->(noun)`) are now first-class knowledge, stored directly in the main graph and available in real-time.
-*   **`spaCy`-Powered Symbolic Parser:** The old, brittle "regex waterfall" parser was replaced with a new, powerful `SymbolicParser` built on `spaCy`'s dependency parsing. This allows the agent to understand the true grammatical structure of sentences, not just simple string patterns.
+*   **Hybrid `spaCy`-Powered Symbolic Parser:** The old, brittle "regex waterfall" parser was replaced with a new, powerful, hybrid `SymbolicParser`. It now uses a combination of high-priority "fast-path" rules for commands and common questions, and falls back to `spaCy`'s dependency parsing for general statements.
 *   **"Symbolic-First" Cognitive Pipeline:** The `KnowledgeManager` and `ConversationManager` were updated to always try the fast, internal `SymbolicParser` first, only falling back to the slow, expensive `UniversalInterpreter` (LLM) when a sentence is too complex.
-*   **Tiered Reset & Checkpointing System:** The old `axiom-reset` command was replaced with a new, safer system:
-    *   `axiom-reset`: A "soft reset" that clears the agent's state but preserves its learned knowledge.
-    *   `axiom-factory-reset`: A "hard reset" that completely wipes the agent's brain, returning it to its factory state.
+*   **Data Integrity & "Smart Constructors":** The entire node creation process was refactored to ensure that every concept, including those in the `master_brain.json` template, is created with a rich, consistent set of default properties, eliminating "graph pollution" at its source.
 
 ---
 
-# Phase 7 — Semantic Mastery & The Symbolic Synthesizer (CURRENT PHASE)
+# Phase 7 — Semantic Mastery: Homonym Disambiguation (CURRENT PHASE)
+
+**Goal:** Solve the problem of linguistic ambiguity by enabling the agent to understand that a single word can have multiple, distinct meanings. This is the next critical step to prevent graph corruption and unlock deeper reasoning.
+
+### Key Features
+*   **Formal "Sense" Node Architecture:** Refactor the `KnowledgeManager` and `ConceptGraph` to formally support "sense" nodes. A base word (e.g., "bank") will act as a parent, linked to multiple, distinct sense nodes (e.g., "bank (a financial institution)" and "bank (the edge of a river)").
+*   **Contextual Disambiguation:** Enhance the `_get_or_create_concept_node` method to use the context of a sentence (the verb and object) to intelligently decide whether to use an existing sense or create a new one.
+*   **Disambiguation in Reasoning:** Upgrade the `_answer_question_about` method to recognize when a query is ambiguous (e.g., "what is a bank?") and to either ask a clarifying question or report on all known senses.
+*   **Parser Integration:** Ensure the `SymbolicParser` correctly creates and links facts to the appropriate "sense" node, not the ambiguous base node.
+
+---
+
+# Phase 8 — The Symbolic Synthesizer & Advanced Semantics
 
 **Goal:** Complete the end-to-end symbolic loop by building a "fast path" for language generation, and deepen the agent's understanding of language nuance.
 
 ### Key Features
 *   **Symbolic Synthesizer:** Create a fast, template-based `SymbolicSynthesizer` to handle the generation of simple, factual responses. This will be the mirror image of the `SymbolicParser` and will complete the "Symbolic-First" architecture, allowing for entire conversations with zero LLM calls.
-*   **Homonym & Polysemy Disambiguation:** Enhance the `KnowledgeManager` and `ConceptGraph` to create and manage distinct "sense" nodes for words with multiple meanings (e.g., "bank" the financial institution vs. "bank" the river's edge).
 *   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and the `ConceptGraph` to represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
 *   **Temporal Reasoning:** Upgrade the `_filter_facts_for_temporal_query` to handle a wider range of date/time formats and relative queries (e.g., "before 2020," "last year").
 
 ---
 
-# Phase 8 — The Logical Reasoner (Procedural Thought)
+# Phase 9 — The Logical Reasoner (Procedural Thought)
 
 **Goal:** Evolve beyond semantic knowledge to incorporate procedural and logical reasoning by introducing "Tools."
 
@@ -133,7 +142,7 @@ The agent has now completed its most critical architectural evolution to date in
 
 ---
 
-# Phase 9 — The Autonomous Operator
+# Phase 10 — The Autonomous Operator
 
 **Goal:** Grant the agent the agency to act upon its own conclusions, evolving from a "Verified Advisor" to a "Human-in-the-Loop Operator."
 
