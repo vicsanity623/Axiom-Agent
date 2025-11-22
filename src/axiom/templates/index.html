@@ -147,6 +147,22 @@
                     document.querySelectorAll('.message-menu-dropdown.show').forEach(d => d.classList.remove('show'));
                     dropdown.classList.toggle('show');
                 });
+                let htmlContent = messageData.text
+                .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                .replace(/\*(.*?)\*/g, '<i>$1</i>')
+                .replace(/\n/g, '<br>');
+
+            htmlContent = htmlContent.replace(/```(python|bash|html)\n([\s\S]*?)```/g, (match, lang, code) => {
+                const highlighted = hljs.highlight(code.trim(), { language: lang }).value;
+                return `<pre><code class="hljs ${lang}">${highlighted}</code></pre>`;
+            });
+             htmlContent = htmlContent.replace(/```\n([\s\S]*?)```/g, (match, code) => {
+                const highlighted = hljs.highlightAuto(code.trim()).value;
+                return `<pre><code class="hljs">${highlighted}</code></pre>`;
+            });
+
+            textElement.innerHTML = htmlContent;
             }
 
             messageElement.appendChild(contentElement);

@@ -1,28 +1,51 @@
 from __future__ import annotations
 
+import sys
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
-import spacy
 
 from axiom.cognitive_agent import CognitiveAgent
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from spacy.language import Language
-
     from axiom.universal_interpreter import InterpretData
+
+
+@pytest.fixture(scope="session", autouse=True)
+def mock_spacy_global():
+    """
+    Globally mocks spacy.load to prevent the 'SystemExit' error
+    when the model isn't found during imports.
+    """
+    mock_nlp = MagicMock()
+
+    # Create a mock Doc object that behaves like a spaCy Doc
+    mock_doc = MagicMock()
+    mock_doc.noun_chunks = []
+    mock_doc.ents = []
+
+    # Make the mock_nlp callable return the mock_doc
+    mock_nlp.return_value = mock_doc
+
+    # Create a fake module to replace 'spacy'
+    fake_spacy = MagicMock()
+    fake_spacy.load.return_value = mock_nlp
+
+    # Patch it into sys.modules
+    sys.modules["spacy"] = fake_spacy
+    return fake_spacy
 
 
 class MockUniversalInterpreter:
     """A fake UniversalInterpreter that routes calls to realistic canned responses."""
 
     def __init__(self, *args, **kwargs):
-        self.llm = "This is a mock LLM object"  # Make it not None
+        self.llm = "This is a mock LLM object"
         print("--- Initialized MockUniversalInterpreter (No LLM Loaded) ---")
 
     def generate_curriculum(self, high_level_goal: str, **kwargs) -> list[str]:
@@ -34,7 +57,7 @@ class MockUniversalInterpreter:
         self, original_topic: str, raw_sentence: str
     ) -> str | None:
         if original_topic.lower() in raw_sentence.lower():
-            return raw_sentence.replace(".", "")  # Return a clean sentence
+            return raw_sentence.replace(".", "")
         return None
 
     def synthesize(
@@ -43,7 +66,6 @@ class MockUniversalInterpreter:
         original_question: str | None = None,
         **kwargs,
     ) -> str:
-        # --- FIX: Add routing logic for synthesis tests ---
         if original_question and "What is a cat?" in original_question:
             return "Based on the facts, a cat is an animal."
         if isinstance(structured_facts, list) and "fact1" in structured_facts:
@@ -53,18 +75,16 @@ class MockUniversalInterpreter:
             and "a cat is an animal" in structured_facts
         ):
             return "A cat is an animal"
-
-        # Fallback for other tests
         if isinstance(structured_facts, list):
             return ". ".join(map(str, structured_facts)) + "."
         return str(structured_facts)
 
     def interpret(self, user_input: str) -> InterpretData | None:
+        # We need to import this inside the method to avoid circular imports if checking types
         from axiom.universal_interpreter import InterpretData
 
         if "gibberish" in user_input:
             return None
-        # A more realistic response for other tests
         return InterpretData(
             intent="statement_of_fact",
             entities=[],
@@ -130,18 +150,6 @@ def blank_agent(session_agent: CognitiveAgent, monkeypatch) -> CognitiveAgent:
     session_agent.goal_manager.goals.clear()
 
     return session_agent
-
-
-@pytest.fixture(scope="session")
-def spacy_nlp_lg() -> Language | None:
-    """A session-scoped fixture that loads the large spaCy model once."""
-    try:
-        return spacy.load("en_core_web_lg")
-    except (OSError, ImportError):
-        print(
-            "Warning: spaCy model 'en_core_web_lg' not found. spaCy-dependent tests will be skipped."
-        )
-        return None
 
 
 @pytest.fixture(scope="session")

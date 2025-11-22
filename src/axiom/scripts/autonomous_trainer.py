@@ -4,10 +4,11 @@ import argparse
 import logging
 import random
 import subprocess
+import threading
 import time
 import traceback
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -21,6 +22,9 @@ from ..config import (
 from ..logging_config import console, setup_logging
 from ..metacognitive_engine import MetacognitiveEngine
 from .cycle_manager import CycleManager
+
+if TYPE_CHECKING:
+    import threading
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +69,7 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 **RULES:**
 1.  The output MUST be a single, continuous string.
 2.  The string MUST start with a high-level mission statement.
-3.  The string MUST contain exactly 7 stages, each formatted as `[Stage X: Title]: Description...`.
+3.  The string MUST contain exactly 3 stages, each formatted as `[Stage X: Title]: Description...`.
 4.  The stages MUST follow a logical progression from concrete fundamentals to abstract reasoning, starting at a "toddler" level.
 5.  **Crucially, you MUST introduce variation and avoid redundancy.** The AI has already learned the concepts listed in the "Known Concepts" section. Your generated curriculum should focus on related, but distinct, topics to broaden the AI's knowledge.
 
@@ -73,7 +77,7 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 {known_concepts}
 
 **EXAMPLE OUTPUT (Do NOT copy this example; use it only for structure):**
-"Embark on a mission to understand the world through the scientific method, evolving from a simple observer to a systematic investigator.[Stage 1: Empirical Observation]: Learn to identify and describe objective phenomena, distinguishing between objects, properties, and events. [Stage 2: Pattern Recognition]: Analyze collections of observations to identify correlations, sequences, and recurring patterns in the data. [Stage 3: Hypothesis Formulation]: Based on observed patterns, learn to generate simple, testable explanations or 'if-then' hypotheses about cause and effect. [Stage 4: Variable Isolation]: Understand the concept of variables and how to distinguish between independent, dependent, and confounding variables in a system. [Stage 5: Experimental Design]: Learn to construct a logical procedure to test a hypothesis by manipulating an independent variable and measuring its effect on a dependent variable. [Stage 6: Evidence Evaluation]: Analyze the results of an experiment to determine whether the evidence supports, refutes, or is inconclusive regarding the hypothesis. [Stage 7: Theory Building]: Learn to synthesize multiple, validated hypotheses into a broader, more comprehensive explanatory model or theory."
+"Embark on a mission to understand the world through the scientific method, evolving from a simple observer to a systematic investigator.[Stage 1: Empirical Observation]: Learn to identify and describe objective phenomena, distinguishing between objects, properties, and events. [Stage 2: Pattern Recognition]: Analyze collections of observations to identify correlations, sequences, and recurring patterns in the data. [Stage 3: Hypothesis Formulation]: Based on observed patterns, learn to generate simple, testable explanations or 'if-then' hypotheses about cause and effect."
 """
 
 
@@ -101,22 +105,20 @@ def _generate_or_set_initial_goal(
 
     while True:
         creative_seeds = [
-            # Tier 1: Foundational Physical World
-            "Generate a curriculum about the fundamental properties of the physical world. Start with simple objects, their materials, and their colors. Example topics: ball, wood, red, water, solid, liquid.",
-            "Generate a curriculum about basic spatial relationships and actions. Start with concepts of location and movement. Example topics: in, on, under, push, pull, fall.",
-            "Generate a curriculum about common animals and their characteristics. Start with simple, well-known animals. Example topics: cat, dog, fish, bird, mammal, has fur, can fly.",
-            # Tier 2: Sensory Experience & Simple Abstractions
-            "Generate a curriculum about human senses and perceptions. Example topics: sight, sound, smell, taste, touch, loud, quiet, bright, dark.",
-            "Generate a curriculum about basic emotions and mental states. Example topics: happy, sad, angry, think, know, believe.",
-            "Generate a curriculum about numbers and basic mathematics. Start with counting and simple shapes. Example topics: one, two, three, circle, square, triangle.",
-            # Tier 3: Social & Conceptual World
-            "Generate a curriculum about social structures and roles. Start with the concept of a person and their relationships. Example topics: person, family, friend, job, doctor, teacher.",
-            "Generate a curriculum about common tools and their functions. Example topics: hammer, nail, computer, program, write, calculate.",
-            "Generate a curriculum about fundamental concepts in science. Start with physics and biology. Example topics: force, energy, gravity, cell, DNA, plant, animal.",
-            # Tier 4: Abstract & Philosophical Concepts
-            "Generate a curriculum about abstract concepts of logic and truth. Example topics: logic, reason, true, false, cause, effect.",
-            "Generate a curriculum about concepts of time and history. Example topics: past, present, future, year, day, history, war, peace.",
-            "Generate a curriculum about societal and ethical concepts. Example topics: law, justice, right, wrong, government, society.",
+            # Tier 1:
+            "Generate a curriculum about the journey of food from farm to table. Start with agriculture and end with cooking. Example topics: farm, soil, seed, grow, harvest, transport, market, buy, cook, recipe, eat.",
+            "Generate a curriculum about the science of nutrition. Start with basic macronutrients and their sources. Example topics: nutrition, protein, carbohydrate, fat, vitamin, mineral, meat, vegetable, fruit, water, energy.",
+            "Generate a curriculum about world cuisines and culinary traditions. Start with different types of meals and flavors. Example topics: cuisine, spice, sweet, sour, salty, bitter, Italian, Mexican, Chinese, bread, rice, pasta.",
+            # Tier 2:
+            "Generate a curriculum about the practical skills of cooking. Start with simple actions and utensils. Example topics: cook, bake, fry, boil, chop, mix, oven, stove, knife, pan, bowl, plate.",
+            "Generate a curriculum about food as if teaching a young child. Start with the most basic, common foods and meals. Example topics: apple, banana, milk, bread, cheese, breakfast, lunch, dinner, eat, drink, yummy.",
+            # Tier 3:
+            "Generate a curriculum about the biology of edible plants. Start with the parts of a plant that we eat. Example topics: plant, fruit, vegetable, root, leaf, seed, stem, flower, sugar, starch.",
+            "Generate a curriculum about the concepts of a restaurant and dining out. Start with the roles of people and the items on a menu. Example topics: restaurant, menu, chef, waiter, order, pay, food, drink, appetizer, main course, dessert.",
+            "Generate a curriculum based on the traditional food groups. Start with the major categories of food. Example topics: food group, dairy, grain, protein, fruit, vegetable, fat, oil, milk, bread, meat, apple.",
+            # Tier 4:
+            "Generate a curriculum about the history of agriculture and food production. Start with ancient methods and key crops. Example topics: history, agriculture, hunt, gather, farm, wheat, corn, rice, domesticate, preserve.",
+            "Generate a curriculum about the sensory experience of eating. Start with taste, texture, and aroma. Example topics: taste, smell, texture, crunchy, soft, sweet, sour, aroma, flavor, delicious, disgusting.",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(
@@ -124,10 +126,31 @@ def _generate_or_set_initial_goal(
             selected_seed,
         )
 
-        known_concepts = agent.graph.get_all_node_names()
-        known_concepts_str = (
-            ", ".join(sorted(known_concepts)) if known_concepts else "None"
-        )
+        # --- FIX: Replace the "Brain Dump" with a "Strategic Summary" ---
+        # Get all nodes, but then create a smaller, more strategic summary.
+        all_nodes = agent.graph.get_all_nodes()
+        if all_nodes:
+            # Sort nodes by a combination of access count and how recent they are.
+            # This gives a good proxy for "importance" or "relevance".
+            sorted_nodes = sorted(
+                all_nodes,
+                key=lambda n: (
+                    n.properties.get("access_count", 0),
+                    n.properties.get("last_accessed", ""),
+                ),
+                reverse=True,
+            )
+            # Take a sample of the top 200 most relevant concepts.
+            # This is a large enough sample to give context, but small enough to avoid context window errors.
+            strategic_summary_nodes = sorted_nodes[:200]
+            known_concepts_str = ", ".join(
+                sorted(n.name for n in strategic_summary_nodes)
+            )
+            logger.info(
+                f"   - Providing LLM with a strategic summary of {len(strategic_summary_nodes)} most relevant concepts."
+            )
+        else:
+            known_concepts_str = "None"
 
         prompt = CURRICULUM_GENERATION_PROMPT.format(
             creative_seed=selected_seed, known_concepts=known_concepts_str
@@ -172,7 +195,8 @@ def _generate_or_set_initial_goal(
                     "[Curriculum Generation]: Triggering autonomous curiosity to find a new topic..."
                 )
 
-                creative_seeds = [agent.interpreter.generate_new_creative_seed()]
+                # This logic for generating a new seed is complex, let's simplify for now
+                # creative_seeds = [agent.interpreter.generate_new_creative_seed()]
                 agent.goal_manager.goals.clear()
                 continue
 
@@ -186,6 +210,8 @@ def start_autonomous_training(
     state_file: Path,
     initial_goal: str | None = None,
     duration_hours: float | None = None,
+    launch_ui: bool = True,
+    stop_event: threading.Event | None = None,
 ) -> None:
     """Initialize the agent and run its autonomous learning cycles indefinitely."""
 
@@ -201,8 +227,8 @@ def start_autonomous_training(
         style="border",
     )
 
-    # Launch the trends graph in a separate macOS Terminal window
-    _launch_graph_monitor_terminal()
+    if launch_ui:
+        _launch_graph_monitor_terminal()
 
     axiom_agent: CognitiveAgent | None = None
     scheduler: BackgroundScheduler | None = None
@@ -232,16 +258,20 @@ def start_autonomous_training(
             harvester=harvester,
             metacognitive_engine=metacognitive_engine,
             console=console,
+            stop_event=stop_event,
         )
 
         _generate_or_set_initial_goal(axiom_agent, initial_goal)
 
-        # FIX: Pass the duration to the manager's start method
         manager.start(duration_hours=duration_hours)
         scheduler.start()
 
-        # The main loop now just waits for the scheduler to be shut down
         while scheduler.running:
+            if stop_event and stop_event.is_set():
+                logger.info(
+                    "[border]\n--- [AUTONOMOUS TRAINER]: External stop signal received. Shutting down... ---[/border]",
+                )
+                break
             time.sleep(1)
 
     except (KeyboardInterrupt, SystemExit):

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from ..knowledge_harvester import KnowledgeHarvester
     from ..metacognitive_engine import MetacognitiveEngine
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("axiom")
 
 
 class CycleManager:
@@ -30,23 +30,21 @@ class CycleManager:
         harvester: KnowledgeHarvester,
         metacognitive_engine: MetacognitiveEngine,
         console: Console,
+        stop_event: threading.Event | None = None,
     ) -> None:
         self.scheduler = scheduler
         self.harvester = harvester
         self.metacognitive_engine = metacognitive_engine
         self.console = console
-
+        self.stop_event = stop_event
         self.phase_lock = threading.Lock()
-
-        self.LEARNING_PHASE_DURATION = timedelta(hours=5)
+        self.LEARNING_PHASE_DURATION = timedelta(hours=1.2)
         self.DISCOVERY_PHASE_DURATION = timedelta(minutes=3.2)
         self.REFINEMENT_PHASE_DURATION = timedelta(minutes=3)
         self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
-
         self.CYCLE_DELAY_SECONDS = 60
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
-
         fast_mode = os.getenv("AXIOM_FAST_TEST") == "1"
         if fast_mode:
             self.LEARNING_PHASE_DURATION = timedelta(minutes=5)
@@ -64,28 +62,32 @@ class CycleManager:
         self.scheduler.add_job(
             self._manage_phases, "interval", minutes=1, id="cycle_manager_job"
         )
-
         if duration_hours is not None and duration_hours > 0:
             end_time = datetime.now() + timedelta(hours=duration_hours)
-            self.scheduler.add_job(
-                self.shutdown,
-                "date",
-                run_date=end_time,
-                id="shutdown_job",
-            )
+
+            def shutdown_after_delay():
+                delay_seconds = (end_time - datetime.now()).total_seconds()
+                if delay_seconds > 0:
+                    timer = threading.Timer(delay_seconds, self.shutdown)
+                    timer.start()
+                    if self.stop_event:
+                        # This will block the shutdown_thread until the main stop_event is set
+                        self.stop_event.wait()
+                        timer.cancel()
+
+            shutdown_thread = threading.Thread(target=shutdown_after_delay, daemon=True)
+            shutdown_thread.start()
             logger.warning(
                 f"--- [CYCLE MANAGER]: Benchmark mode enabled. System will shut down at {end_time.strftime('%Y-%m-%d %H:%M:%S')} ---"
             )
 
-    # --- FIX: Add the missing shutdown method ---
-    def shutdown(self) -> None:
+    def shutdown(self, _wait: bool = True) -> None:
         """
-        Cleanly shuts down the scheduler. This will cause the main loop in
-        the autonomous_trainer to exit.
+        Cleanly shuts down the scheduler.
         """
         logger.info("--- [CYCLE MANAGER]: Shutdown initiated by job or signal. ---")
         if self.scheduler.running:
-            self.scheduler.shutdown()
+            self.scheduler.shutdown(wait=False)
             logger.info("--- [CYCLE MANAGER]: Scheduler has been shut down. ---")
 
     def _run_and_reschedule_cycle(
@@ -97,20 +99,23 @@ class CycleManager:
     ) -> None:
         """
         Generic wrapper to run a cycle function and reschedule it only if progress was made.
-
-        Args:
-            cycle_func: The function to execute (e.g., harvester.study_cycle).
-                        Must return True if progress was made, False otherwise.
-            job_id: The unique ID for the scheduler job.
-            phase_name: The name of the phase this job belongs to.
-            **kwargs: Arguments to pass to the cycle_func.
         """
+        if self.stop_event and self.stop_event.is_set():
+            logger.info(
+                f"--- [CYCLE MANAGER]: Stop signal received. Skipping job '{job_id}'. ---"
+            )
+            return
         with self.phase_lock:
             progress_made = False
             try:
                 progress_made = cycle_func(**kwargs)
             finally:
                 if self.current_phase == phase_name and progress_made:
+                    if self.stop_event and self.stop_event.is_set():
+                        logger.info(
+                            f"--- [CYCLE MANAGER]: Stop signal received. Not rescheduling '{job_id}'. ---"
+                        )
+                        return
                     next_run = datetime.now() + timedelta(
                         seconds=self.CYCLE_DELAY_SECONDS
                     )
@@ -140,7 +145,6 @@ class CycleManager:
         self.current_phase = "learning"
         self.phase_start_time = datetime.now()
         phase_end_time = self.phase_start_time + self.LEARNING_PHASE_DURATION
-
         self.scheduler.add_job(
             self._run_and_reschedule_cycle,
             "date",
@@ -218,6 +222,14 @@ class CycleManager:
 
     def _manage_phases(self) -> None:
         """The main heartbeat, called every interval to check for phase transitions."""
+        # --- FIX: Check the stop event at the very beginning of the heartbeat ---
+        if self.stop_event and self.stop_event.is_set():
+            logger.info(
+                "--- [CYCLE MANAGER]: Stop signal detected in heartbeat. Shutting down scheduler. ---"
+            )
+            self.shutdown()
+            return
+
         with self.phase_lock:
             if not self.phase_start_time:
                 return
@@ -247,5 +259,5 @@ class CycleManager:
     def _clear_all_jobs(self) -> None:
         """Remove all existing cognitive cycle jobs from the scheduler."""
         for job in self.scheduler.get_jobs():
-            if job.id != "cycle_manager_job":
+            if job.id not in ["cycle_manager_job", "shutdown_job"]:
                 job.remove()

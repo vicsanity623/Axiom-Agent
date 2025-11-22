@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 # --- Configuration ---
 STATE_FILE_PATH: Path = DEFAULT_STATE_FILE
-REFRESH_INTERVAL_SECONDS: int = 60  # How often to update the graph (in seconds)
+REFRESH_INTERVAL_SECONDS: int = 200  # How often to update the graph (in seconds)
 
 
 def read_high_priority_task_count(state_file: Path) -> int | None:

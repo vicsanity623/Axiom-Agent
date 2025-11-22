@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-950 text-gray-100">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Axiom Studio • Developer IDE</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #111; }
+    ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 4px; }
+    .log-line { 
+      font-family: 'JetBrains Mono', 'Fira Code', monospace; 
+      white-space: pre-wrap; 
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col" hx-ext="sse">
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+          Axiom Studio
+        </h1>
+      </div>
+      <a href="https://github.com/vicsanity623/Axiom-Agent" target="_blank" 
+         class="text-gray-400 hover:text-white transition"><i class="fab fa-github text-xl"></i></a>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- Sidebar -->
+    <aside class="w-80 border-r border-gray-800 bg-gray-900/50 backdrop-blur flex flex-col">
+
+      <!-- Stats (auto-updating) -->
+      <div id="graph-stats" class="p-4 border-b border-gray-800 text-xs space-y-1 flex-shrink-0"
+           hx-get="/api/status" hx-trigger="every 2s" hx-swap="innerHTML">
+        <h3 class="text-sm font-semibold text-gray-400 mb-2">Knowledge Graph Stats</h3>
+        <div>Nodes: <span class="text-indigo-400 font-mono">...</span></div>
+        <div>Edges: <span class="text-indigo-400 font-mono">...</span></div>
+        <div>Deferred: <span class="text-yellow-400 font-mono">...</span></div>
+      </div>
+
+      <!-- Chart - THIS WAS THE PROBLEM CHILD -->
+      <div class="p-4 flex-1 min-h-0 overflow-hidden">
+        <h3 class="text-sm font-semibold text-gray-400 mb-3">Live Deferred Tasks Trend</h3>
+        <div class="h-full">
+          <canvas id="taskChart" class="w-full h-full"></canvas>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+      
+      <!-- Log Output -->
+      <div id="log" class="flex-1 overflow-y-auto p-6 bg-black/40 font-mono text-sm"
+           sse-connect="/api/log_stream" sse-swap="message" hx-target="this" hx-swap="beforeend">
+        <div class="log-line text-gray-500">Axiom Studio ready. Click "Start" or type a command below.</div>
+      </div>
+
+      <!-- Command Input -->
+      <div class="border-t border-gray-800 bg-gray-900/90 p-4 flex-shrink-0">
+        <form hx-post="/api/command" hx-target="#log" hx-swap="beforeend" 
+              hx-on::after-request="this.reset()" class="flex gap-3">
+          <input type="text" name="cmd" placeholder="Send command (e.g. 'what is gravity?', 'show facts')..."
+                 class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition"
+                 autocomplete="off" />
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <!-- Chart + Auto-scroll Script -->
+  <script>
+    const ctx = document.getElementById('taskChart').getContext('2d');
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: { 
+        labels: [], 
+        datasets: [{
+          label: 'Deferred Tasks',
+          data: [],
+          borderColor: '#a78bfa',
+          backgroundColor: 'rgba(167, 139, 250, 0.1)',
+          tension: 0.4,
+          fill: true,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, ticks: { color: '#9ca3af' } },
+          x: { ticks: { color: '#9ca3af', maxTicksLimit: 10 } }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+
+    // Update chart when stats refresh
+    document.body.addEventListener('htmx:afterSwap', (e) => {
+      if (e.detail.target.id === 'graph-stats') {
+        try {
+          const data = JSON.parse(e.detail.xhr.response);
+          chart.data.labels.push(new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+          chart.data.datasets[0].data.push(data.deferred || 0);
+          if (chart.data.labels.length > 50) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+          }
+          chart.update('quiet');
+        } catch (err) {}
+      }
+
+      // Auto-scroll log
+      const log = document.getElementById('log');
+      if (log) log.scrollTop = log.scrollHeight;
+    });
+
+    // SSE log streaming
+    document.body.addEventListener('sse:message', (e) => {
+      try {
+        const data = JSON.parse(e.detail.data);
+        const log = document.getElementById('log');
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        line.textContent = data.line;
+        log.appendChild(line);
+        log.scrollTop = log.scrollHeight;
+      } catch (err) {}
+    });
+  </script>
+</body>
+</html>

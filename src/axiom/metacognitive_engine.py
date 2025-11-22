@@ -284,6 +284,19 @@ class PerformanceMonitor:
                 i += 1
                 continue
 
+            if "[SymbolicParser Failure]" in line:
+                entry = _LogEntry(
+                    function_name="SymbolicParser._interpret",
+                    message=line.strip(),
+                    timestamp=int(time.time()),
+                    log_level="WARNING",
+                    execution_time=None,
+                    traceback=None,
+                )
+                analysis_data.entries_by_func["SymbolicParser._interpret"].append(entry)
+                i += 1
+                continue
+
             match = self._LOG_PATTERN.search(line)
             if not match:
                 i += 1
@@ -322,7 +335,14 @@ class PerformanceMonitor:
                 else:
                     i -= 1
 
-            entry = _LogEntry(func, message, ts, log_level, exec_time, traceback_str)
+            entry = _LogEntry(
+                function_name=func,
+                message=message,
+                timestamp=ts,
+                log_level=log_level,
+                execution_time=exec_time,
+                traceback=traceback_str,
+            )
             analysis_data.entries_by_func[func].append(entry)
         return analysis_data
 

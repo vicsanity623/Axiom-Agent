@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging
+import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Literal, TypedDict, cast
 
 import nltk
+import spacy
 from nltk.corpus import wordnet as wn
 from nltk.stem import WordNetLemmatizer
 
@@ -12,17 +15,52 @@ if TYPE_CHECKING:
     from spacy.language import Language
     from spacy.tokens import Doc
 
-
-try:
-    import spacy
-
-    nlp: Language | None = spacy.load("en-core-web-sm")
-except ImportError:
-    nlp = None
-
 logger = logging.getLogger(__name__)
 
 lemmatizer = WordNetLemmatizer()
+
+
+def get_bundle_dir() -> Path:
+    """Returns the base directory for resources in a frozen app."""
+    if hasattr(sys, "_MEIPASS"):
+        # PyInstaller --onefile mode
+        return Path(sys._MEIPASS)
+    # PyInstaller --onedir mode (macOS .app)
+    # Resources are located in the same directory as the executable
+    return Path(sys.executable).parent
+
+
+nlp: Language | None = None
+try:
+    if getattr(sys, "frozen", False):
+        if hasattr(sys, "_MEIPASS"):
+            # Onefile mode
+            bundle_dir = Path(sys._MEIPASS)  # type: ignore[attr-defined]
+            model_root = bundle_dir / "en_core_web_sm"
+        else:
+            # Onedir mode (.app) - Model is in Contents/Frameworks
+            bundle_dir = Path(sys.executable).parent.parent / "Frameworks"
+            model_root = bundle_dir / "en_core_web_sm"
+            
+        # The model files are likely inside a subdirectory like 'en_core_web_sm-3.x.x'
+        if model_root.exists():
+            subdirs = [d for d in model_root.iterdir() if d.is_dir() and d.name.startswith("en_core_web_sm")]
+            if subdirs:
+                model_path = subdirs[0]
+            else:
+                model_path = model_root
+        else:
+            model_path = model_root
+
+        nlp = spacy.load(model_path)
+    else:
+        # FIX: Use underscores 'en_core_web_sm', not dashes
+        nlp = spacy.load("en_core_web_sm")
+    logger.info("[success]spaCy NLP pipeline loaded successfully.[/success]")
+except Exception as e:
+    logger.error("[bold red]CRITICAL ERROR: Failed to load spaCy model.[/bold red]")
+    logger.error("Original error: %s", e)
+    nlp = None
 
 pos_map: Final[dict[str, str]] = {
     "NN": "noun",

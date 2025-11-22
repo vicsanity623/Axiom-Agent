@@ -32,7 +32,7 @@ def analyze_brain_file(brain_path: Path) -> dict[str, int | float]:
 
     data = json.loads(brain_path.read_text())
     num_nodes = len(data.get("nodes", []))
-    num_edges = len(data.get("edges", []))
+    num_edges = len(data.get("links", []))
 
     connectivity = (num_edges / num_nodes) if num_nodes > 0 else 0.0
 
