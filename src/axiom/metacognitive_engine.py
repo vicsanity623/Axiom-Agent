@@ -887,28 +887,32 @@ class SandboxVerifier:
 
                 logger.info("  [Sandbox]: Running multi-pass auto-fixer (Ruff)...")
 
-                subprocess.run(
-                    ["ruff", "check", "--select", "F821", "--add-noqa", "."],
-                    capture_output=True,
-                    text=True,
-                    cwd=sandbox_root,
-                )
+                # Run ruff checks and auto-fix if available; ignore if ruff is not installed.
+                try:
+                    subprocess.run(
+                        ["ruff", "check", "--select", "F821", "--add-noqa", "."],
+                        capture_output=True,
+                        text=True,
+                        cwd=sandbox_root,
+                    )
+                    subprocess.run(
+                        ["ruff", "format", "."],
+                        capture_output=True,
+                        text=True,
+                        cwd=sandbox_root,
+                    )
+                    fix_process = subprocess.run(
+                        ["ruff", "check", "--fix", "."],
+                        capture_output=True,
+                        text=True,
+                        cwd=sandbox_root,
+                    )
+                except FileNotFoundError:
+                    # ruff not installed; skip linting steps.
+                    fix_process = None
 
-                subprocess.run(
-                    ["ruff", "format", "."],
-                    capture_output=True,
-                    text=True,
-                    cwd=sandbox_root,
-                )
-
-                fix_process = subprocess.run(
-                    ["ruff", "check", "--fix", "."],
-                    capture_output=True,
-                    text=True,
-                    cwd=sandbox_root,
-                )
-
-                if fix_process.returncode != 0:
+                # If ruff was run, evaluate its result; otherwise, continue.
+                if fix_process is not None and fix_process.returncode != 0:
                     logger.error(
                         "  [Sandbox]: ❌ Ruff auto-fix FAILED. The suggestion is likely unrecoverable."
                     )

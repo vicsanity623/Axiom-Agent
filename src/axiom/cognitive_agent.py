@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 import logging
+import os
 import re
 import shutil
 import threading
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 
 from nltk.stem import WordNetLemmatizer
 
+from .coding_agent import CodingAgent
 from .config import DEFAULT_BRAIN_FILE, DEFAULT_LLM_PATH, DEFAULT_STATE_FILE
 from .constants import CONTRACTION_MAP, RELATION_TYPE_MAP
 from .conversation_manager import ConversationManager
@@ -115,6 +117,7 @@ class CognitiveAgent:
         self.interpreter = UniversalInterpreter(
             model_path=DEFAULT_LLM_PATH, load_llm=enable_llm
         )
+        self.coding_agent = CodingAgent(self.interpreter)  # Initialize Coding Agent
         self.lexicon = LexiconManager(self)
         self.parser = SymbolicParser(self)
         self.goal_manager = GoalManager(self)
@@ -191,7 +194,11 @@ class CognitiveAgent:
         self._initialize_identity()
 
     def chat(self, user_input: str) -> str:
-        """Public entry point for user interaction, delegated to the ConversationManager."""
+        """Public entry point for user interaction."""
+        # Check for Coding Mode command
+        if user_input.strip().startswith("/code"):
+            return self.coding_agent.process_request(user_input)
+
         return self.conversation_manager.chat(user_input)
 
     def _initialize_identity(self):
@@ -218,9 +225,24 @@ class CognitiveAgent:
         if not self.state_file.exists():
             logger.info("   - No agent state file found. Starting with a fresh state.")
             return
+
+        def sanitize_llm_artifacts(obj):
+            """Recursively remove LLM instruction tokens from strings in nested structures."""
+            if isinstance(obj, str):
+                return obj.replace("[/INST]", "").replace("[INST]", "").strip()
+            if isinstance(obj, dict):
+                return {k: sanitize_llm_artifacts(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [sanitize_llm_artifacts(item) for item in obj]
+            return obj
+
         try:
             with self.state_file.open("r", encoding="utf-8") as f:
                 state_data = json.load(f)
+
+            # Sanitize all loaded data to prevent Rich markup crashes
+            state_data = sanitize_llm_artifacts(state_data)
+
             self.learning_goals = state_data.get("learning_goals", [])
             self.high_priority_tasks = state_data.get("high_priority_tasks", [])
             self.autonomous_cycle_count = state_data.get("autonomous_cycle_count", 0)
@@ -241,7 +263,7 @@ class CognitiveAgent:
             self.goal_manager.goals = {}
 
     def save_state(self) -> None:
-        """Save the agent's complete operational state to its state file."""
+        """Save the agent's complete operational state to its state file atomically."""
         logger.info(f"   - Saving agent's operational state to '{self.state_file}'...")
         try:
             state_data = {
@@ -254,24 +276,29 @@ class CognitiveAgent:
                 ),
                 "goals": self.goal_manager.goals,
             }
-            with self.state_file.open("w", encoding="utf-8") as f:
+
+            # Atomic write: write to temp file then rename
+            temp_file = self.state_file.with_suffix(".tmp")
+            with temp_file.open("w", encoding="utf-8") as f:
                 json.dump(state_data, f, indent=4)
+
+            os.replace(temp_file, self.state_file)
             logger.info("   - Agent state saved successfully.")
         except Exception as e:
             logger.error(f"   - CRITICAL ERROR: Failed to save agent state. Error: {e}")
 
     def save_brain(self) -> None:
-        """Save the current knowledge graph to its JSON file."""
+        """Save the current knowledge graph to its JSON file atomically."""
         if self.inference_mode:
             return
-        lock_file = self.brain_file.parent / f"{self.brain_file.name}.lock"
         try:
-            lock_file.touch()
-            self.graph.save_to_file(self.brain_file)
+            # Atomic write
+            temp_file = self.brain_file.with_suffix(".tmp")
+            self.graph.save_to_file(temp_file)
+            os.replace(temp_file, self.brain_file)
             logger.info(f"[cyan]   - Agent brain saved to {self.brain_file}[/cyan]")
-        finally:
-            if lock_file.exists():
-                lock_file.unlink()
+        except Exception as e:
+            logger.error(f"   - CRITICAL ERROR: Failed to save brain. Error: {e}")
 
     def log_autonomous_cycle_completion(self) -> None:
         """Increment the autonomous cycle counter and trigger an interpreter reboot if needed."""

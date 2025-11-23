@@ -168,7 +168,7 @@ class KnowledgeHarvester:
                         provenance="dictionary_api",
                     )
                     self.agent.knowledge_manager.learn_new_fact_autonomously(
-                        definition, term_to_learn
+                        f"{term_to_learn} is {definition}", term_to_learn
                     )
 
                 logger.info(
@@ -671,11 +671,13 @@ class KnowledgeHarvester:
 
             if fact_sentence:
                 with self.lock:
+                    # --- FIX: Construct full sentence for parser ---
+                    full_sentence = f"{random_node_name} is {fact_sentence}"
                     logger.info(
-                        f"  [Deepen Knowledge]: {LogColors.GREEN}Attempting to learn new fact: '{fact_sentence}'{LogColors.RESET}"
+                        f"  [Deepen Knowledge]: {LogColors.GREEN}Attempting to learn new fact: '{full_sentence}'{LogColors.RESET}"
                     )
                 return self.agent.knowledge_manager.learn_new_fact_autonomously(
-                    fact_sentence, source_topic=random_node_name
+                    full_sentence, source_topic=random_node_name
                 )
 
             eligible_names.remove(random_node_name)

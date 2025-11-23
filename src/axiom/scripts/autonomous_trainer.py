@@ -25,6 +25,7 @@ from .cycle_manager import CycleManager
 
 if TYPE_CHECKING:
     import threading
+    from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 **RULES:**
 1.  The output MUST be a single, continuous string.
 2.  The string MUST start with a high-level mission statement.
-3.  The string MUST contain exactly 3 stages, each formatted as `[Stage X: Title]: Description...`.
+3.  The string MUST contain exactly 5 stages, each formatted as `[Stage X: Title]: Description...`.
 4.  The stages MUST follow a logical progression from concrete fundamentals to abstract reasoning, starting at a "toddler" level.
 5.  **Crucially, you MUST introduce variation and avoid redundancy.** The AI has already learned the concepts listed in the "Known Concepts" section. Your generated curriculum should focus on related, but distinct, topics to broaden the AI's knowledge.
 
@@ -88,10 +89,25 @@ def _generate_or_set_initial_goal(
     Sets a custom initial goal or generates a new, state-aware, and potentially
     self-renewing curriculum.
     """
-    if agent.goal_manager.get_active_goal() or agent.learning_goals:
+    active_goal = agent.goal_manager.get_active_goal()
+    if active_goal:
         logger.info(
-            "--- [AUTONOMOUS TRAINER]: Found existing goals. Resuming previous learning plan. ---"
+            "--- [AUTONOMOUS TRAINER]: Found existing active goals. Resuming previous learning plan. ---"
         )
+        # Ensure learning_goals is populated from the active goal's sub-goals
+        if active_goal.get("sub_goals"):
+            agent.learning_goals = list(active_goal["sub_goals"])
+        return
+
+    # --- FIX: Check for pending goals to resume before generating new ones ---
+    if agent.goal_manager.activate_next_pending_goal():
+        logger.info(
+            "--- [AUTONOMOUS TRAINER]: Found pending goals. Resuming saved learning plan. ---"
+        )
+        # Ensure learning_goals is populated from the newly activated goal
+        active_goal = agent.goal_manager.get_active_goal()
+        if active_goal and active_goal.get("sub_goals"):
+            agent.learning_goals = list(active_goal["sub_goals"])
         return
 
     if custom_goal:
@@ -105,20 +121,22 @@ def _generate_or_set_initial_goal(
 
     while True:
         creative_seeds = [
-            # Tier 1:
-            "Generate a curriculum about the journey of food from farm to table. Start with agriculture and end with cooking. Example topics: farm, soil, seed, grow, harvest, transport, market, buy, cook, recipe, eat.",
-            "Generate a curriculum about the science of nutrition. Start with basic macronutrients and their sources. Example topics: nutrition, protein, carbohydrate, fat, vitamin, mineral, meat, vegetable, fruit, water, energy.",
-            "Generate a curriculum about world cuisines and culinary traditions. Start with different types of meals and flavors. Example topics: cuisine, spice, sweet, sour, salty, bitter, Italian, Mexican, Chinese, bread, rice, pasta.",
-            # Tier 2:
-            "Generate a curriculum about the practical skills of cooking. Start with simple actions and utensils. Example topics: cook, bake, fry, boil, chop, mix, oven, stove, knife, pan, bowl, plate.",
-            "Generate a curriculum about food as if teaching a young child. Start with the most basic, common foods and meals. Example topics: apple, banana, milk, bread, cheese, breakfast, lunch, dinner, eat, drink, yummy.",
-            # Tier 3:
-            "Generate a curriculum about the biology of edible plants. Start with the parts of a plant that we eat. Example topics: plant, fruit, vegetable, root, leaf, seed, stem, flower, sugar, starch.",
-            "Generate a curriculum about the concepts of a restaurant and dining out. Start with the roles of people and the items on a menu. Example topics: restaurant, menu, chef, waiter, order, pay, food, drink, appetizer, main course, dessert.",
-            "Generate a curriculum based on the traditional food groups. Start with the major categories of food. Example topics: food group, dairy, grain, protein, fruit, vegetable, fat, oil, milk, bread, meat, apple.",
-            # Tier 4:
-            "Generate a curriculum about the history of agriculture and food production. Start with ancient methods and key crops. Example topics: history, agriculture, hunt, gather, farm, wheat, corn, rice, domesticate, preserve.",
-            "Generate a curriculum about the sensory experience of eating. Start with taste, texture, and aroma. Example topics: taste, smell, texture, crunchy, soft, sweet, sour, aroma, flavor, delicious, disgusting.",
+            # Tier 1: The Primitives of Code
+            "Generate a curriculum about the atomic building blocks of Python programming. Start with data types and basic syntax. Example topics: python, code, interpreter, variable, string, integer, float, boolean, syntax, comment, assign.",
+            "Generate a curriculum about basic operators and logic in programming. Start with math and comparisons. Example topics: add, subtract, multiply, divide, equals, not equals, greater than, true, false, logic, operator.",
+            # Tier 2: Control Flow & Logic
+            "Generate a curriculum about controlling the flow of execution in software. Start with decisions and loops. Example topics: if statement, else, elif, condition, loop, iteration, for loop, while loop, break, continue, block, indentation.",
+            # Tier 3: Data Structures & Organization
+            "Generate a curriculum about organizing data in memory using Python structures. Start with lists and mappings. Example topics: list, dictionary, tuple, set, index, key, value, append, pop, element, sequence, mutable, immutable.",
+            "Generate a curriculum about reusable code and modularity. Start with functions and scope. Example topics: function, def, return, call, argument, parameter, scope, global, local, module, import, library.",
+            # Tier 4: Object-Oriented Programming (OOP)
+            "Generate a curriculum about Object-Oriented Programming (OOP) concepts. Start with the blueprint of objects. Example topics: class, object, instance, instantiate, attribute, method, self, init, constructor, property.",
+            "Generate a curriculum about advanced OOP relationships. Start with how classes interact. Example topics: inheritance, parent class, child class, polymorphism, override, encapsulation, abstraction, interface, composition.",
+            # Tier 5: Code Quality, Error Handling, & Review
+            "Generate a curriculum about handling errors and preventing crashes. Start with exceptions. Example topics: error, bug, crash, exception, raise, try, except, finally, traceback, debugging.",
+            "Generate a curriculum about writing clean, maintainable, and professional code. Start with style and readability. Example topics: refactoring, readability, linting, pep8, docstring, annotation, type hint, clean code, review, testing.",
+            # Tier 6: Advanced Python Concepts
+            "Generate a curriculum about advanced Python features for efficient coding. Start with iterators and decorators. Example topics: iterator, generator, yield, decorator, wrapper, context manager, with statement, lambda, list comprehension.",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(
@@ -140,9 +158,9 @@ def _generate_or_set_initial_goal(
                 ),
                 reverse=True,
             )
-            # Take a sample of the top 200 most relevant concepts.
-            # This is a large enough sample to give context, but small enough to avoid context window errors.
-            strategic_summary_nodes = sorted_nodes[:200]
+            # Take a sample of the top 30 most relevant concepts.
+            # Reduced to 30 to ensure prompt fits within batch size.
+            strategic_summary_nodes = sorted_nodes[:30]
             known_concepts_str = ", ".join(
                 sorted(n.name for n in strategic_summary_nodes)
             )
@@ -210,8 +228,9 @@ def start_autonomous_training(
     state_file: Path,
     initial_goal: str | None = None,
     duration_hours: float | None = None,
-    launch_ui: bool = True,
+    launch_ui: bool = False,
     stop_event: threading.Event | None = None,
+    agent_callback: Callable[[CognitiveAgent], None] | None = None,
 ) -> None:
     """Initialize the agent and run its autonomous learning cycles indefinitely."""
 
@@ -240,6 +259,10 @@ def start_autonomous_training(
             inference_mode=False,
         )
         axiom_agent.load_state()
+
+        # Expose agent to caller (e.g. studio server)
+        if agent_callback:
+            agent_callback(axiom_agent)
 
         if axiom_agent.harvester is None:
             logger.critical(
@@ -316,6 +339,12 @@ def main() -> None:
     )
 
     parser.add_argument(
+        "--ui",
+        action="store_true",
+        help="Launch the legacy external graph monitor UI.",
+    )
+
+    parser.add_argument(
         "brain_file",
         type=Path,
         nargs="?",
@@ -338,6 +367,7 @@ def main() -> None:
         args.state_file,
         initial_goal=args.goal,
         duration_hours=args.duration,
+        launch_ui=args.ui,
     )
 
 

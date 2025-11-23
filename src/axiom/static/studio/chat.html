@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900 text-gray-300">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Axiom Chat</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="w-full h-full flex flex-col overflow-hidden font-sans">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-4 py-3 bg-[#18181b] border-b border-[#27272a] shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <span class="text-xs font-bold text-gray-300 uppercase tracking-wider">Axiom Studio</span>
+            </div>
+            <!-- Context Badge -->
+            <span id="context-badge"
+                class="hidden px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                Context Active
+            </span>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Model Selector -->
+            <select id="model-select"
+                class="bg-[#27272a] border border-[#3f3f46] text-xs text-gray-300 rounded px-2 py-1.5 focus:outline-none focus:border-indigo-500 transition-colors">
+                <option value="gemma">Gemma 3 12B (Default)</option>
+                <option value="browse">Browse...</option>
+            </select>
+
+            <!-- New Chat Button -->
+            <button id="new-chat-btn" class="p-1.5 hover:bg-[#27272a] rounded text-gray-400 hover:text-white transition"
+                title="New Chat">
+                <i class="fas fa-trash-alt text-xs"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chat Log -->
+    <div id="chat-log" class="chat-messages scroll-smooth">
+        <!-- Welcome Message -->
+        <div class="message agent">
+            <div class="message-content">
+                Hello! I'm your AI coding assistant. I can help you understand code, write new features, or answer
+                questions about the project.
+            </div>
+        </div>
+    </div>
+
+    <!-- Command Input -->
+    <div class="border-t border-[#27272a] bg-[#18181b] p-4 flex-shrink-0">
+
+        <form id="chat-form" class="flex flex-col gap-3" onsubmit="handleSubmit(event)">
+
+            <!-- Hidden Context Fields -->
+            <input type="hidden" name="active_file_name" id="input-file-name" value="">
+            <input type="hidden" name="active_file_content" id="input-file-content" value="">
+
+            <!-- Context Indicator (Visual) -->
+            <div id="context-bar" class="hidden flex items-center gap-2">
+                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Context:</span>
+                <div class="flex items-center bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5">
+                    <i class="fas fa-file-code text-indigo-400 text-xs mr-1.5"></i>
+                    <span id="active-file-name" class="text-xs text-indigo-300 font-mono">...</span>
+                </div>
+            </div>
+
+            <!-- Mode Toggles -->
+            <div class="flex items-center gap-4">
+                <!-- Code Mode Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <div class="relative">
+                        <input type="checkbox" id="coding-mode" class="peer sr-only">
+                        <div class="w-8 h-4 bg-[#27272a] rounded-full peer-checked:bg-indigo-600 transition-colors">
+                        </div>
+                        <div
+                            class="absolute left-0.5 top-0.5 w-3 h-3 bg-gray-400 rounded-full peer-checked:translate-x-4 peer-checked:bg-white transition-all">
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Code Mode</span>
+                </label>
+
+                <!-- Axiom Mode Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <div class="relative">
+                        <input type="checkbox" id="axiom-mode" class="peer sr-only">
+                        <div class="w-8 h-4 bg-[#27272a] rounded-full peer-checked:bg-purple-600 transition-colors">
+                        </div>
+                        <div
+                            class="absolute left-0.5 top-0.5 w-3 h-3 bg-gray-400 rounded-full peer-checked:translate-x-4 peer-checked:bg-white transition-all">
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Axiom Mode</span>
+                </label>
+            </div>
+
+            <!-- Input Row -->
+            <div class="relative flex items-center">
+                <input type="text" name="cmd" id="cmd-input" placeholder="Ask a question..."
+                    class="w-full bg-[#27272a] border border-[#3f3f46] rounded-xl pl-10 pr-12 py-3 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm"
+                    autocomplete="off" />
+
+                <!-- File Upload Button -->
+                <button type="button" id="upload-btn"
+                    class="absolute left-2 top-1.5 bottom-1.5 text-gray-400 hover:text-white hover:bg-[#3f3f46] rounded-lg px-2 transition-colors flex items-center justify-center"
+                    title="Add text file context">
+                    <i class="fas fa-plus text-xs"></i>
+                </button>
+                <input type="file" id="file-input" class="hidden"
+                    accept=".txt,.py,.js,.html,.css,.md,.json,.c,.cpp,.h,.java,.ts">
+
+                <!-- Send Button -->
+                <button type="submit"
+                    class="absolute right-2 top-1.5 bottom-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 transition-colors flex items-center justify-center shadow-sm">
+                    <i class="fas fa-paper-plane text-xs"></i>
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // API called by Python host
+        window.setActiveFile = function (fileName, content) {
+            const bar = document.getElementById('context-bar');
+            const badge = document.getElementById('context-badge');
+            const label = document.getElementById('active-file-name');
+            const inputName = document.getElementById('input-file-name');
+            const inputContent = document.getElementById('input-file-content');
+
+            if (fileName) {
+                bar.classList.remove('hidden');
+                if (badge) badge.classList.remove('hidden');
+                label.textContent = fileName;
+                inputName.value = fileName;
+                inputContent.value = content;
+            } else {
+                bar.classList.add('hidden');
+                if (badge) badge.classList.add('hidden');
+                inputName.value = "";
+                inputContent.value = "";
+            }
+        };
+
+        // Handle Mode Toggles (Mutually Exclusive)
+        const codingMode = document.getElementById('coding-mode');
+        const axiomMode = document.getElementById('axiom-mode');
+
+        codingMode.addEventListener('change', () => {
+            if (codingMode.checked) axiomMode.checked = false;
+        });
+
+        axiomMode.addEventListener('change', () => {
+            if (axiomMode.checked) codingMode.checked = false;
+        });
+
+        // Handle Form Submission
+        async function handleSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('cmd-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // 1. Render User Bubble Immediately
+            appendMessage(message, 'user');
+            input.value = '';
+
+            // 2. Show Thinking Bubble
+            const thinkingId = showThinking();
+
+            // 3. Prepare Data
+            const formData = new FormData();
+            formData.append('cmd', message);
+            formData.append('active_file_name', document.getElementById('input-file-name').value);
+            formData.append('active_file_content', document.getElementById('input-file-content').value);
+
+            if (codingMode.checked) formData.append('coding_mode', 'true');
+            if (axiomMode.checked) formData.append('axiom_mode', 'true');
+
+            try {
+                // 4. Send Request
+                const response = await fetch('/api/command', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                // 5. Remove Thinking Bubble
+                removeThinking(thinkingId);
+
+                if (response.ok) {
+                    const html = await response.text();
+                    // The server returns HTML with the agent bubble
+                    const log = document.getElementById('chat-log');
+                    log.insertAdjacentHTML('beforeend', html);
+                    renderMarkdownInLog();
+                    scrollToBottom();
+                } else {
+                    appendMessage('Error: Failed to get response.', 'agent');
+                }
+            } catch (err) {
+                removeThinking(thinkingId);
+                appendMessage('Error: Connection failed.', 'agent');
+                console.error(err);
+            }
+        }
+
+        function appendMessage(text, type) {
+            const log = document.getElementById('chat-log');
+            const bubble = document.createElement('div');
+            bubble.className = `message ${type}`;
+            bubble.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+            log.appendChild(bubble);
+            scrollToBottom();
+        }
+
+        function showThinking() {
+            const log = document.getElementById('chat-log');
+            const id = 'thinking-' + Date.now();
+            const bubble = document.createElement('div');
+            bubble.id = id;
+            bubble.className = 'thinking-bubble';
+            bubble.innerHTML = `
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            `;
+            log.appendChild(bubble);
+            scrollToBottom();
+            return id;
+        }
+
+        function removeThinking(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            const log = document.getElementById('chat-log');
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Markdown Rendering Helper
+        function renderMarkdownInLog() {
+            const contents = document.querySelectorAll('.message-content:not(.markdown-rendered)');
+            contents.forEach(content => {
+                // Skip user messages (usually plain text) unless complex
+                if (content.parentElement.classList.contains('user')) return;
+
+                try {
+                    content.innerHTML = marked.parse(content.textContent);
+                    content.classList.add('markdown-rendered');
+                } catch (e) {
+                    console.error("Markdown render error:", e);
+                }
+            });
+        }
+
+        // --- New Chat Logic ---
+        document.getElementById('new-chat-btn').addEventListener('click', function () {
+            fetch('/api/reset_chat', { method: 'POST' })
+                .then(() => {
+                    const log = document.getElementById('chat-log');
+                    log.innerHTML = `
+                        <div class="message agent">
+                            <div class="message-content">
+                                Chat history cleared. Ready for a new task!
+                            </div>
+                        </div>
+                    `;
+                });
+        });
+
+        // --- Model Selection Logic ---
+        const modelSelect = document.getElementById('model-select');
+        modelSelect.addEventListener('change', function () {
+            if (this.value === 'browse') {
+                window.location.href = "axiom://browse-model";
+                this.value = 'gemma';
+            }
+        });
+
+        window.addModelOption = function (modelName, modelPath) {
+            const option = document.createElement('option');
+            option.value = modelPath;
+            option.text = modelName;
+            option.selected = true;
+            const browseOption = modelSelect.querySelector('option[value="browse"]');
+            modelSelect.insertBefore(option, browseOption);
+        };
+
+        // --- File Upload Logic ---
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileInput = document.getElementById('file-input');
+        const cmdInput = document.getElementById('cmd-input');
+
+        uploadBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', function () {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+
+                // Simple check for text/code files based on extension or type
+                // Gemma 3 is text-only, so we warn if it looks like an image
+                if (file.type.startsWith('image/')) {
+                    alert("Gemma 3 currently only supports text-based file context. Image support is coming soon!");
+                    this.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const content = e.target.result;
+                    // Append to input or set as context?
+                    // Let's append it to the input in a structured way so the user sees it
+                    // and can edit if needed, or just send it.
+                    // Actually, for better UX, let's just inject it into the message box
+                    // with a header.
+                    const fileHeader = `\n\n[FILE: ${file.name}]\n\`\`\`\n${content}\n\`\`\`\n`;
+                    cmdInput.value += fileHeader;
+                    cmdInput.focus();
+                };
+                reader.readAsText(file);
+            }
+        });
+
+    </script>
+</body>
+
+</html>

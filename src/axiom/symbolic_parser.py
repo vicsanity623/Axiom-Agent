@@ -71,7 +71,11 @@ class SymbolicParser:
 
                 # The model files are likely inside a subdirectory like 'en_core_web_sm-3.x.x'
                 if model_root.exists():
-                    subdirs = [d for d in model_root.iterdir() if d.is_dir() and d.name.startswith("en_core_web_sm")]
+                    subdirs = [
+                        d
+                        for d in model_root.iterdir()
+                        if d.is_dir() and d.name.startswith("en_core_web_sm")
+                    ]
                     if subdirs:
                         model_path = subdirs[0]
                     else:
@@ -228,6 +232,17 @@ class SymbolicParser:
         if not doc:
             return None
 
+        # --- FIX: RE-INSERTED DEBUG LOOP HERE ---
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("  ── Dependency Parse ──")
+            for token in doc:
+                logger.debug(
+                    f"  Token='{token.text:<15}' POS='{token.pos_:<6}' "
+                    f"DEP='{token.dep_:<10}' HEAD='{token.head.text}'"
+                )
+            logger.debug("  ── End Dependency Parse ──")
+        # -----------------------------------------
+
         # --- FIX: Use a simpler, more robust routing logic ---
         # Rule 1: If the sentence starts with an auxiliary verb, it's a yes/no question.
         if doc[0].pos_ == "AUX":
@@ -238,13 +253,122 @@ class SymbolicParser:
             (token for token in doc if token.dep_ == "ROOT"), None
         )
 
-        if root and root.pos_ == "VERB":
-            return self._handle_svo_statement(doc, root)
+        if root:
+            if root.pos_ == "VERB":
+                return self._handle_svo_statement(doc, root)
+            # --- FIX: Handle Copular Verbs (is, are, was, were) where POS is AUX ---
+            if root.pos_ == "AUX":
+                return self._handle_copular_statement(doc, root)
 
         logger.debug(
             f"  [Symbolic Parser]: Failed. No spaCy handler matched for root '{root.text if root else 'None'}' ({root.pos_ if root else 'None'})."
         )
         return None
+
+    def _handle_copular_statement(
+        self, doc: Doc, root: Token
+    ) -> list[InterpretData] | None:
+        """
+        Handles sentences where the main verb is a copula (is, are, was, were),
+        linking a subject to an attribute (predicate nominative/adjective).
+        Example: "A kitchen is a room." -> (kitchen, is_a, room)
+        """
+        # 1. Find Subject (nsubj)
+        subj = next((c for c in root.children if c.dep_ == "nsubj"), None)
+        if not subj:
+            return None
+
+        # 2. Find Attribute (attr), Adjectival Complement (acomp), or Open Clausal Complement (xcomp)
+        # "Kitchen is a room" -> room (attr)
+        # "The sky is blue" -> blue (acomp)
+        # "Reasoning is to deduce" -> deduce (xcomp)
+        attr = next(
+            (c for c in root.children if c.dep_ in ("attr", "acomp", "xcomp")), None
+        )
+
+        # If no direct attribute, check for prepositional phrases acting as predicates?
+        # e.g. "The cat is on the mat" -> on (prep)
+        if not attr:
+            attr = next((c for c in root.children if c.dep_ == "prep"), None)
+
+        if not attr:
+            return None
+
+        subject_str = self._get_full_noun_phrase(subj)
+
+        # For attributes, we might want the full phrase too
+        if attr.dep_ == "prep":
+            # "on the mat"
+            # This is getting complex, maybe just take the pobj of the prep?
+            pobj = next((c for c in attr.children if c.dep_ == "pobj"), None)
+            if pobj:
+                object_str = f"{attr.text} {self._get_full_noun_phrase(pobj)}"
+                relation_type = (
+                    "is_located_in"  # Defaulting to location for preps? Or generic?
+                )
+                # Let's use the map if possible, or just "is_related_to"
+                if attr.text in ("in", "on", "at"):
+                    relation_type = f"is_located_{attr.text}"
+                else:
+                    relation_type = "is_related_to"
+            else:
+                return None
+        elif attr.dep_ == "xcomp":
+            # "to deduce..." -> treat as "means" or "involves"
+            # We need to capture the full verb phrase "to deduce..."
+            # Simple approach: get the subtree? Or just the verb?
+            # Let's try to reconstruct "to [verb] ..."
+            # Check for 'aux' child 'to'
+            aux_to = next(
+                (
+                    c
+                    for c in attr.children
+                    if c.dep_ == "aux" and c.text.lower() == "to"
+                ),
+                None,
+            )
+            if aux_to:
+                object_str = f"to {self._get_full_noun_phrase(attr)}"  # _get_full_noun_phrase might not be perfect for verbs but let's try
+                # Actually, for verbs we want the full subtree usually.
+                # Let's just use the token text for now to be safe, or a simple reconstruction
+                object_str = f"to {attr.text}"
+                # If there are objects of the xcomp, add them? e.g. "to deduce a conclusion"
+                dobj = next((c for c in attr.children if c.dep_ == "dobj"), None)
+                if dobj:
+                    object_str += f" {self._get_full_noun_phrase(dobj)}"
+
+                relation_type = "involves_action"  # Or "means"
+            else:
+                object_str = self._get_full_noun_phrase(attr)
+                relation_type = "involves"
+        else:
+            object_str = self._get_full_noun_phrase(attr)
+            relation_type = "is_a" if attr.dep_ == "attr" else "has_property"
+
+        clean_subject = self.agent._clean_phrase(subject_str)
+        clean_obj = self.agent._clean_phrase(object_str)
+
+        if not clean_subject or not clean_obj:
+            return None
+
+        relation = RelationData(
+            subject=clean_subject, verb=relation_type, object=clean_obj
+        )
+
+        return [
+            InterpretData(
+                intent="statement_of_fact",
+                entities=[
+                    {"name": clean_subject, "type": "CONCEPT"},
+                    {"name": clean_obj, "type": "CONCEPT"},
+                ],
+                relation=relation,
+                key_topics=[clean_subject, clean_obj],
+                full_text_rephrased=doc.text,
+                provenance="symbolic_parser_copula",
+                confidence=0.95,
+            )
+        ]
 
     def _get_full_noun_phrase(self, token: Token) -> str:
         """

@@ -41,10 +41,14 @@ try:
             # Onedir mode (.app) - Model is in Contents/Frameworks
             bundle_dir = Path(sys.executable).parent.parent / "Frameworks"
             model_root = bundle_dir / "en_core_web_sm"
-            
+
         # The model files are likely inside a subdirectory like 'en_core_web_sm-3.x.x'
         if model_root.exists():
-            subdirs = [d for d in model_root.iterdir() if d.is_dir() and d.name.startswith("en_core_web_sm")]
+            subdirs = [
+                d
+                for d in model_root.iterdir()
+                if d.is_dir() and d.name.startswith("en_core_web_sm")
+            ]
             if subdirs:
                 model_path = subdirs[0]
             else:

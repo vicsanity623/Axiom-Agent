@@ -202,6 +202,40 @@ class GoalManager:
 
         return in_progress_goals[0]
 
+    def activate_next_pending_goal(self) -> bool:
+        """
+        Activates the highest priority pending goal if no goal is currently active.
+        Returns True if a goal was activated, False otherwise.
+        """
+        if self.get_active_goal():
+            return False
+
+        pending_goals = [
+            goal
+            for goal in self.goals.values()
+            if goal.get("status") == "pending"
+            and goal.get("sub_goals")  # Only activate goals with tasks ready
+        ]
+
+        if not pending_goals:
+            return False
+
+        # Sort by priority (descending) then by ID (ascending) for stability
+        next_goal = sorted(
+            pending_goals,
+            key=lambda g: (g.get("priority", 5), g.get("id")),
+            reverse=True,
+        )[0]
+
+        next_goal["status"] = "in_progress"
+        self.agent.learning_goals.extend(cast("list[str]", next_goal["sub_goals"]))
+        logger.info(
+            "[GoalManager]: Activated pending goal: '%s' (Priority: %d)",
+            next_goal.get("description"),
+            next_goal.get("priority", 5),
+        )
+        return True
+
     def check_goal_completion(self, goal_id: str):
         """Checks for completion of goals and activates the next stage if applicable."""
         goal = self.goals.get(goal_id)
