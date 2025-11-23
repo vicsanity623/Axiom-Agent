@@ -21,6 +21,12 @@ class CodingAgent:
         self.interpreter = interpreter
         self.working_dir = PROJECT_ROOT
         self.chat_history: list[dict[str, str]] = []
+        self.stop_generation = False  # Flag for emergency stop
+
+    def cancel_generation(self):
+        """Cancels the current generation."""
+        self.stop_generation = True
+        logger.info("[CodingAgent]: Generation cancelled by user")
 
     def clear_history(self):
         """Clears the conversation history."""
@@ -145,7 +151,14 @@ class CodingAgent:
         # Add Current User Input
         full_prompt += f"{prompt}<end_of_turn>\n<start_of_turn>model\n"
 
+        # Reset stop flag at start of new request
+        self.stop_generation = False
+
         try:
+            # Check if cancelled before starting LLM
+            if self.stop_generation:
+                return "[Response cancelled]"
+
             response = self.interpreter._run_llm_completion_with_retries(
                 full_prompt,
                 max_tokens=4096,

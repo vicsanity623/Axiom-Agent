@@ -110,6 +110,7 @@ class TestConceptNode:
             "properties": None,
             "value": 0.5,
             "activation": 0.0,
+            "embedding": None,  # Added missing required key
         }
         node = ConceptNode.from_dict(data)
         assert node.properties == {}

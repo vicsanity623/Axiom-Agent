@@ -17,7 +17,9 @@ from datetime import datetime
 from functools import cached_property
 from hashlib import sha256
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, NamedTuple, cast
+
+# Added 'Any' to imports
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
 import google.generativeai as genai
 
@@ -37,11 +39,11 @@ try:
     from sentence_transformers import SentenceTransformer
 
     EMBEDDING_MODEL_AVAILABLE = True
-    _EMB_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    # Added type annotation ': Any' here so MyPy allows it to be None later
+    _EMB_MODEL: Any = SentenceTransformer("all-MiniLM-L6-v2")
 except ImportError:
     _EMB_MODEL = None
     EMBEDDING_MODEL_AVAILABLE = False
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------

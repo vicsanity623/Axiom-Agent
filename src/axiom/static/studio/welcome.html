@@ -68,32 +68,61 @@
     </div>
 
     <script>
-        // Fetch recent workspaces
-        fetch('/api/recent_workspaces')
-            .then(res => res.json())
-            .then(data => {
-                const list = document.getElementById('recent-list');
-                if (data.length > 0) {
-                    list.innerHTML = '';
-                    data.forEach(path => {
-                        const item = document.createElement('div');
-                        item.className = 'group flex items-center justify-between p-3 rounded-lg hover:bg-[#18181b] cursor-pointer border border-transparent hover:border-[#27272a] transition-all';
-                        item.onclick = () => window.location.href = `axiom://open-recent?path=${encodeURIComponent(path)}`;
+        function loadRecents() {
+            fetch('/api/recent_workspaces')
+                .then(res => res.json())
+                .then(data => {
+                    const list = document.getElementById('recent-list');
+                    if (data.length > 0) {
+                        list.innerHTML = '';
+                        data.forEach(path => {
+                            const item = document.createElement('div');
+                            item.className = 'group flex items-center justify-between p-3 rounded-lg hover:bg-[#18181b] cursor-pointer border border-transparent hover:border-[#27272a] transition-all';
+                            item.onclick = () => window.location.href = `axiom://open-recent?path=${encodeURIComponent(path)}`;
 
-                        const name = path.split('/').pop();
+                            const name = path.split('/').pop();
+                            // Escape path for onclick handler
+                            const escapedPath = path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
-                        item.innerHTML = `
-                        <div class="flex flex-col overflow-hidden">
-                            <span class="text-sm text-gray-200 font-medium truncate group-hover:text-indigo-400 transition-colors">${name}</span>
-                            <span class="text-[10px] text-gray-500 truncate">${path}</span>
-                        </div>
-                        <i class="fas fa-chevron-right text-gray-600 opacity-0 group-hover:opacity-100 text-xs transition-opacity"></i>
-                    `;
-                        list.appendChild(item);
-                    });
-                }
-            })
-            .catch(err => console.error('Failed to load recents:', err));
+                            item.innerHTML = `
+                            <div class="flex flex-col overflow-hidden flex-1 mr-4">
+                                <span class="text-sm text-gray-200 font-medium truncate group-hover:text-indigo-400 transition-colors">${name}</span>
+                                <span class="text-[10px] text-gray-500 truncate">${path}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="deleteWorkspace('${escapedPath}', event)" class="opacity-0 group-hover:opacity-100 p-2 hover:bg-red-500/10 text-gray-600 hover:text-red-500 rounded transition-all" title="Remove from list">
+                                    <i class="fas fa-trash-alt text-xs"></i>
+                                </button>
+                                <i class="fas fa-chevron-right text-gray-600 opacity-0 group-hover:opacity-100 text-xs transition-opacity"></i>
+                            </div>
+                        `;
+                            list.appendChild(item);
+                        });
+                    } else {
+                        list.innerHTML = '<div class="text-center text-gray-600 text-xs py-4 italic">No recent workspaces</div>';
+                    }
+                })
+                .catch(err => console.error('Failed to load recents:', err));
+        }
+
+        async function deleteWorkspace(path, event) {
+            event.stopPropagation();
+            if (!confirm('Remove this workspace from recent history?')) return;
+
+            try {
+                await fetch('/api/recent_workspaces', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                loadRecents();
+            } catch (err) {
+                console.error('Failed to delete workspace:', err);
+            }
+        }
+
+        // Initial load
+        loadRecents();
     </script>
 
 </body>

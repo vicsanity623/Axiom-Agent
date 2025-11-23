@@ -26,6 +26,7 @@ class ConceptNodeData(TypedDict):
     properties: PropertyData | None
     value: float
     activation: float
+    embedding: list[float] | None
 
 
 class ConceptNode:
@@ -39,6 +40,7 @@ class ConceptNode:
         value: float = 0.5,
         activation: float = 0.0,
         id_: str | None = None,
+        embedding: list[float] | None = None,
     ) -> None:
         self.id = id_ or str(uuid.uuid4())
         self.name = name.lower()
@@ -46,6 +48,7 @@ class ConceptNode:
         self.value = value
         self.activation = activation
         self.properties: PropertyData = properties or {}
+        self.embedding = embedding
 
     def to_dict(self) -> ConceptNodeData:
         """Serialize the ConceptNode instance to a dictionary."""
@@ -56,6 +59,7 @@ class ConceptNode:
             "properties": self.properties,
             "value": self.value,
             "activation": self.activation,
+            "embedding": self.embedding,
         }
 
     @classmethod
@@ -68,6 +72,7 @@ class ConceptNode:
             properties=data.get("properties"),
             value=data.get("value", 0.5),
             activation=data.get("activation", 0.0),
+            embedding=data.get("embedding"),
         )
 
 
@@ -198,6 +203,29 @@ class ConceptGraph:
         if node_id:
             return self.get_node_by_id(node_id)
         return None
+
+    def get_nearest_nodes(
+        self, query_embedding: list[float], top_k: int = 5, threshold: float = 0.0
+    ) -> list[tuple[ConceptNode, float]]:
+        """
+        Finds the nodes with embeddings most similar to the query embedding.
+        Uses a linear scan, which is sufficient for graph sizes < 100k nodes.
+        """
+        from axiom.vector_store import VectorStore
+
+        store = VectorStore()
+        candidates = []
+
+        for node_id in self.graph.nodes:
+            node = self.get_node_by_id(node_id)
+            if node and node.embedding:
+                score = store.cosine_similarity(query_embedding, node.embedding)
+                if score >= threshold:
+                    candidates.append((node, score))
+
+        # Sort by score descending
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[:top_k]
 
     def get_node_by_id(self, node_id: str) -> ConceptNode | None:
         """Retrieve a single ConceptNode object from the graph by its ID."""

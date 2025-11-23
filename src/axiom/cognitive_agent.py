@@ -47,6 +47,7 @@ from .universal_interpreter import (
     Task,
     UniversalInterpreter,
 )
+from .vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,9 @@ class CognitiveAgent:
         self.state_file = state_file
         self.inference_mode = inference_mode
         self.interaction_lock = threading.Lock()
+
+        # Initialize Vector Store
+        self.vector_store = VectorStore()
 
         self.graph: ConceptGraph
         self.interpreter: UniversalInterpreter
@@ -200,6 +204,23 @@ class CognitiveAgent:
             return self.coding_agent.process_request(user_input)
 
         return self.conversation_manager.chat(user_input)
+
+    def semantic_search(
+        self, query: str, top_k: int = 5
+    ) -> list[tuple[ConceptNode, float]]:
+        """
+        Perform a semantic search over the knowledge graph using vector embeddings.
+        Returns a list of (ConceptNode, similarity_score) tuples.
+        """
+        if not self.vector_store.is_available:
+            logger.warning("Semantic search requested but VectorStore is unavailable.")
+            return []
+
+        query_embedding = self.vector_store.encode(query)
+        if not query_embedding:
+            return []
+
+        return self.graph.get_nearest_nodes(query_embedding, top_k=top_k)
 
     def _initialize_identity(self):
         """

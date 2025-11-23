@@ -97,7 +97,7 @@ async def startup():
     agent = CognitiveAgent(
         brain_file=DEFAULT_BRAIN_FILE,
         state_file=DEFAULT_STATE_FILE,
-        inference_mode=True,  # Start in inference mode to avoid locks
+        inference_mode=False,  # Enable learning mode for Axiom Studio
     )
     try:
         agent.load_state()
@@ -174,6 +174,28 @@ async def get_recent_workspaces():
         except Exception:
             pass
     return []
+
+
+class WorkspaceItem(BaseModel):
+    path: str
+
+
+@app.delete("/api/recent_workspaces")
+async def remove_recent_workspace(item: WorkspaceItem):
+    """Removes a workspace path from the recent list."""
+    config_path = Path.home() / ".axiom" / "studio_config.json"
+    if config_path.exists():
+        try:
+            data = json.loads(config_path.read_text(encoding="utf-8"))
+            recents = data.get("recent_workspaces", [])
+            if item.path in recents:
+                recents.remove(item.path)
+                data["recent_workspaces"] = recents
+                config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            return {"status": "ok"}
+        except Exception as e:
+            return JSONResponse({"detail": str(e)}, status_code=500)
+    return {"status": "ok"}
 
 
 class AgentSettings(BaseModel):
@@ -591,3 +613,80 @@ if __name__ == "__main__":
         port=8000,
         log_level="info",
     )
+
+
+@app.get("/api/system_stats")
+async def system_stats():
+    """Returns real-time system resource usage (CPU, RAM, GPU)."""
+    try:
+        import psutil
+
+        # CPU Usage
+        cpu_percent = psutil.cpu_percent(interval=0.1)
+
+        # RAM Usage
+        memory = psutil.virtual_memory()
+        ram_used_gb = memory.used / (1024**3)
+        ram_total_gb = memory.total / (1024**3)
+        ram_percent = memory.percent
+
+        # GPU Usage (optional, may not be available)
+        gpu_percent = 0
+        gpu_memory_used_gb = 0
+        gpu_memory_total_gb = 0
+
+        try:
+            import GPUtil
+
+            gpus = GPUtil.getGPUs()
+            if gpus:
+                gpu = gpus[0]  # Use first GPU
+                gpu_percent = gpu.load * 100
+                gpu_memory_used_gb = gpu.memoryUsed / 1024
+                gpu_memory_total_gb = gpu.memoryTotal / 1024
+        except Exception:
+            # GPU monitoring not available
+            pass
+
+        return JSONResponse(
+            {
+                "cpu_percent": round(cpu_percent, 1),
+                "ram_used_gb": round(ram_used_gb, 2),
+                "ram_total_gb": round(ram_total_gb, 2),
+                "ram_percent": round(ram_percent, 1),
+                "gpu_percent": round(gpu_percent, 1),
+                "gpu_memory_used_gb": round(gpu_memory_used_gb, 2),
+                "gpu_memory_total_gb": round(gpu_memory_total_gb, 2),
+            }
+        )
+    except Exception as e:
+        return JSONResponse(
+            {
+                "cpu_percent": 0,
+                "ram_used_gb": 0,
+                "ram_total_gb": 0,
+                "ram_percent": 0,
+                "gpu_percent": 0,
+                "gpu_memory_used_gb": 0,
+                "gpu_memory_total_gb": 0,
+                "error": str(e),
+            }
+        )
+
+
+@app.post("/api/cancel_chat")
+async def cancel_chat():
+    """Cancels the currently running chat request."""
+    try:
+        if agent and hasattr(agent, "coding_agent"):
+            agent.coding_agent.cancel_generation()
+            return HTMLResponse(
+                '<div class="message agent"><div class="message-content">[Response cancelled by user]</div></div>'
+            )
+        return HTMLResponse(
+            '<div class="message agent"><div class="message-content">[Nothing to cancel]</div></div>'
+        )
+    except Exception as e:
+        return HTMLResponse(
+            f'<div class="message agent"><div class="message-content">[Cancel failed: {str(e)}]</div></div>'
+        )

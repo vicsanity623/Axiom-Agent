@@ -117,9 +117,15 @@
                     accept=".txt,.py,.js,.html,.css,.md,.json,.c,.cpp,.h,.java,.ts">
 
                 <!-- Send Button -->
-                <button type="submit"
+                <button type="submit" id="send-btn"
                     class="absolute right-2 top-1.5 bottom-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 transition-colors flex items-center justify-center shadow-sm">
                     <i class="fas fa-paper-plane text-xs"></i>
+                </button>
+
+                <!-- Stop Button (hidden by default) -->
+                <button type="button" id="stop-btn" style="display: none;" onclick="cancelChat()"
+                    class="absolute right-2 top-1.5 bottom-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg px-3 transition-colors flex items-center justify-center shadow-sm">
+                    <i class="fas fa-stop-circle text-xs"></i>
                 </button>
             </div>
         </form>
@@ -160,6 +166,33 @@
             if (axiomMode.checked) codingMode.checked = false;
         });
 
+        // Emergency Chat Stop
+        let isThinking = false;
+        const sendBtn = document.getElementById('send-btn');
+        const stopBtn = document.getElementById('stop-btn');
+
+        function showStopButton() {
+            isThinking = true;
+            sendBtn.style.display = 'none';
+            stopBtn.style.display = 'flex';
+        }
+
+        function showSendButton() {
+            isThinking = false;
+            sendBtn.style.display = 'flex';
+            stopBtn.style.display = 'none';
+        }
+
+        async function cancelChat() {
+            try {
+                await fetch('/api/cancel_chat', { method: 'POST' });
+                showSendButton();
+                appendMessage('[Response cancelled]', 'agent');
+            } catch (err) {
+                console.error('Failed to cancel chat:', err);
+            }
+        }
+
         // Handle Form Submission
         async function handleSubmit(e) {
             e.preventDefault();
@@ -171,8 +204,9 @@
             appendMessage(message, 'user');
             input.value = '';
 
-            // 2. Show Thinking Bubble
+            // 2. Show Thinking Bubble and Stop Button
             const thinkingId = showThinking();
+            showStopButton();
 
             // 3. Prepare Data
             const formData = new FormData();
@@ -190,8 +224,9 @@
                     body: formData
                 });
 
-                // 5. Remove Thinking Bubble
+                // 5. Remove Thinking Bubble and restore Send button
                 removeThinking(thinkingId);
+                showSendButton();
 
                 if (response.ok) {
                     const html = await response.text();
@@ -205,6 +240,7 @@
                 }
             } catch (err) {
                 removeThinking(thinkingId);
+                showSendButton();
                 appendMessage('Error: Connection failed.', 'agent');
                 console.error(err);
             }

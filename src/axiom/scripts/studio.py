@@ -376,9 +376,46 @@ class AxiomStudio(QMainWindow):
         self.stop_button.setStyleSheet(
             "background-color: #dc2626; color: white; padding: 5px 15px; border-radius: 5px;"
         )
-        self.stop_button.clicked.connect(self.stop_training_clicked)
         self.stop_button.setEnabled(False)
         toolbar.addWidget(self.stop_button)
+
+        toolbar.addSeparator()
+
+        # --- Panel Toggles ---
+        self.toggle_browser_btn = QPushButton("📁 Files")
+        self.toggle_browser_btn.setCheckable(True)
+        self.toggle_browser_btn.setChecked(False)  # Initially hidden
+        self.toggle_browser_btn.setToolTip("Toggle File Explorer")
+        self.toggle_browser_btn.clicked.connect(self.toggle_file_browser)
+        self.toggle_browser_btn.setStyleSheet("padding: 5px 10px;")
+        toolbar.addWidget(self.toggle_browser_btn)
+
+        self.toggle_term_btn = QPushButton("💻 Terminal")
+        self.toggle_term_btn.setCheckable(True)
+        self.toggle_term_btn.setChecked(False)  # Initially hidden
+        self.toggle_term_btn.setToolTip("Toggle Terminal Panel")
+        self.toggle_term_btn.clicked.connect(self.toggle_bottom_panel)
+        self.toggle_term_btn.setStyleSheet("padding: 5px 10px;")
+        toolbar.addWidget(self.toggle_term_btn)
+
+        self.toggle_chat_btn = QPushButton("💬 Chat")
+        self.toggle_chat_btn.setCheckable(True)
+        self.toggle_chat_btn.setChecked(False)  # Initially hidden
+        self.toggle_chat_btn.setToolTip("Toggle AI Chat Panel")
+        self.toggle_chat_btn.clicked.connect(self.toggle_chat_panel)
+        self.toggle_chat_btn.setStyleSheet("padding: 5px 10px;")
+        toolbar.addWidget(self.toggle_chat_btn)
+
+        toolbar.addSeparator()
+
+        # --- Agent Manager ---
+        self.agent_manager_btn = QPushButton("🤖 Agent Manager")
+        self.agent_manager_btn.setToolTip("Open Agent Manager Settings")
+        self.agent_manager_btn.clicked.connect(self.open_agent_manager_dialog)
+        self.agent_manager_btn.setStyleSheet(
+            "padding: 5px 10px; background-color: #4f46e5; color: white; border-radius: 5px;"
+        )
+        toolbar.addWidget(self.agent_manager_btn)
 
     def _configure_editor(self):
         """Sets up the QScintilla code editor with a VS Code Dark+ inspired theme."""
@@ -559,9 +596,18 @@ class AxiomStudio(QMainWindow):
         self._add_recent_workspace(folder_path)
 
         # Reveal Panels
+        # Reveal Panels
         self.file_browser.show()
+        if hasattr(self, "toggle_browser_btn"):
+            self.toggle_browser_btn.setChecked(True)
+
         self.bottom_panel.show()
+        if hasattr(self, "toggle_term_btn"):
+            self.toggle_term_btn.setChecked(True)
+
         self.chat_view.show()
+        if hasattr(self, "toggle_chat_btn"):
+            self.toggle_chat_btn.setChecked(True)
 
         # Navigate browser to Dashboard if on Welcome screen
         current_url = self.browser.url().toString()
@@ -603,8 +649,23 @@ class AxiomStudio(QMainWindow):
         """Toggles the visibility of the AI Chat Panel."""
         if self.chat_view.isVisible():
             self.chat_view.hide()
+            if hasattr(self, "toggle_chat_btn"):
+                self.toggle_chat_btn.setChecked(False)
         else:
             self.chat_view.show()
+            if hasattr(self, "toggle_chat_btn"):
+                self.toggle_chat_btn.setChecked(True)
+
+    def toggle_file_browser(self):
+        """Toggles the visibility of the File Browser."""
+        if self.file_browser.isVisible():
+            self.file_browser.hide()
+            if hasattr(self, "toggle_browser_btn"):
+                self.toggle_browser_btn.setChecked(False)
+        else:
+            self.file_browser.show()
+            if hasattr(self, "toggle_browser_btn"):
+                self.toggle_browser_btn.setChecked(True)
 
     def on_tab_changed(self, index):
         """Handle tab changes to update context."""
@@ -674,13 +735,19 @@ class AxiomStudio(QMainWindow):
         # Ensure panel is visible
         if not self.bottom_panel.isVisible():
             self.bottom_panel.show()
+            if hasattr(self, "toggle_term_btn"):
+                self.toggle_term_btn.setChecked(True)
 
     def toggle_bottom_panel(self):
         """Toggles the visibility of the bottom terminal panel."""
         if self.bottom_panel.isVisible():
             self.bottom_panel.hide()
+            if hasattr(self, "toggle_term_btn"):
+                self.toggle_term_btn.setChecked(False)
         else:
             self.bottom_panel.show()
+            if hasattr(self, "toggle_term_btn"):
+                self.toggle_term_btn.setChecked(True)
 
     def start_training_clicked(self):
         """
@@ -694,6 +761,8 @@ class AxiomStudio(QMainWindow):
         # Show panel
         if not self.bottom_panel.isVisible():
             self.bottom_panel.show()
+            if hasattr(self, "toggle_term_btn"):
+                self.toggle_term_btn.setChecked(True)
 
         # Get current terminal view
         current_term = self.bottom_panel.currentWidget()
@@ -715,6 +784,8 @@ class AxiomStudio(QMainWindow):
         # Ensure panel is visible
         if not self.bottom_panel.isVisible():
             self.bottom_panel.show()
+            if hasattr(self, "toggle_term_btn"):
+                self.toggle_term_btn.setChecked(True)
 
         current_term = self.bottom_panel.currentWidget()
         if isinstance(current_term, QWebEngineView):

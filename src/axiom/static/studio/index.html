@@ -91,6 +91,23 @@
         </div>
       </div>
 
+      <!-- System Stats Cards -->
+      <div id="system-stats" class="grid grid-cols-3 gap-4" hx-get="/api/system_stats" hx-trigger="load, every 3s"
+        hx-swap="none">
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">CPU Usage</div>
+          <div class="text-lg font-bold text-blue-400" id="stats-cpu">...</div>
+        </div>
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">RAM Usage</div>
+          <div class="text-lg font-bold text-green-400" id="stats-ram">...</div>
+        </div>
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">GPU Usage</div>
+          <div class="text-lg font-bold text-purple-400" id="stats-gpu">...</div>
+        </div>
+      </div>
+
       <!-- Graph -->
       <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5 flex-1 min-h-[300px] flex flex-col">
         <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
@@ -196,6 +213,29 @@
       }
     });
 
+    // Update system stats when they refresh
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      if (e.detail.elt.id === 'system-stats') {
+        try {
+          const data = JSON.parse(e.detail.xhr.response);
+
+          // CPU
+          document.getElementById('stats-cpu').textContent = `${data.cpu_percent}%`;
+
+          // RAM
+          const ramText = data.ram_total_gb > 0
+            ? `${data.ram_used_gb}/${data.ram_total_gb} GB (${data.ram_percent}%)`
+            : 'N/A';
+          document.getElementById('stats-ram').textContent = ramText;
+
+          // GPU
+          const gpuText = data.gpu_percent > 0
+            ? `${data.gpu_percent}% (${data.gpu_memory_used_gb}/${data.gpu_memory_total_gb} GB)`
+            : 'N/A';
+          document.getElementById('stats-gpu').textContent = gpuText;
+        } catch (err) { console.error('System stats error:', err); }
+      }
+    });
 
   </script>
 </body>
