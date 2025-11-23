@@ -26,6 +26,17 @@ This two-tiered system allows Axiom to be both fast and robust, combining the sp
 
 ---
 
+## 🖥️ Axiom Studio: The Integrated Environment
+
+Axiom now includes **Axiom Studio**, a powerful IDE designed specifically for developing and training the agent.
+
+*   **Integrated Terminal:** Run training cycles (`axiom-train`) directly within the UI.
+*   **Live Knowledge Graph:** Watch the agent's mind grow in real-time with live stats and trend charts.
+*   **Context-Aware AI Chat:** Chat with the agent about your code. The agent knows what file you are looking at and can answer context-specific questions.
+*   **Model Management:** Easily switch between different LLM models (GGUF) to test performance.
+
+---
+
 ## 🧬 The Cognitive Loop: How the Agent Thinks and Grows
 
 The agent runs in a continuous, multi-phase loop of learning and self-improvement, orchestrated by the `CycleManager`.
@@ -68,6 +79,7 @@ flowchart TD
 
 ## ✅ Key Capabilities
 
+*   **Axiom Studio:** A fully integrated development environment for training, observing, and interacting with the agent.
 *   **Symbolic-First Architecture:** Prioritizes fast, deterministic, and low-cost internal reasoning.
 *   **Hybrid Intelligence:** Combines a rule-based, **`spaCy`-powered** `SymbolicParser` with an LLM-based `UniversalInterpreter`.
 *   **Autonomous Learning Cycles:** Continuously runs through Learning, Discovery, and Refinement phases to expand its knowledge.

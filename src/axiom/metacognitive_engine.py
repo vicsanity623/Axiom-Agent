@@ -265,7 +265,17 @@ class PerformanceMonitor:
 
     def _parse_log_file(self, log_file: Path) -> _LogAnalysisData:
         """Parses a log file, including high-priority heuristics for critical issues."""
-        lines = log_file.read_text(encoding="utf-8").splitlines()
+        # Optimization: Read only the last 2000 lines to avoid O(N) slowdown
+        try:
+            import collections
+
+            with open(log_file, encoding="utf-8") as f:
+                raw_lines = collections.deque(f, 2000)
+                lines = [line.rstrip() for line in raw_lines]
+        except Exception as e:
+            logger.warning(f"[Metacognition]: Error reading log file {log_file}: {e}")
+            return _LogAnalysisData()
+
         analysis_data = _LogAnalysisData()
         i = 0
         while i < len(lines):
@@ -596,7 +606,15 @@ class CodeIntrospector:
         function_map: dict[str, Path] = {}
 
         for file_path in Path(SRC_ROOT).rglob("*.py"):
-            if "tests" in file_path.parts:
+            # Optimization: Skip hidden directories and common non-source dirs
+            parts = file_path.parts
+            if (
+                any(p.startswith(".") for p in parts)
+                or "venv" in parts
+                or "__pycache__" in parts
+                or "site-packages" in parts
+                or "tests" in parts
+            ):
                 continue
             try:
                 source_code = file_path.read_text(encoding="utf-8")

@@ -49,7 +49,7 @@ RULES:
 JSON_STRUCTURE_PROMPT: Final[str] = """
 The JSON object must have the following fields:
 - 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
-- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'properties'.
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'properties' (for dates, locations, etc.).
 - 'key_topics': A list of the main subjects or topics.
 - 'full_text_rephrased': A neutral, one-sentence rephrasing.
 """.strip()
@@ -406,6 +406,54 @@ class UniversalInterpreter:
                     return ""
         return ""
 
+    def _run_llm_completion_streaming(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float = 0.0,
+        stop: list[str] | None = None,
+    ):
+        """Runs the LLM completion with streaming support for SSE."""
+        stop_tokens = stop if stop is not None else ["</s>", "\n\n"]
+
+        if not self.llm:
+            yield 'data: {"error": "LLM is not loaded"}\n\n'
+            return
+
+        try:
+            logger.info(
+                f"  [LLM Streaming]: Starting stream for prompt length: {len(prompt)} chars"
+            )
+
+            # Call llama-cpp with stream=True
+            stream = self.llm(
+                prompt,
+                max_tokens=max_tokens,
+                stop=stop_tokens,
+                echo=False,
+                temperature=temperature,
+                stream=True,  # Enable streaming
+            )
+
+            # Yield each token as it's generated
+            for chunk in stream:
+                chunk_dict = cast("dict[str, Any]", chunk)
+                if chunk_dict and "choices" in chunk_dict and chunk_dict["choices"]:
+                    token = chunk_dict["choices"][0].get("text", "")
+                    if token:
+                        # Send token in SSE format
+                        import json
+
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+
+            # Send completion signal
+            yield 'data: {"done": true}\n\n'
+        except Exception as e:
+            logger.error(f"  [LLM Streaming Error]: {e}")
+            import json
+
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
     def interpret(self, user_input: str) -> InterpretData:
         """Analyze user input with the LLM and return a structured interpretation."""
         cache_key = user_input
@@ -444,7 +492,7 @@ class UniversalInterpreter:
             'Input: \'show all facts\'\nOutput: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}',
             'Input: \'what is a human\'\nOutput: {"intent": "question_about_concept", "entities": [{"name": "human", "type": "CONCEPT"}], "relation": null, "key_topics": ["human"], "full_text_rephrased": "User is asking for information about a human."}',
             'Input: \'correction: the sky is blue\'\nOutput: {"intent": "statement_of_correction", "entities": [{"name": "sky", "type": "CONCEPT"}, {"name": "blue", "type": "COLOR"}], "relation": {"subject": "sky", "verb": "is", "object": "blue"}, "key_topics": ["sky", "blue"], "full_text_rephrased": "User is correcting the fact that the sky is blue."}',
-            'Input: \'In 2023, Tim Cook was the CEO of Apple.\'\nOutput: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "Apple", "type": "COMPANY"}], "relation": {"subject": "Tim Cook", "verb": "was CEO of", "object": "Apple"}, "key_topics": ["Tim Cook", "Apple"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple."}',
+            'Input: \'In 2023, Tim Cook was the CEO of Apple.\'\nOutput: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "Apple", "type": "COMPANY"}], "relation": {"subject": "Tim Cook", "verb": "was CEO of", "object": "Apple", "properties": {"effective_date": "2023"}}, "key_topics": ["Tim Cook", "Apple"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple in 2023."}',
             'Input: \'who is Donald Trump?\'\nOutput: {"intent": "question_about_entity", "entities": [{"name": "Donald Trump", "type": "PERSON"}], "relation": null, "key_topics": ["Donald Trump"], "full_text_rephrased": "User is asking for information about Donald Trump."}',
         ]
         examples_prompt = "Here are some examples:\n" + "\n\n".join(examples_list)
@@ -595,6 +643,60 @@ class UniversalInterpreter:
             contextual_input = self.resolve_context(history, user_input)
 
         return self.interpret(contextual_input)
+
+    def disambiguate_word(self, word: str, context_sentence: str) -> str | None:
+        """
+        Uses the LLM to determine the specific meaning (sense) of a word in a given context.
+        Returns a short, descriptive phrase for the sense (e.g., "financial institution").
+        """
+        if self.llm is None:
+            logger.warning("[Interpreter]: LLM is disabled. Cannot disambiguate.")
+            return None
+
+        logger.info(
+            f"[Interpreter]: Disambiguating '{word}' in context: '{context_sentence}'"
+        )
+
+        prompt = f"""
+        **ROLE:** You are a precise semantic analyzer.
+        **TASK:** Identify the specific meaning (sense) of the word "{word}" as it is used in the "CONTEXT SENTENCE".
+        **OUTPUT:** Return ONLY a short, descriptive phrase (2-4 words) that clarifies the meaning. Do not use the word "{word}" in your output.
+
+        **EXAMPLE 1:**
+        Word: bank
+        Context Sentence: "I deposited my paycheck at the bank."
+        Output: financial institution
+
+        **EXAMPLE 2:**
+        Word: bank
+        Context Sentence: "We sat on the bank and watched the river flow."
+        Output: river edge
+
+        **EXAMPLE 3:**
+        Word: crane
+        Context Sentence: "The crane lifted the heavy steel beam."
+        Output: construction machine
+
+        **TARGET:**
+        Word: {word}
+        Context Sentence: "{context_sentence}"
+        Output:
+        """
+
+        try:
+            response = self._run_llm_completion_with_retries(
+                f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n",
+                max_tokens=32,
+                temperature=0.0,
+            )
+            sense = response.strip().lower()
+            # Basic cleanup to remove punctuation
+            sense = re.sub(r"[^\w\s]", "", sense)
+            logger.info(f"[Interpreter]: Disambiguated sense: '{sense}'")
+            return sense
+        except Exception as e:
+            logger.error(f"[Interpreter Error]: Disambiguation failed: {e}")
+            return None
 
     def _flatten_structured_object(self, obj: Any) -> str:
         """

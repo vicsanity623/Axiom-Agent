@@ -164,69 +164,6 @@ class ConversationManager:
 
         return "I currently lack high-confidence facts to display."
 
-    def _answer_question_about(self, entity_name: str, user_input: str) -> str:
-        """Find and return known facts related to a specific entity."""
-        clean_entity_name = self.agent._clean_phrase(entity_name)
-        if not clean_entity_name:
-            return f"I don't have any information about {entity_name}."
-
-        # --- FIX: Create a primary gate for all meta-questions about the agent ---
-        if "agent" in clean_entity_name:
-            # Specific case for "what is your name?"
-            if "name" in user_input.lower():
-                agent_node = self.agent.graph.get_node_by_name("agent")
-                if agent_node:
-                    name_edge = next(
-                        (
-                            edge
-                            for edge in self.agent.graph.get_edges_from_node(
-                                agent_node.id
-                            )
-                            if edge.type == "has_name"
-                        ),
-                        None,
-                    )
-                    if name_edge:
-                        name_node = self.agent.graph.get_node_by_id(name_edge.target)
-                        if name_node:
-                            return f"My name is {name_node.name.capitalize()}."
-                        return "I know I have a name, but I can't seem to recall it right now."
-                    return "I don't have a name yet."
-                return "I don't seem to have a concept of myself right now."
-            # General case for "who are you?", "what are you?", etc.
-            # Provide a clean, canned response instead of a data dump.
-            return "I am Axiom, a cognitive agent designed to learn, reason, and understand."
-
-        # This logic now only runs for non-agent entities.
-        subject_node = self.agent.graph.get_node_by_name(clean_entity_name)
-        if not subject_node:
-            return f"I don't have any information about {entity_name}."
-
-        logger.info(
-            "  [CognitiveAgent]: Starting single-hop reasoning for '%s'.", entity_name
-        )
-        facts_with_props = self._gather_facts_multihop(subject_node.id, max_hops=4)
-
-        is_temporal_query = any(
-            keyword in user_input.lower()
-            for keyword in ["now", "currently", "today", "this year"]
-        )
-        if is_temporal_query:
-            facts = self._filter_facts_for_temporal_query(facts_with_props)
-        else:
-            facts = {fact_str for fact_str, _ in facts_with_props}
-
-        if not facts:
-            return f"I dont have any details for {subject_node.name.capitalize()}."
-
-        # For general entities, we can use the synthesizer to create a nice summary.
-        summary = self.agent.interpreter.synthesize(
-            structured_facts=list(facts), original_question=user_input, mode="statement"
-        )
-        return (
-            summary if summary else "I found some facts but could not summarize them."
-        )
-
     def _perform_multi_hop_query(
         self, start_node: ConceptNode, end_node: ConceptNode, max_hops: int = 3
     ) -> list[RelationshipEdge] | None:
@@ -408,21 +345,86 @@ class ConversationManager:
     def _filter_facts_for_temporal_query(
         self,
         facts_with_props_tuple: tuple[tuple[str, tuple[tuple[str, str], ...]], ...],
+        query_text: str = "",
     ) -> set[str]:
-        """Filter a set of facts to find the most current one."""
+        """
+        Filter a set of facts based on temporal constraints in the query.
+        Supports 'current' (default) and specific years (e.g., 'in 2010').
+        """
         logger.debug("  [TemporalReasoning]: Filtering facts by date...")
+
+        # Extract target year if present
+        target_year = None
+        match = re.search(r"\b(19|20)\d{2}\b", query_text)
+        if match:
+            target_year = int(match.group(0))
+            logger.debug(f"  [TemporalReasoning]: Detected target year: {target_year}")
+
         today = datetime.utcnow().date()
-        best_fact: str | None = None
-        best_date: date | None = None
+        filtered_facts = set()
+
         facts_list = [
             (fact_str, dict(props_tuple))
             for fact_str, props_tuple in facts_with_props_tuple
         ]
+
+        for fact_str, props in facts_list:
+            date_str = props.get("effective_date")
+            if not date_str:
+                # If no date is present, we generally include it unless we are looking for a specific time
+                # and strict filtering is desired. For now, include it as timeless truth.
+                if not target_year:
+                    filtered_facts.add(fact_str)
+                continue
+
+            try:
+                # Handle YYYY format
+                if len(date_str) == 4 and date_str.isdigit():
+                    fact_year = int(date_str)
+                    fact_date = date(fact_year, 1, 1)  # Default to Jan 1
+                else:
+                    fact_date = datetime.fromisoformat(date_str).date()
+                    fact_year = fact_date.year
+
+                if target_year:
+                    # Check if the fact was active in the target year
+                    # Ideally we need start/end dates. For now, we check if effective_date matches year
+                    # or if it's a "start date" (implied) and no end date.
+                    # This is a simplification.
+                    if fact_year == target_year:
+                        filtered_facts.add(fact_str)
+                else:
+                    # Default "current" logic: most recent fact <= today
+                    # This logic in the original code was a bit specific to finding ONE best fact.
+                    # Let's keep it simple: if it's in the past or today, it's valid history.
+                    # But if the user asks "who IS...", we want the latest.
+                    # The original logic tried to find the "best_date".
+                    pass
+
+            except (ValueError, TypeError):
+                continue
+
+        # If we have a target year, return matches
+        if target_year:
+            return (
+                filtered_facts
+                if filtered_facts
+                else {f"I found no facts specifically for {target_year}."}
+            )
+
+        # Original "Current/Latest" Logic for non-specific queries
+        best_fact: str | None = None
+        best_date: date | None = None
+
         for fact_str, props in facts_list:
             date_str = props.get("effective_date")
             if date_str:
                 try:
-                    fact_date = datetime.fromisoformat(date_str).date()
+                    if len(date_str) == 4 and date_str.isdigit():
+                        fact_date = date(int(date_str), 1, 1)
+                    else:
+                        fact_date = datetime.fromisoformat(date_str).date()
+
                     if fact_date <= today and (
                         best_date is None or fact_date > best_date
                     ):
@@ -430,8 +432,11 @@ class ConversationManager:
                         best_fact = fact_str
                 except (ValueError, TypeError):
                     continue
+
         if best_fact:
             return {best_fact}
+
+        # Fallback to timeless facts
         return {
             fact_str
             for fact_str, props in facts_list
@@ -757,7 +762,9 @@ class ConversationManager:
         if intent == "positive_affirmation":
             return "I'm glad you think so!"
         if intent == "meta_question_self":
-            response: str | None = self._answer_question_about("agent", user_input)
+            response: str | None = self.agent._answer_question_about(
+                "agent", user_input
+            )
             return (
                 response
                 if response is not None
@@ -816,7 +823,7 @@ class ConversationManager:
             if entities:
                 entity_name = entities[0]["name"]
                 corrected_entity_name = self._get_corrected_entity(entity_name)
-                response = self._answer_question_about(
+                response = self.agent._answer_question_about(
                     corrected_entity_name, user_input
                 )
                 return (

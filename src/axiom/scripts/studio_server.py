@@ -6,6 +6,7 @@ import logging
 import queue
 import threading
 from pathlib import Path
+from typing import Any
 
 import tornado.web
 import uvicorn
@@ -25,6 +26,7 @@ from axiom.cognitive_agent import CognitiveAgent
 from axiom.config import (
     DEFAULT_BRAIN_FILE,
     DEFAULT_STATE_FILE,
+    PROJECT_ROOT,
     STATIC_DIR,
 )
 from axiom.scripts.autonomous_trainer import start_autonomous_training
@@ -360,7 +362,7 @@ async def command(
                 "content": active_file_content,
             }
 
-        response = ""
+        response: str | dict[str, Any] = ""
 
         # Routing Logic
         if axiom_mode == "true":
@@ -370,16 +372,26 @@ async def command(
             # Code Mode: Use CodingAgent (Direct LLM)
             if hasattr(agent, "coding_agent"):
                 response = agent.coding_agent.process_request(cmd, context=context)
+
+                # Check if response is a dict (structured edit) or string (text response)
+                if isinstance(response, dict) and response.get("type") == "edit":
+                    # Return JSON for code edits
+                    return JSONResponse(response)
             else:
                 response = "Coding Agent not initialized."
         else:
             # Default: Use CodingAgent for standard chat (Gemma 3 experience)
             if hasattr(agent, "coding_agent"):
                 response = agent.coding_agent.process_request(cmd, context=context)
+
+                # Check if response is a dict (structured edit) or string (text response)
+                if isinstance(response, dict) and response.get("type") == "edit":
+                    # Return JSON for code edits
+                    return JSONResponse(response)
             else:
                 response = agent.chat(cmd)
 
-        # Return HTML bubble
+        # Return HTML bubble for text responses
         return HTMLResponse(
             f'<div class="message agent"><div class="message-content">{response}</div></div>'
         )
@@ -387,6 +399,79 @@ async def command(
         return HTMLResponse(
             f'<div class="message agent"><div class="message-content">Error: {e}</div></div>'
         )
+
+
+@app.post("/api/command_stream")
+async def command_stream(
+    cmd: str = Form(...),
+    active_file_name: str = Form(None),
+    active_file_content: str = Form(None),
+    coding_mode: str = Form(None),
+    axiom_mode: str = Form(None),
+):
+    """Handles streaming commands using Server-Sent Events (SSE)."""
+    if not agent:
+
+        async def error_generator():
+            yield 'data: {"error": "Agent not loaded"}\n\n'
+            yield 'data: {"done": true}\n\n'
+
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
+
+    try:
+        # Construct context object
+        context = {}
+        if active_file_name and active_file_content:
+            context["active_file"] = {
+                "name": active_file_name,
+                "content": active_file_content,
+            }
+
+        # Check for edit intent first - if detected, use non-streaming endpoint for structured diffs
+        if coding_mode == "true" or not axiom_mode:
+            if hasattr(agent, "coding_agent"):
+                # Check if this is an edit request
+                if (
+                    context
+                    and "active_file" in context
+                    and agent.coding_agent._detect_code_edit_intent(cmd, context)
+                ):
+                    # Use regular process_request for structured edits
+                    edit_result = agent.coding_agent._generate_code_edit(cmd, context)
+                    if edit_result and isinstance(edit_result, dict):
+                        # Return JSON response for code edits (non-streaming)
+                        return JSONResponse(edit_result)
+
+                # Otherwise, use streaming for regular responses
+                return StreamingResponse(
+                    agent.coding_agent._generate_code_response_streaming(
+                        cmd, context=context
+                    ),
+                    media_type="text/event-stream",
+                )
+
+        # Fallback to non-streaming for Axiom Mode
+        async def fallback_generator():
+            response = (
+                agent.chat(cmd)
+                if axiom_mode == "true"
+                else "Streaming not supported for this mode"
+            )
+            yield f'data: {{"token": "{response}"}}\n\n'
+            yield 'data: {"done": true}\n\n'
+
+        return StreamingResponse(fallback_generator(), media_type="text/event-stream")
+
+    except Exception as e:
+        error_msg = str(e)
+
+        async def error_generator():
+            import json
+
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+            yield 'data: {"done": true}\n\n'
+
+        return StreamingResponse(error_generator(), media_type="text/event-stream")
 
 
 @app.get("/api/status")
@@ -429,18 +514,25 @@ async def status():
 async def get_curriculum():
     """Returns the active curriculum/goal state as an HTML fragment."""
     try:
-        if not DEFAULT_STATE_FILE.exists():
-            return HTMLResponse(
-                '<div class="text-gray-500 text-sm">Waiting for agent state...</div>',
-                headers={
-                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-                    "Pragma": "no-cache",
-                    "Expires": "0",
-                },
-            )
+        # Prefer in-memory agent state if available for real-time updates
+        global agent
+        state_data = {}
 
-        state_data = json.loads(DEFAULT_STATE_FILE.read_text(encoding="utf-8"))
-        # If the state file is empty or lacks goals, treat as not ready
+        if agent:
+            # Extract state from in-memory agent
+            if hasattr(agent, "goal_manager") and agent.goal_manager.goals:
+                state_data["goals"] = agent.goal_manager.goals
+            if hasattr(agent, "learning_goals"):
+                state_data["learning_goals"] = agent.learning_goals
+
+        # Fallback to disk if in-memory state is empty or agent not loaded
+        if not state_data and DEFAULT_STATE_FILE.exists():
+            try:
+                state_data = json.loads(DEFAULT_STATE_FILE.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        # If the state is still empty or lacks goals, treat as not ready
         if not state_data or not state_data.get("goals"):
             return HTMLResponse(
                 '<div class="text-gray-500 text-sm">Waiting for agent state...</div>',
@@ -676,17 +768,52 @@ async def system_stats():
 
 @app.post("/api/cancel_chat")
 async def cancel_chat():
-    """Cancels the currently running chat request."""
+    """Cancels the current chat generation (for CodingAgent)."""
+    if agent and hasattr(agent, "coding_agent"):
+        agent.coding_agent.cancel_generation()
+        return {"status": "cancelled"}
+    return {"status": "no agent"}
+
+
+class ApplyEditRequest(BaseModel):
+    file: str
+    content: str
+
+
+@app.post("/api/apply_edit")
+async def apply_edit(request: ApplyEditRequest):
+    """Applies an approved code edit to the file system."""
+    if not agent:
+        return JSONResponse({"error": "Agent not loaded"}, status_code=500)
+
     try:
-        if agent and hasattr(agent, "coding_agent"):
-            agent.coding_agent.cancel_generation()
-            return HTMLResponse(
-                '<div class="message agent"><div class="message-content">[Response cancelled by user]</div></div>'
-            )
-        return HTMLResponse(
-            '<div class="message agent"><div class="message-content">[Nothing to cancel]</div></div>'
-        )
+        from pathlib import Path
+
+        file_path = Path(request.file)
+
+        # Resolve to absolute path within PROJECT_ROOT
+        if not file_path.is_absolute():
+            file_path = PROJECT_ROOT / file_path
+
+        # Security check: ensure the path is within PROJECT_ROOT
+        try:
+            file_path = file_path.resolve()
+            if not str(file_path).startswith(str(PROJECT_ROOT.resolve())):
+                return JSONResponse(
+                    {"error": "Access denied: file is outside project root"},
+                    status_code=403,
+                )
+        except Exception:
+            return JSONResponse({"error": "Invalid file path"}, status_code=400)
+
+        # Ensure parent directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Write the content
+        file_path.write_text(request.content, encoding="utf-8")
+
+        return JSONResponse({"status": "success", "file": str(file_path)})
+
     except Exception as e:
-        return HTMLResponse(
-            f'<div class="message agent"><div class="message-content">[Cancel failed: {str(e)}]</div></div>'
-        )
+        logging.error(f"Error applying edit: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)

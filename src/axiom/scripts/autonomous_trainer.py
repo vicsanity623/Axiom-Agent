@@ -70,7 +70,7 @@ You are a curriculum design expert for an AI. Your task is to generate a single,
 **RULES:**
 1.  The output MUST be a single, continuous string.
 2.  The string MUST start with a high-level mission statement.
-3.  The string MUST contain exactly 5 stages, each formatted as `[Stage X: Title]: Description...`.
+3.  The string MUST contain exactly 6 stages, each formatted as `[Stage X: Title]: Description...`.
 4.  The stages MUST follow a logical progression from concrete fundamentals to abstract reasoning, starting at a "toddler" level.
 5.  **Crucially, you MUST introduce variation and avoid redundancy.** The AI has already learned the concepts listed in the "Known Concepts" section. Your generated curriculum should focus on related, but distinct, topics to broaden the AI's knowledge.
 
@@ -119,7 +119,11 @@ def _generate_or_set_initial_goal(
         "[bold purple]No active goals found. Generating a new curriculum.[/bold purple]",
     )
 
-    while True:
+    max_curriculum_attempts = 3
+    for curriculum_attempt in range(max_curriculum_attempts):
+        logger.info(
+            f"[Curriculum Generation]: Attempt {curriculum_attempt + 1}/{max_curriculum_attempts}"
+        )
         creative_seeds = [
             # Tier 1: The Primitives of Code
             "Generate a curriculum about the atomic building blocks of Python programming. Start with data types and basic syntax. Example topics: python, code, interpreter, variable, string, integer, float, boolean, syntax, comment, assign.",
@@ -137,6 +141,10 @@ def _generate_or_set_initial_goal(
             "Generate a curriculum about writing clean, maintainable, and professional code. Start with style and readability. Example topics: refactoring, readability, linting, pep8, docstring, annotation, type hint, clean code, review, testing.",
             # Tier 6: Advanced Python Concepts
             "Generate a curriculum about advanced Python features for efficient coding. Start with iterators and decorators. Example topics: iterator, generator, yield, decorator, wrapper, context manager, with statement, lambda, list comprehension.",
+            # Tier 7: Concurrency and Parallelism
+            "Generate a curriculum about executing multiple tasks simultaneously. Start with threads and processes. Example topics: thread, process, concurrency, parallelism, GIL, multiprocessing, asyncio, event loop, coroutine, thread safety.",
+            # Tier 8: Database Interaction and Persistence
+            "Generate a curriculum about interacting with databases and persisting data. Start with relational databases and SQL. Example topics: database, SQL, relational, table, schema, query, insert, update, delete, connection, persistence, ORM.",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(
@@ -144,15 +152,17 @@ def _generate_or_set_initial_goal(
             selected_seed,
         )
 
-        # --- FIX: Replace the "Brain Dump" with a "Strategic Summary" ---
         # Get all nodes, but then create a smaller, more strategic summary.
         all_nodes = agent.graph.get_all_nodes()
         if all_nodes:
-            # Sort nodes by a combination of access count and how recent they are.
-            # This gives a good proxy for "importance" or "relevance".
+            # Sort nodes by connectivity (degree), access count, and recency.
+            # Well-connected nodes are "hub" concepts that should be known.
             sorted_nodes = sorted(
                 all_nodes,
                 key=lambda n: (
+                    len(
+                        agent.graph.get_edges_from_node(n.id)
+                    ),  # Connection count (degree)
                     n.properties.get("access_count", 0),
                     n.properties.get("last_accessed", ""),
                 ),
@@ -165,7 +175,7 @@ def _generate_or_set_initial_goal(
                 sorted(n.name for n in strategic_summary_nodes)
             )
             logger.info(
-                f"   - Providing LLM with a strategic summary of {len(strategic_summary_nodes)} most relevant concepts."
+                f"   - Providing LLM with a strategic summary of {len(strategic_summary_nodes)} most relevant concepts (sorted by connectivity)."
             )
         else:
             known_concepts_str = "None"
@@ -174,13 +184,36 @@ def _generate_or_set_initial_goal(
             creative_seed=selected_seed, known_concepts=known_concepts_str
         )
 
-        new_curriculum_goal = agent.interpreter.synthesize(
-            structured_facts=prompt, mode="creative_writing"
-        )
+        # Retry logic with exponential backoff
+        new_curriculum_goal = None
+        for retry in range(3):
+            try:
+                new_curriculum_goal = agent.interpreter.synthesize(
+                    structured_facts=prompt, mode="creative_writing"
+                )
+                if new_curriculum_goal and "[Stage 1:" in new_curriculum_goal:
+                    break
+                logger.warning(
+                    f"[Curriculum Generation]: LLM synthesis attempt {retry + 1}/3 returned invalid format"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[Curriculum Generation]: LLM synthesis attempt {retry + 1}/3 failed: {e}"
+                )
+            if retry < 2:  # Don't sleep on the last attempt
+                time.sleep(2**retry)  # Exponential backoff: 1s, 2s
 
         if not new_curriculum_goal or "[Stage 1:" not in new_curriculum_goal:
+            logger.warning(
+                f"[Curriculum Generation]: Attempt {curriculum_attempt + 1} failed to generate valid curriculum."
+            )
+            if curriculum_attempt < max_curriculum_attempts - 1:
+                continue
             logger.error(
-                "--- [AUTONOMOUS TRAINER]: Failed to generate a valid new curriculum from LLM. Halting. ---"
+                "--- [AUTONOMOUS TRAINER]: All curriculum generation attempts failed. Using fallback goal. ---"
+            )
+            agent.goal_manager.add_goal(
+                "Learn fundamental programming concepts.[Stage 1: Basic Syntax]: Understand variables, data types, and basic operators."
             )
             return
 
@@ -209,18 +242,21 @@ def _generate_or_set_initial_goal(
                 logger.warning(
                     "[Curriculum Generation]: All generated topics are already well-known."
                 )
-                logger.info(
-                    "[Curriculum Generation]: Triggering autonomous curiosity to find a new topic..."
-                )
-
-                # This logic for generating a new seed is complex, let's simplify for now
-                # creative_seeds = [agent.interpreter.generate_new_creative_seed()]
+                logger.info("[Curriculum Generation]: Retrying with different seed...")
                 agent.goal_manager.goals.clear()
                 continue
 
             active_goal["sub_goals"] = filtered_sub_goals
             agent.learning_goals[:] = filtered_sub_goals
             break
+    else:
+        # All attempts exhausted without success
+        logger.error(
+            "--- [AUTONOMOUS TRAINER]: Maximum curriculum generation attempts reached. Using fallback goal. ---"
+        )
+        agent.goal_manager.add_goal(
+            "Learn fundamental programming concepts.[Stage 1: Basic Syntax]: Understand variables, data types, and basic operators."
+        )
 
 
 def start_autonomous_training(

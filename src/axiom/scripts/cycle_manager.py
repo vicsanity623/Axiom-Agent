@@ -38,19 +38,23 @@ class CycleManager:
         self.console = console
         self.stop_event = stop_event
         self.phase_lock = threading.Lock()
-        self.LEARNING_PHASE_DURATION = timedelta(hours=1.2)
-        self.DISCOVERY_PHASE_DURATION = timedelta(minutes=3.2)
-        self.REFINEMENT_PHASE_DURATION = timedelta(minutes=3)
-        self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
+        # Base durations (can be adjusted adaptively)
+        self.BASE_LEARNING_PHASE_DURATION = timedelta(hours=1.2)
+        self.BASE_DISCOVERY_PHASE_DURATION = timedelta(minutes=3.2)
+        self.BASE_REFINEMENT_PHASE_DURATION = timedelta(minutes=3)
+        self.BASE_METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
         self.CYCLE_DELAY_SECONDS = 60
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
+        # Adaptive thresholds
+        self.PENDING_RELATIONS_HIGH_THRESHOLD = 50
+        self.PHASE_EXTENSION_FACTOR = 1.2  # Extend by 20%
         fast_mode = os.getenv("AXIOM_FAST_TEST") == "1"
         if fast_mode:
-            self.LEARNING_PHASE_DURATION = timedelta(minutes=5)
-            self.DISCOVERY_PHASE_DURATION = timedelta(seconds=5)
-            self.REFINEMENT_PHASE_DURATION = timedelta(minutes=5)
-            self.METACOGNITIVE_PHASE_DURATION = timedelta(minutes=4)
+            self.BASE_LEARNING_PHASE_DURATION = timedelta(minutes=5)
+            self.BASE_DISCOVERY_PHASE_DURATION = timedelta(seconds=5)
+            self.BASE_REFINEMENT_PHASE_DURATION = timedelta(minutes=5)
+            self.BASE_METACOGNITIVE_PHASE_DURATION = timedelta(minutes=4)
             self.CYCLE_DELAY_SECONDS = 2
 
     def start(self, duration_hours: float | None = None) -> None:
@@ -136,7 +140,18 @@ class CycleManager:
 
     def _start_learning_phase(self) -> None:
         """Start the Learning Phase by scheduling the first study cycle."""
-        hours = self.LEARNING_PHASE_DURATION.total_seconds() / 3600
+        # Adaptive duration based on pending relations
+        agent = self.harvester.agent
+        pending_count = len(agent.pending_relations)
+
+        duration = self.BASE_LEARNING_PHASE_DURATION
+        if pending_count > self.PENDING_RELATIONS_HIGH_THRESHOLD:
+            duration = self.BASE_LEARNING_PHASE_DURATION * self.PHASE_EXTENSION_FACTOR
+            logger.info(
+                f"[Adaptive Phasing]: Extended learning phase by {int((self.PHASE_EXTENSION_FACTOR - 1) * 100)}% due to {pending_count} pending relations"
+            )
+
+        hours = duration.total_seconds() / 3600
         self.console.rule(
             f"[bold cyan]Starting {hours:.1f}-hour LEARNING phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold cyan]",
             style="border",
@@ -144,7 +159,7 @@ class CycleManager:
         self._clear_all_jobs()
         self.current_phase = "learning"
         self.phase_start_time = datetime.now()
-        phase_end_time = self.phase_start_time + self.LEARNING_PHASE_DURATION
+        phase_end_time = self.phase_start_time + duration
         self.scheduler.add_job(
             self._run_and_reschedule_cycle,
             "date",
@@ -157,7 +172,7 @@ class CycleManager:
 
     def _start_discovery_phase(self) -> None:
         """Start the Discovery Phase by scheduling the first discover cycle."""
-        minutes = self.DISCOVERY_PHASE_DURATION.total_seconds() / 60
+        minutes = self.BASE_DISCOVERY_PHASE_DURATION.total_seconds() / 60
         self.console.rule(
             f"[bold cyan]Starting {minutes:.1f}-minute DISCOVERY phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold cyan]",
             style="border",
@@ -176,7 +191,7 @@ class CycleManager:
 
     def _start_refinement_phase(self) -> None:
         """Start the Refinement Phase by scheduling the first refinement cycle."""
-        minutes = self.REFINEMENT_PHASE_DURATION.total_seconds() / 60
+        minutes = self.BASE_REFINEMENT_PHASE_DURATION.total_seconds() / 60
         self.console.rule(
             f"[bold blue]Starting {minutes:.1f}-minute REFINEMENT phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold blue]",
             style="border",
@@ -199,7 +214,7 @@ class CycleManager:
 
     def _start_metacognitive_phase(self) -> None:
         """Start the Metacognitive Phase by scheduling the first metacognitive cycle."""
-        minutes = self.METACOGNITIVE_PHASE_DURATION.total_seconds() / 60
+        minutes = self.BASE_METACOGNITIVE_PHASE_DURATION.total_seconds() / 60
         self.console.rule(
             f"[bold blue]Starting {minutes:.1f}-minute METACOGNITIVE phase (delay: {self.CYCLE_DELAY_SECONDS}s).[/bold blue]",
             style="border",
@@ -235,26 +250,49 @@ class CycleManager:
                 return
             now = datetime.now()
             elapsed_time = now - self.phase_start_time
-            if (
-                self.current_phase == "learning"
-                and elapsed_time >= self.LEARNING_PHASE_DURATION
-            ):
+            # Log metrics before transitioning
+            if self.current_phase:
+                self._log_phase_metrics(self.current_phase)
+
+            # Calculate adaptive duration for learning phase
+            learning_duration = self.BASE_LEARNING_PHASE_DURATION
+            agent = self.harvester.agent
+            if len(agent.pending_relations) > self.PENDING_RELATIONS_HIGH_THRESHOLD:
+                learning_duration = (
+                    self.BASE_LEARNING_PHASE_DURATION * self.PHASE_EXTENSION_FACTOR
+                )
+
+            if self.current_phase == "learning" and elapsed_time >= learning_duration:
                 self._start_discovery_phase()
             elif (
                 self.current_phase == "discovery"
-                and elapsed_time >= self.DISCOVERY_PHASE_DURATION
+                and elapsed_time >= self.BASE_DISCOVERY_PHASE_DURATION
             ):
                 self._start_refinement_phase()
             elif (
                 self.current_phase == "refinement"
-                and elapsed_time >= self.REFINEMENT_PHASE_DURATION
+                and elapsed_time >= self.BASE_REFINEMENT_PHASE_DURATION
             ):
                 self._start_metacognitive_phase()
             elif (
                 self.current_phase == "metacognitive"
-                and elapsed_time >= self.METACOGNITIVE_PHASE_DURATION
+                and elapsed_time >= self.BASE_METACOGNITIVE_PHASE_DURATION
             ):
                 self._start_learning_phase()
+
+    def _log_phase_metrics(self, phase_name: str) -> None:
+        """Log comprehensive metrics at the end of a phase."""
+        agent = self.harvester.agent
+        node_count = len(agent.graph.get_all_nodes())
+        edge_count = len(agent.graph.get_all_edges())
+        pending_count = len(agent.pending_relations)
+        goal_count = len(agent.learning_goals) + len(agent.high_priority_tasks)
+
+        logger.info(
+            f"[Phase Metrics - {phase_name.upper()}]: "
+            f"Nodes={node_count}, Edges={edge_count}, "
+            f"Pending={pending_count}, Active Goals={goal_count}"
+        )
 
     def _clear_all_jobs(self) -> None:
         """Remove all existing cognitive cycle jobs from the scheduler."""

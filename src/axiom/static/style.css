@@ -86,6 +86,7 @@ body {
     display: flex;
     flex-direction: column;
     max-width: 90%;
+    min-width: 0;
     animation: fadeIn 0.3s ease-out;
 }
 
@@ -102,14 +103,16 @@ body {
 .message-content {
     padding: 12px 16px;
     border-radius: 12px;
-    line-height: 1.6;
-    font-size: 0.95rem;
+    line-height: 1.5;
+    font-size: 0.8rem;
     position: relative;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     word-wrap: break-word;
     overflow-wrap: break-word;
     word-break: break-word;
     max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
 }
 
 .message.user .message-content {
@@ -131,12 +134,22 @@ body {
     padding: 12px;
     margin: 8px 0;
     overflow-x: auto;
+    overflow-y: hidden;
     border: 1px solid #27272a;
+    max-width: 100%;
+    word-wrap: normal;
+    white-space: pre;
+}
+
+.message-content pre code {
+    white-space: pre;
+    word-break: normal;
+    overflow-wrap: normal;
 }
 
 .message-content code {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85em;
+    font-size: 0.75em;
     background: rgba(0, 0, 0, 0.2);
     padding: 2px 4px;
     border-radius: 4px;
@@ -144,6 +157,7 @@ body {
 
 .message-content p {
     margin-bottom: 0.5em;
+    word-wrap: break-word;
 }
 
 .message-content p:last-child {
@@ -203,4 +217,146 @@ body {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Message Wrapper & Actions */
+.message-wrapper {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.message.user .message-wrapper {
+    flex-direction: row-reverse;
+}
+
+.message-actions {
+    position: relative;
+    flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.message:hover .message-actions {
+    opacity: 1;
+}
+
+.action-menu-btn {
+    background: transparent;
+    border: none;
+    color: #71717a;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.action-menu-btn:hover {
+    background: #27272a;
+    color: #a1a1aa;
+}
+
+.action-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    border-radius: 8px;
+    padding: 4px;
+    margin-top: 4px;
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    min-width: 140px;
+}
+
+.message.user .action-menu {
+    right: auto;
+    left: 0;
+}
+
+.action-menu.hidden {
+    display: none;
+}
+
+.action-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    background: transparent;
+    border: none;
+    color: #e4e4e7;
+    font-size: 0.875rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 0.2s;
+    text-align: left;
+}
+
+.action-item:hover {
+    background: #3f3f46;
+}
+
+.action-item i {
+    width: 14px;
+    color: #a1a1aa;
+}
+
+/* Edit Textarea */
+.edit-textarea {
+    width: 100%;
+    min-height: 60px;
+    background: #18181b;
+    border: 1px solid #3f3f46;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #e4e4e7;
+    font-family: inherit;
+    font-size: 0.95rem;
+    resize: vertical;
+    margin-bottom: 8px;
+}
+
+.edit-textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.edit-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.save-edit-btn,
+.cancel-edit-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.save-edit-btn {
+    background: #6366f1;
+    color: white;
+}
+
+.save-edit-btn:hover {
+    background: #4f46e5;
+}
+
+.cancel-edit-btn {
+    background: #3f3f46;
+    color: #e4e4e7;
+}
+
+.cancel-edit-btn:hover {
+    background: #52525b;
 }

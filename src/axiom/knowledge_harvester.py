@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import builtins
+import inspect
 import json
+import keyword
 import logging
+
+# --- FIX: Add Python introspection imports ---
 import random
 import re
 import time
@@ -124,6 +129,53 @@ class KnowledgeHarvester:
         logger.info("--- [Discovery Cycle Finished] ---\n")
         self.agent.log_autonomous_cycle_completion()
 
+    def _is_python_context(self) -> bool:
+        """Checks if the active goal is related to Python or Coding."""
+        active_goal = self.agent.goal_manager.get_active_goal()
+        if not active_goal:
+            return False
+        desc = active_goal.get("description", "").lower()
+        keywords = ["python", "coding", "programming", "code", "software", "developer"]
+        return any(k in desc for k in keywords)
+
+    def _get_python_definition(self, term: str) -> tuple[str, str] | None:
+        """Attempts to get a definition using Python's internal documentation tools.
+        This acts as the 'Grounded Truth' for code concepts.
+        """
+        # 1. Check Python Keywords (if, else, def, etc.)
+        if keyword.iskeyword(term):
+            return (
+                "keyword",
+                f"'{term}' is a reserved Python keyword used for control flow or structural definitions.",
+            )
+        # 2. Check Built-in Functions/Types (print, len, str, int)
+        if hasattr(builtins, term):
+            obj = getattr(builtins, term)
+            doc = inspect.getdoc(obj)
+            if doc:
+                summary = doc.split("\n\n")[0].replace("\n", " ")
+                return "code_object", summary
+        # 3. No match
+        return None
+
+    def _get_technical_llm_definition(self, term: str) -> tuple[str, str] | None:
+        """Uses the LLM to generate a definition specifically in the context of Python programming.
+        This prevents generic dictionary definitions.
+        """
+        prompt = f"""
+        Define the term '{term}' strictly in the context of Python programming and Computer Science.
+        Do not provide general dictionary definitions.
+        Format: A short, factual single sentence.
+        Example for 'memory': 'Memory refers to the computer's RAM where variables and objects are stored during execution.'
+        """
+        try:
+            definition = self.agent.interpreter.synthesize(prompt, mode="factual")
+            if definition:
+                return "concept", definition
+        except Exception as e:
+            logger.warning(f"Technical LLM lookup failed for '{term}': {e}")
+        return None
+
     def _resolve_investigation_goal(self, goal: Task | str) -> bool:
         caller_name = f"{self.__class__.__name__}._resolve_investigation_goal"
         raw_term: str
@@ -147,7 +199,6 @@ class KnowledgeHarvester:
             logger.warning(
                 f"Cannot learn the definition of a number ('{term_to_learn}'). Discarding task as invalid."
             )
-            # --- FIX: Add the invalid term to the failed tasks set to break the loop ---
             self._failed_tasks.add(term_to_learn)
             return True
 
@@ -155,6 +206,39 @@ class KnowledgeHarvester:
             f"[Study Cycle]: Prioritizing learning goal: To define '{term_to_learn}' (from '{raw_term}')."
         )
 
+        # Context-aware routing
+        is_python_mode = self._is_python_context()
+        if is_python_mode:
+            logger.info(
+                f"[Context Switch]: 🐍 Python Mode Detected for '{term_to_learn}'. Using Technical Sources."
+            )
+            # Try Python internal docs
+            result = self._get_python_definition(term_to_learn)
+            # Fallback to technical LLM if needed
+            if not result:
+                result = self._get_technical_llm_definition(term_to_learn)
+            if result:
+                pos, definition = result
+                with self.lock:
+                    self.agent.lexicon.add_linguistic_knowledge(
+                        term_to_learn,
+                        pos if pos in ["noun", "verb", "adj"] else "noun",
+                        confidence=0.95,
+                        provenance="python_docs",
+                    )
+                    # Use definition as a fact sentence
+                    self.agent.knowledge_manager.learn_new_fact_autonomously(
+                        definition, term_to_learn
+                    )
+                logger.info(
+                    f"[green]   - Successfully processed '{term_to_learn}' via Python/Technical lookup.[/green]"
+                )
+                return True
+            logger.warning(
+                f"   - Python lookup failed for '{term_to_learn}'. Falling back to web."
+            )
+
+        # Standard path (non-Python or fallback)
         is_single_word = " " not in term_to_learn
         if is_single_word:
             api_result = self.get_definition_from_api(term_to_learn)
@@ -170,7 +254,6 @@ class KnowledgeHarvester:
                     self.agent.knowledge_manager.learn_new_fact_autonomously(
                         f"{term_to_learn} is {definition}", term_to_learn
                     )
-
                 logger.info(
                     f"[green]   - Successfully processed '{term_to_learn}' from Dictionary API.[/green]"
                 )
@@ -179,6 +262,7 @@ class KnowledgeHarvester:
                 f"   - Dictionary API failed for '{term_to_learn}'. Falling back to web search."
             )
 
+        # Web Search Fallback (shared)
         web_fact: str | None = None
         queries = [f"what is {term_to_learn}", f"define {term_to_learn}"]
         for query in queries:

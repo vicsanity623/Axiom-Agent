@@ -112,6 +112,80 @@ def run_server():
     server_thread.join()
 
 
+class FileBrowser(QTreeView):
+    """
+    Custom QTreeView to handle drag-and-drop and context menus.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+        self.setDragDropMode(QTreeView.DragDropMode.InternalMove)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+
+    def _show_context_menu(self, position):
+        index = self.indexAt(position)
+        if not index.isValid():
+            return
+
+        # Actually, we should create a QMenu directly
+        from PyQt6.QtWidgets import QMenu
+
+        menu = QMenu(self)
+
+        copy_path_action = QAction("Copy Path", self)
+        copy_path_action.triggered.connect(lambda: self._copy_path(index))
+        menu.addAction(copy_path_action)
+
+        copy_rel_path_action = QAction("Copy Relative Path", self)
+        copy_rel_path_action.triggered.connect(lambda: self._copy_rel_path(index))
+        menu.addAction(copy_rel_path_action)
+
+        menu.addSeparator()
+
+        delete_action = QAction("Delete", self)
+        delete_action.triggered.connect(lambda: self._delete_file(index))
+        menu.addAction(delete_action)
+
+        menu.exec(self.viewport().mapToGlobal(position))
+
+    def _copy_path(self, index):
+        path = self.model().filePath(index)
+        QApplication.clipboard().setText(path)
+
+    def _copy_rel_path(self, index):
+        path = Path(self.model().filePath(index))
+        try:
+            rel_path = path.relative_to(PROJECT_ROOT)
+            QApplication.clipboard().setText(str(rel_path))
+        except ValueError:
+            QApplication.clipboard().setText(str(path))
+
+    def _delete_file(self, index):
+        from PyQt6.QtWidgets import QMessageBox
+
+        path = Path(self.model().filePath(index))
+        reply = QMessageBox.question(
+            self,
+            "Confirm Delete",
+            f"Are you sure you want to delete {path.name}?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                if path.is_dir():
+                    import shutil
+
+                    shutil.rmtree(path)
+                else:
+                    path.unlink()
+            except Exception as e:
+                print(f"Error deleting {path}: {e}")
+
+
 class AxiomStudio(QMainWindow):
     """
     The main window for the Axiom Studio IDE, now with a full IDE layout.
@@ -129,9 +203,12 @@ class AxiomStudio(QMainWindow):
         self.setCentralWidget(main_splitter)
 
         # 1. File Browser (Left)
-        self.file_browser = QTreeView()
+        self.file_browser = FileBrowser(self)
         self.file_system_model = QFileSystemModel()
         self.file_system_model.setRootPath(str(PROJECT_ROOT))
+        self.file_system_model.setReadOnly(
+            False
+        )  # Enable write operations for drag/drop
         self.file_browser.setModel(self.file_system_model)
         self.file_browser.setRootIndex(self.file_system_model.index(str(PROJECT_ROOT)))
         self.file_browser.setColumnWidth(0, 250)
@@ -354,67 +431,102 @@ class AxiomStudio(QMainWindow):
         toolbar = QToolBar("Main Toolbar")
         self.addToolBar(toolbar)
 
-        # We can reuse actions from the menu if we stored them, but for now simple buttons are fine
-        # or we can just keep the existing buttons as they are convenient.
+        # Metallic Button Style
+        metallic_style = """
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #4b5563, stop:1 #374151);
+                color: white;
+                border: 1px solid #1f2937;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #6b7280, stop:1 #4b5563);
+            }
+            QPushButton:pressed {
+                background: #1f2937;
+            }
+            QPushButton:disabled {
+                background: #374151;
+                color: #9ca3af;
+            }
+        """
 
-        self.play_button = QPushButton("Autonomous")
-        self.play_button.setStyleSheet(
-            "background-color: #4f46e5; color: white; padding: 5px 15px; border-radius: 5px;"
-        )
+        # --- Play Button ---
+        self.play_button = QPushButton("▶ Start")
+        self.play_button.setStyleSheet(metallic_style)
         self.play_button.clicked.connect(self.start_training_clicked)
         toolbar.addWidget(self.play_button)
 
-        self.open_folder_button = QPushButton("Open Folder")
-        self.open_folder_button.setStyleSheet(
-            "background-color: #4b5563; color: white; padding: 5px 15px; border-radius: 5px;"
-        )
-        self.open_folder_button.clicked.connect(self.open_folder_dialog)
-        toolbar.addWidget(self.open_folder_button)
-
-        self.stop_button = QPushButton("Stop")
-        # --- FIX: Provide a valid, simple stylesheet ---
-        self.stop_button.setStyleSheet(
-            "background-color: #dc2626; color: white; padding: 5px 15px; border-radius: 5px;"
-        )
+        # --- Stop Button ---
+        self.stop_button = QPushButton("⏹ Stop")
+        self.stop_button.setStyleSheet(metallic_style)
         self.stop_button.setEnabled(False)
+        self.stop_button.clicked.connect(self.stop_training_clicked)
         toolbar.addWidget(self.stop_button)
 
         toolbar.addSeparator()
 
+        # --- Open Folder ---
+        self.open_folder_button = QPushButton("📂 Open")
+        self.open_folder_button.setStyleSheet(metallic_style)
+        self.open_folder_button.clicked.connect(self.open_folder_dialog)
+        toolbar.addWidget(self.open_folder_button)
+
+        toolbar.addSeparator()
+
         # --- Panel Toggles ---
-        self.toggle_browser_btn = QPushButton("📁 Files")
+        # Toggle Button Style (slightly different to show state)
+        toggle_style = """
+            QPushButton {
+                background: transparent;
+                color: #d1d5db;
+                border: 1px solid transparent;
+                border-radius: 4px;
+                padding: 6px 10px;
+            }
+            QPushButton:hover {
+                background: #374151;
+            }
+            QPushButton:checked {
+                background: #4b5563;
+                color: white;
+                border: 1px solid #6b7280;
+            }
+        """
+
+        self.toggle_browser_btn = QPushButton("Files")
         self.toggle_browser_btn.setCheckable(True)
-        self.toggle_browser_btn.setChecked(False)  # Initially hidden
+        self.toggle_browser_btn.setChecked(False)
         self.toggle_browser_btn.setToolTip("Toggle File Explorer")
         self.toggle_browser_btn.clicked.connect(self.toggle_file_browser)
-        self.toggle_browser_btn.setStyleSheet("padding: 5px 10px;")
+        self.toggle_browser_btn.setStyleSheet(toggle_style)
         toolbar.addWidget(self.toggle_browser_btn)
 
-        self.toggle_term_btn = QPushButton("💻 Terminal")
+        self.toggle_term_btn = QPushButton("Terminal")
         self.toggle_term_btn.setCheckable(True)
-        self.toggle_term_btn.setChecked(False)  # Initially hidden
+        self.toggle_term_btn.setChecked(False)
         self.toggle_term_btn.setToolTip("Toggle Terminal Panel")
         self.toggle_term_btn.clicked.connect(self.toggle_bottom_panel)
-        self.toggle_term_btn.setStyleSheet("padding: 5px 10px;")
+        self.toggle_term_btn.setStyleSheet(toggle_style)
         toolbar.addWidget(self.toggle_term_btn)
 
-        self.toggle_chat_btn = QPushButton("💬 Chat")
+        self.toggle_chat_btn = QPushButton("Chat")
         self.toggle_chat_btn.setCheckable(True)
-        self.toggle_chat_btn.setChecked(False)  # Initially hidden
+        self.toggle_chat_btn.setChecked(False)
         self.toggle_chat_btn.setToolTip("Toggle AI Chat Panel")
         self.toggle_chat_btn.clicked.connect(self.toggle_chat_panel)
-        self.toggle_chat_btn.setStyleSheet("padding: 5px 10px;")
+        self.toggle_chat_btn.setStyleSheet(toggle_style)
         toolbar.addWidget(self.toggle_chat_btn)
 
         toolbar.addSeparator()
 
         # --- Agent Manager ---
-        self.agent_manager_btn = QPushButton("🤖 Agent Manager")
+        self.agent_manager_btn = QPushButton("⚙ Manager")
         self.agent_manager_btn.setToolTip("Open Agent Manager Settings")
         self.agent_manager_btn.clicked.connect(self.open_agent_manager_dialog)
-        self.agent_manager_btn.setStyleSheet(
-            "padding: 5px 10px; background-color: #4f46e5; color: white; border-radius: 5px;"
-        )
+        self.agent_manager_btn.setStyleSheet(metallic_style)
         toolbar.addWidget(self.agent_manager_btn)
 
     def _configure_editor(self):

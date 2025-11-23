@@ -131,6 +131,11 @@ class CognitiveAgent:
         self.knowledge_manager = KnowledgeManager(self)
         self.conversation_manager = ConversationManager(self)
 
+        # Initialize Symbolic Synthesizer (Phase 9)
+        from .symbolic_synthesizer import SymbolicSynthesizer
+
+        self.synthesizer = SymbolicSynthesizer(self)
+
         if load_from_file:
             if not self.brain_file.exists():
                 logger.info(
@@ -197,7 +202,7 @@ class CognitiveAgent:
 
         self._initialize_identity()
 
-    def chat(self, user_input: str) -> str:
+    def chat(self, user_input: str) -> str | dict[str, Any]:
         """Public entry point for user interaction."""
         # Check for Coding Mode command
         if user_input.strip().startswith("/code"):
@@ -451,3 +456,145 @@ class CognitiveAgent:
             if len(object_.split()) == 1 and object_[0].isupper():
                 return "has name"
         return RELATION_TYPE_MAP.get(verb, verb)
+
+    def _answer_question_about(self, topic: str, user_input: str | None = None) -> str:
+        """
+        Generates a natural language answer about a specific topic by querying the graph.
+        Handles ambiguity by checking for 'has_sense' edges.
+        """
+        clean_topic = self._clean_phrase(topic)
+
+        # --- Meta-Question Gate ---
+        if "agent" in clean_topic and user_input:
+            # Specific case for "what is your name?"
+            if "name" in user_input.lower():
+                agent_node = self.graph.get_node_by_name("agent")
+                if agent_node:
+                    name_edge = next(
+                        (
+                            edge
+                            for edge in self.graph.get_edges_from_node(agent_node.id)
+                            if edge.type == "has_name"
+                        ),
+                        None,
+                    )
+                    if name_edge:
+                        name_node = self.graph.get_node_by_id(name_edge.target)
+                        if name_node:
+                            return f"My name is {name_node.name.capitalize()}."
+                        return "I know I have a name, but I can't seem to recall it right now."
+                    return "I don't have a name yet."
+                return "I don't seem to have a concept of myself right now."
+            # General case for "who are you?", "what are you?", etc.
+            return "I am Axiom, a cognitive agent designed to learn, reason, and understand."
+
+        node = self.graph.get_node_by_name(clean_topic)
+
+        if not node:
+            return f"I don't have any information about '{topic}' yet."
+
+        # --- AMBIGUITY CHECK ---
+        sense_edges = self.graph.get_edges_by_type(node.id, "has_sense")
+        if sense_edges:
+            senses = []
+            for edge in sense_edges:
+                sense_node = self.graph.get_node_by_id(edge.target)
+                if sense_node:
+                    # Extract the sense description from the name "bank (financial institution)"
+                    match = re.search(r"\((.*?)\)", sense_node.name)
+                    if match:
+                        senses.append(match.group(1))
+                    else:
+                        senses.append(sense_node.name)
+
+            if senses:
+                response = (
+                    f"The term '{topic}' can mean multiple things. Did you mean:\n"
+                )
+                for i, sense in enumerate(senses, 1):
+                    response += f"{i}. {sense.capitalize()}\n"
+                return response.strip()
+
+        # Standard Fact Retrieval
+        facts_with_props = self.conversation_manager._gather_facts_multihop(
+            node.id, max_hops=1
+        )
+
+        # --- Temporal Filtering ---
+        # Check if the user is asking about a specific time or "now"
+        is_temporal_query = False
+        if user_input:
+            is_temporal_query = any(
+                keyword in user_input.lower()
+                for keyword in [
+                    "now",
+                    "currently",
+                    "today",
+                    "this year",
+                    "when",
+                    "year",
+                    "date",
+                ]
+            ) or bool(re.search(r"\b(19|20)\d{2}\b", user_input))
+
+        if is_temporal_query and user_input:
+            filtered_facts = self.conversation_manager._filter_facts_for_temporal_query(
+                facts_with_props, user_input
+            )
+            if not filtered_facts:
+                return f"I don't have any information about '{topic}' for that specific time."
+
+            # If we filtered down to specific facts, we might want to synthesize them directly
+            # or pass them to the synthesizer if they are simple enough.
+            # For now, let's just use the LLM synthesizer for these specific temporal answers
+            # as they might be nuanced.
+            return self.interpreter.synthesize(list(filtered_facts), topic)
+
+        if not facts_with_props:
+            return (
+                f"I know of '{topic}', but I don't have any specific details about it."
+            )
+
+        # --- Phase 9: Try Symbolic Synthesis FIRST ---
+        # Convert the complex tuple structure back to a list of (fact_str, edge) for the synthesizer
+        # _gather_facts_multihop returns: tuple[tuple[str, tuple[tuple[str, str], ...]], ...]
+        # We need to fetch the actual edge objects. This is a bit inefficient, we might want to refactor
+        # _gather_facts_multihop to return edges directly or IDs.
+        # For now, let's just re-fetch or pass the data the synthesizer needs.
+
+        # Actually, let's look at what _gather_facts_multihop returns.
+        # It returns a tuple of (fact_string, properties_tuple).
+        # The synthesizer needs RelationshipEdge objects to be fully effective (for types).
+        # But wait, the synthesizer I wrote takes `list[tuple[str, "RelationshipEdge"]]`.
+        # _gather_facts_multihop DOES NOT return edges. It returns strings and props.
+
+        # Let's use a simpler retrieval for the synthesizer for now, or update _gather_facts_multihop.
+        # Better yet, let's just get the direct edges for the synthesizer, as it's meant for simple facts.
+
+        direct_edges = self.graph.get_edges_from_node(node.id)
+        # Filter out low weight
+        valid_edges = [
+            e for e in direct_edges if e.weight >= 0.5 and e.type != "might_relate"
+        ]
+
+        # Prepare data for synthesizer: list of (fact_str, edge)
+        # We construct a dummy fact string or just pass the edge.
+        # The synthesizer uses the edge to get source/target/type.
+        # It uses the fact_str only for logging or if we passed it.
+
+        synthesizer_input = []
+        for edge in valid_edges:
+            synthesizer_input.append(("", edge))  # Empty string as placeholder
+
+        symbolic_response = self.synthesizer.synthesize(synthesizer_input, topic)
+
+        if symbolic_response:
+            logger.info(
+                f"   - ✅ Synthesized response via SymbolicSynthesizer: {symbolic_response}"
+            )
+            return symbolic_response
+
+        # Fallback to LLM Synthesis
+        # We need to convert facts_with_props to the list of strings expected by interpreter.synthesize
+        facts_list = [f[0] for f in facts_with_props]
+        return self.interpreter.synthesize(facts_list, topic)

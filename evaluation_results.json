@@ -1,25 +1,25 @@
 [
     {
         "question": "What is an apple?",
-        "answer": "An apple is a fruit that functions as food.",
+        "answer": "Apple is a food.",
         "score": null,
         "notes": ""
     },
     {
         "question": "What is a dog?",
-        "answer": "A dog is a domesticated mammal that is commonly referred to as a noun, and it has four legs.",
+        "answer": "Dog is a type of mammal.",
         "score": null,
         "notes": ""
     },
     {
         "question": "What is a chair?",
-        "answer": "A chair is a furniture item with a seat and back, used for sitting.",
+        "answer": "Chair is used for sitting.",
         "score": null,
         "notes": ""
     },
     {
         "question": "What color is a banana?",
-        "answer": "I'm not sure how to process that. Could you rephrase?",
+        "answer": "Banana falls under the category of food.",
         "score": null,
         "notes": ""
     },
@@ -37,13 +37,13 @@
     },
     {
         "question": "Is a chair a type of fruit?",
-        "answer": "A chair is a furniture item with a seat and back, it is not a type of fruit.",
+        "answer": "I'm not sure. I don't have any information about whether chair has a relationship with type.",
         "score": null,
         "notes": ""
     },
     {
         "question": "What is a house used for?",
-        "answer": "A house is used for living in.",
+        "answer": "A house was used for something the current user talked about.",
         "score": null,
         "notes": ""
     },

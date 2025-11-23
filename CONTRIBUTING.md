@@ -89,40 +89,35 @@ The primary way to develop and test Axiom is to run its autonomous training proc
 | Command | Description |
 |---|---|
 | **Core Workflow** | |
-| `axiom-train` | **(Primary Workflow)** Starts the agent's autonomous learning cycles. |
+| `axiom-studio` | **(Primary Workflow)** Launches the Integrated Development Environment. |
+| `axiom-train` | Starts the agent's autonomous learning cycles (CLI mode). |
 | `axiom-train --duration 1.5` | Runs the agent for a fixed duration (e.g., 1.5 hours), essential for benchmarking. |
-| `axiom-webui` | Launches an interactive web UI to chat with the agent. |
 | `axiom-teach` | (Continuous Narrative Training) Teach the agent facts directly via the terminal. |
 | **Analysis & Debugging** | |
 | `axiom-reset` | **(Soft Reset)** Wipes the agent's state and caches but **preserves its learned knowledge**. Use this to start a new curriculum. |
 | `axiom-factory-reset` | **(Hard Reset)** Wipes **everything**, including the agent's brain, returning it to its factory state. |
-| `axiom-trends` | Launches a live, auto-refreshing graph of the agent's high-priority tasks during training. |
-| `axiom-visualize` | Creates an interactive HTML visualization of the agent's knowledge graph. |
-| **Benchmarking** | |
 | `axiom-bench` | Runs an automated analysis on the agent's brain and logs after a training run to score its learning efficiency. |
 | `axiom-evaluate` | Runs a "golden question" set against the trained agent to score its reasoning ability. |
 
 A full list of commands can be found in [**pyproject.toml**](pyproject.toml).
 
-**Typical Debugging Session:**
+**Typical Development Session:**
 
 1.  **Start with a clean slate:**
     ```bash
     # This performs a HARD reset, wiping the brain, state, and logs.
     axiom-factory-reset
     ```
-2.  **Run the trainer and the trend graph in separate terminals:**
+2.  **Launch Axiom Studio:**
     ```bash
-    # Terminal 1
-    axiom-train
+    axiom-studio
     ```
-    ```bash
-    # Terminal 2
-    axiom-trends
-    ```
-3.  **Observe the logs and the graph** to understand the agent's behavior.
-4.  **Make your code changes.**
-5.  **Restart the process** with a `axiom-reset` (soft reset) or `axiom-factory-reset` (hard reset) depending on the nature of your changes.
+3.  **In Studio:**
+    *   Use the **Integrated Terminal** to run `axiom-train`.
+    *   Watch the **Live Graph** to observe learning progress.
+    *   Use the **AI Chat** to ask questions or debug code.
+4.  **Make your code changes** in the Studio editor or your preferred IDE.
+5.  **Restart the process** as needed.
 
 ---
 
