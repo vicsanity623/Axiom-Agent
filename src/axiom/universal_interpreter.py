@@ -49,7 +49,7 @@ RULES:
 JSON_STRUCTURE_PROMPT: Final[str] = """
 The JSON object must have the following fields:
 - 'intent': Classify the user's primary intent. Possible values are: 'greeting', 'farewell', 'question_about_entity', 'question_about_concept', 'statement_of_fact', 'statement_of_correction', 'gratitude', 'acknowledgment', 'positive_affirmation', 'command', 'unknown'.
-- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'properties'.
+- 'relation': If 'statement_of_fact' or 'statement_of_correction', extract the core relationship. This object has fields: 'subject', 'verb', 'object', and optional 'properties' (for dates, locations, etc.).
 - 'key_topics': A list of the main subjects or topics.
 - 'full_text_rephrased': A neutral, one-sentence rephrasing.
 """.strip()
@@ -182,8 +182,8 @@ class UniversalInterpreter:
             with open(os.devnull, "w") as f, redirect_stderr(f):
                 self.llm = Llama(
                     model_path=str(model_path),
-                    n_gpu_layers=0,
-                    n_ctx=16384,
+                    n_gpu_layers=0,  # CPU Only as requested
+                    n_ctx=8192,
                     n_threads=os.cpu_count(),
                     n_batch=1024,
                     verbose=False,
@@ -201,6 +201,38 @@ class UniversalInterpreter:
         self._load_cache()
 
         logger.info("[success]Universal Interpreter loaded successfully.[/success]")
+
+    def reload_model(self, model_path: str | Path) -> bool:
+        """
+        Unloads the current LLM and loads a new one from the specified path.
+        Returns True if successful, False otherwise.
+        """
+        logger.info(f"[Interpreter]: Reloading LLM from {model_path}...")
+
+        if not Path(model_path).exists():
+            logger.error(f"[Interpreter]: Model file not found: {model_path}")
+            return False
+
+        # Unload existing model if possible (Python GC should handle it if we drop the ref)
+        self.llm = None
+
+        try:
+            with open(os.devnull, "w") as f, redirect_stderr(f):
+                self.llm = Llama(
+                    model_path=str(model_path),
+                    n_gpu_layers=0,
+                    n_ctx=8192,
+                    n_threads=os.cpu_count(),
+                    n_batch=1024,
+                    verbose=False,
+                )
+            logger.info(
+                f"[Interpreter]: Successfully reloaded model: {Path(model_path).name}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"[Interpreter]: Failed to reload model: {e}")
+            return False
 
     def _is_pronoun_present(self, text: str) -> bool:
         """Check if any pronoun exists as a whole word in the text."""
@@ -262,7 +294,7 @@ class UniversalInterpreter:
             ]
             examples_prompt = "Here are some examples:\n" + "\n\n".join(examples_list)
             sanitized_input = json.dumps(kwargs.get("user_input", ""))
-            return f"[INST] {system_prompt}\n\n{JSON_STRUCTURE_PROMPT}\n\n{examples_prompt}\n\nNow, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
+            return f"<start_of_turn>user\n{system_prompt}\n\n{JSON_STRUCTURE_PROMPT}\n\n{examples_prompt}\n\nNow, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}<end_of_turn>\n<start_of_turn>model\n"
 
         if task_name == "decomposition":
             text = kwargs.get("text", "")
@@ -283,16 +315,14 @@ class UniversalInterpreter:
 
         if task_name == "synthesis_statement":
             facts_str = json.dumps(kwargs.get("facts_to_rephrase", []))
-            return (
-                f"[INST] {REPHRASING_PROMPT}\n\nFacts to rephrase: '{facts_str}'[/INST]"
-            )
+            return f"<start_of_turn>user\n{REPHRASING_PROMPT}\n\nFacts to rephrase: '{facts_str}'<end_of_turn>\n<start_of_turn>model\n"
 
         if task_name == "question_generation":
             topic = kwargs.get("topic", "")
             known_fact = kwargs.get("known_fact", "")
             system_prompt = "You are a creative, inquisitive assistant..."
             examples_prompt = "Here are some examples:\n..."
-            return f"[INST] {system_prompt}\n\n{examples_prompt}\n\nTopic: {topic}\nKnown Fact: {known_fact}\nOutput:[/INST]"
+            return f"<start_of_turn>user\n{system_prompt}\n\n{examples_prompt}\n\nTopic: {topic}\nKnown Fact: {known_fact}\nOutput:<end_of_turn>\n<start_of_turn>model\n"
 
         return ""
 
@@ -328,23 +358,31 @@ class UniversalInterpreter:
         return cleaned_str.replace("\n", "")
 
     def _run_llm_completion_with_retries(
-        self, prompt: str, max_tokens: int, temperature: float = 0.0
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float = 0.0,
+        stop: list[str] | None = None,
     ) -> str:
         """Runs the LLM completion with retry and backoff logic."""
         retries = 3
         backoff_factor = 2
+        stop_tokens = stop if stop is not None else ["</s>", "\n\n"]
 
         for attempt in range(retries):
             try:
                 if not self.llm:
                     raise ConnectionError("LLM is not loaded.")
 
+                # Debug: Log prompt length
+                logger.info(f"  [LLM Debug]: Prompt length: {len(prompt)} chars")
+
                 output = cast(
                     "dict[str, list[dict[str, str]]]",
                     self.llm(
                         prompt,
                         max_tokens=max_tokens,
-                        stop=["</s>", "\n\n"],
+                        stop=stop_tokens,
                         echo=False,
                         temperature=temperature,
                     ),
@@ -367,6 +405,54 @@ class UniversalInterpreter:
                     logger.error("  [LLM Error]: All retry attempts failed.")
                     return ""
         return ""
+
+    def _run_llm_completion_streaming(
+        self,
+        prompt: str,
+        max_tokens: int,
+        temperature: float = 0.0,
+        stop: list[str] | None = None,
+    ):
+        """Runs the LLM completion with streaming support for SSE."""
+        stop_tokens = stop if stop is not None else ["</s>", "\n\n"]
+
+        if not self.llm:
+            yield 'data: {"error": "LLM is not loaded"}\n\n'
+            return
+
+        try:
+            logger.info(
+                f"  [LLM Streaming]: Starting stream for prompt length: {len(prompt)} chars"
+            )
+
+            # Call llama-cpp with stream=True
+            stream = self.llm(
+                prompt,
+                max_tokens=max_tokens,
+                stop=stop_tokens,
+                echo=False,
+                temperature=temperature,
+                stream=True,  # Enable streaming
+            )
+
+            # Yield each token as it's generated
+            for chunk in stream:
+                chunk_dict = cast("dict[str, Any]", chunk)
+                if chunk_dict and "choices" in chunk_dict and chunk_dict["choices"]:
+                    token = chunk_dict["choices"][0].get("text", "")
+                    if token:
+                        # Send token in SSE format
+                        import json
+
+                        yield f"data: {json.dumps({'token': token})}\n\n"
+
+            # Send completion signal
+            yield 'data: {"done": true}\n\n'
+        except Exception as e:
+            logger.error(f"  [LLM Streaming Error]: {e}")
+            import json
+
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     def interpret(self, user_input: str) -> InterpretData:
         """Analyze user input with the LLM and return a structured interpretation."""
@@ -406,15 +492,15 @@ class UniversalInterpreter:
             'Input: \'show all facts\'\nOutput: {"intent": "command", "entities": [], "relation": null, "key_topics": ["show all facts"], "full_text_rephrased": "User has issued a command to show all facts."}',
             'Input: \'what is a human\'\nOutput: {"intent": "question_about_concept", "entities": [{"name": "human", "type": "CONCEPT"}], "relation": null, "key_topics": ["human"], "full_text_rephrased": "User is asking for information about a human."}',
             'Input: \'correction: the sky is blue\'\nOutput: {"intent": "statement_of_correction", "entities": [{"name": "sky", "type": "CONCEPT"}, {"name": "blue", "type": "COLOR"}], "relation": {"subject": "sky", "verb": "is", "object": "blue"}, "key_topics": ["sky", "blue"], "full_text_rephrased": "User is correcting the fact that the sky is blue."}',
-            'Input: \'In 2023, Tim Cook was the CEO of Apple.\'\nOutput: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "Apple", "type": "COMPANY"}], "relation": {"subject": "Tim Cook", "verb": "was CEO of", "object": "Apple"}, "key_topics": ["Tim Cook", "Apple"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple."}',
+            'Input: \'In 2023, Tim Cook was the CEO of Apple.\'\nOutput: {"intent": "statement_of_fact", "entities": [{"name": "Tim Cook", "type": "PERSON"}, {"name": "Apple", "type": "COMPANY"}], "relation": {"subject": "Tim Cook", "verb": "was CEO of", "object": "Apple", "properties": {"effective_date": "2023"}}, "key_topics": ["Tim Cook", "Apple"], "full_text_rephrased": "User is stating that Tim Cook was the CEO of Apple in 2023."}',
             'Input: \'who is Donald Trump?\'\nOutput: {"intent": "question_about_entity", "entities": [{"name": "Donald Trump", "type": "PERSON"}], "relation": null, "key_topics": ["Donald Trump"], "full_text_rephrased": "User is asking for information about Donald Trump."}',
         ]
         examples_prompt = "Here are some examples:\n" + "\n\n".join(examples_list)
 
         sanitized_input = json.dumps(user_input)
         full_prompt = (
-            f"[INST] {system_prompt}\n\n{json_structure_prompt}\n\n{examples_prompt}\n\n"
-            f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}[/INST]"
+            f"<start_of_turn>user\n{system_prompt}\n\n{json_structure_prompt}\n\n{examples_prompt}\n\n"
+            f"Now, analyze the following user input and provide ONLY the JSON output:\n{sanitized_input}<end_of_turn>\n<start_of_turn>model\n"
         )
         try:
             response_text = self._run_llm_completion_with_retries(
@@ -520,9 +606,9 @@ class UniversalInterpreter:
             "New Input: what is the largest planet?\nOutput: what is the largest planet?"
         )
         full_prompt = (
-            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"<start_of_turn>user\n{system_prompt}\n\n{examples_prompt}\n\n"
             f"Conversation History:\n{formatted_history}\n"
-            f"New Input: {new_input}\nOutput:[/INST]"
+            f"New Input: {new_input}\nOutput:<end_of_turn>\n<start_of_turn>model\n"
         )
         try:
             rephrased_input = self._run_llm_completion_with_retries(
@@ -557,6 +643,60 @@ class UniversalInterpreter:
             contextual_input = self.resolve_context(history, user_input)
 
         return self.interpret(contextual_input)
+
+    def disambiguate_word(self, word: str, context_sentence: str) -> str | None:
+        """
+        Uses the LLM to determine the specific meaning (sense) of a word in a given context.
+        Returns a short, descriptive phrase for the sense (e.g., "financial institution").
+        """
+        if self.llm is None:
+            logger.warning("[Interpreter]: LLM is disabled. Cannot disambiguate.")
+            return None
+
+        logger.info(
+            f"[Interpreter]: Disambiguating '{word}' in context: '{context_sentence}'"
+        )
+
+        prompt = f"""
+        **ROLE:** You are a precise semantic analyzer.
+        **TASK:** Identify the specific meaning (sense) of the word "{word}" as it is used in the "CONTEXT SENTENCE".
+        **OUTPUT:** Return ONLY a short, descriptive phrase (2-4 words) that clarifies the meaning. Do not use the word "{word}" in your output.
+
+        **EXAMPLE 1:**
+        Word: bank
+        Context Sentence: "I deposited my paycheck at the bank."
+        Output: financial institution
+
+        **EXAMPLE 2:**
+        Word: bank
+        Context Sentence: "We sat on the bank and watched the river flow."
+        Output: river edge
+
+        **EXAMPLE 3:**
+        Word: crane
+        Context Sentence: "The crane lifted the heavy steel beam."
+        Output: construction machine
+
+        **TARGET:**
+        Word: {word}
+        Context Sentence: "{context_sentence}"
+        Output:
+        """
+
+        try:
+            response = self._run_llm_completion_with_retries(
+                f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n",
+                max_tokens=32,
+                temperature=0.0,
+            )
+            sense = response.strip().lower()
+            # Basic cleanup to remove punctuation
+            sense = re.sub(r"[^\w\s]", "", sense)
+            logger.info(f"[Interpreter]: Disambiguated sense: '{sense}'")
+            return sense
+        except Exception as e:
+            logger.error(f"[Interpreter Error]: Disambiguation failed: {e}")
+            return None
 
     def _flatten_structured_object(self, obj: Any) -> str:
         """
@@ -638,7 +778,9 @@ class UniversalInterpreter:
         """
         try:
             response_text = self._run_llm_completion_with_retries(
-                f"[INST]{prompt}[/INST]", max_tokens=1024, temperature=0.1
+                f"<start_of_turn>user\n{prompt}<end_of_turn>\n<start_of_turn>model\n",
+                max_tokens=1024,
+                temperature=0.1,
             )
             if not response_text:
                 logger.warning(
@@ -755,9 +897,9 @@ class UniversalInterpreter:
             "- SymbolicParser is rule-based."
         )
         full_prompt = (
-            f"[INST] {system_prompt}\n\n{examples_prompt}\n\n"
+            f"<start_of_turn>user\n{system_prompt}\n\n{examples_prompt}\n\n"
             f"Subject: {subject.capitalize()}\nDefinition: {chunky_definition}\n"
-            f"Output:[/INST]"
+            f"Output:<end_of_turn>\n<start_of_turn>model\n"
         )
         try:
             response_text = self._run_llm_completion_with_retries(
@@ -951,7 +1093,7 @@ class UniversalInterpreter:
             else:
                 task_prompt = f"Facts to rephrase: '{facts_str}'"
 
-        full_prompt = f"[INST] {system_prompt}\n\n{task_prompt}[/INST]"
+        full_prompt = f"<start_of_turn>user\n{system_prompt}\n\n{task_prompt}<end_of_turn>\n<start_of_turn>model\n"
         try:
             temperature = (
                 0.7 if mode in ("clarification_question", "creative_writing") else 0.1
@@ -1032,6 +1174,10 @@ class UniversalInterpreter:
         try:
             response_text = self._run_llm_completion_with_retries(
                 full_prompt, max_tokens=4096, temperature=0.5
+            )
+            # Clean LLM artifacts from the response
+            response_text = (
+                response_text.replace("[/INST]", "").replace("[INST]", "").strip()
             )
             topics = [
                 topic.strip() for topic in response_text.split(",") if topic.strip()

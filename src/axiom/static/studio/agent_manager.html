@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0f0f11] text-gray-100">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #6366f1;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+
+        input[type="range"]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            background: #27272a;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+
+<body class="h-full flex flex-col p-6 select-none">
+
+    <div class="flex items-center gap-3 mb-8">
+        <div class="w-10 h-10 rounded-lg bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20">
+            <i class="fas fa-robot text-indigo-400"></i>
+        </div>
+        <div>
+            <h1 class="text-xl font-bold text-white">Agent Manager</h1>
+            <p class="text-xs text-gray-500">Configure Gemma 3 Model Parameters</p>
+        </div>
+    </div>
+
+    <form id="settings-form" class="space-y-6 max-w-lg">
+
+        <!-- Temperature -->
+        <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+                <label class="text-gray-300 font-medium">Temperature</label>
+                <span id="temp-val" class="text-indigo-400 font-mono">0.7</span>
+            </div>
+            <input type="range" id="temperature" name="temperature" min="0" max="1" step="0.1" value="0.7"
+                class="w-full" oninput="document.getElementById('temp-val').textContent = this.value">
+            <p class="text-[10px] text-gray-500">Controls randomness. Higher values make output more creative, lower
+                values more deterministic.</p>
+        </div>
+
+        <!-- Top P -->
+        <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+                <label class="text-gray-300 font-medium">Top P</label>
+                <span id="topp-val" class="text-indigo-400 font-mono">0.9</span>
+            </div>
+            <input type="range" id="top_p" name="top_p" min="0" max="1" step="0.05" value="0.9" class="w-full"
+                oninput="document.getElementById('topp-val').textContent = this.value">
+            <p class="text-[10px] text-gray-500">Nucleus sampling. Limits the cumulative probability of token selection.
+            </p>
+        </div>
+
+        <!-- Max Tokens -->
+        <div class="space-y-2">
+            <label class="text-sm text-gray-300 font-medium">Max Tokens</label>
+            <input type="number" id="max_tokens" name="max_tokens" value="2048"
+                class="w-full bg-[#18181b] border border-[#27272a] rounded p-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+        </div>
+
+        <!-- System Prompt -->
+        <div class="space-y-2">
+            <label class="text-sm text-gray-300 font-medium">System Prompt Override</label>
+            <textarea id="system_prompt" name="system_prompt" rows="4"
+                class="w-full bg-[#18181b] border border-[#27272a] rounded p-2 text-sm text-white focus:border-indigo-500 focus:outline-none placeholder-gray-600"
+                placeholder="Leave empty to use default agent persona..."></textarea>
+        </div>
+
+        <div class="pt-4 flex gap-3">
+            <button type="submit"
+                class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-2 rounded-lg text-sm font-medium transition-colors">
+                Save Settings
+            </button>
+            <button type="button" onclick="window.close()"
+                class="px-4 bg-[#27272a] hover:bg-[#3f3f46] text-gray-300 py-2 rounded-lg text-sm font-medium transition-colors">
+                Close
+            </button>
+        </div>
+
+    </form>
+
+    <div id="toast"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-green-500/10 border border-green-500/20 text-green-400 px-4 py-2 rounded-full text-xs font-medium opacity-0 transition-opacity pointer-events-none">
+        Settings Saved Successfully
+    </div>
+
+    <script>
+        // Load settings
+        fetch('/api/agent_settings')
+            .then(res => res.json())
+            .then(data => {
+                if (data.temperature) {
+                    document.getElementById('temperature').value = data.temperature;
+                    document.getElementById('temp-val').textContent = data.temperature;
+                }
+                if (data.top_p) {
+                    document.getElementById('top_p').value = data.top_p;
+                    document.getElementById('topp-val').textContent = data.top_p;
+                }
+                if (data.max_tokens) document.getElementById('max_tokens').value = data.max_tokens;
+                if (data.system_prompt) document.getElementById('system_prompt').value = data.system_prompt;
+            });
+
+        document.getElementById('settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+
+            try {
+                await fetch('/api/agent_settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const toast = document.getElementById('toast');
+                toast.classList.remove('opacity-0');
+                setTimeout(() => toast.classList.add('opacity-0'), 2000);
+            } catch (err) {
+                alert('Failed to save settings');
+            }
+        });
+    </script>
+
+</body>
+
+</html>

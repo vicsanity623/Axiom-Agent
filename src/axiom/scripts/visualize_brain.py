@@ -15,7 +15,7 @@ def visualize_brain():
     Loads the agent's brain and generates a high-performance, interactive
     HTML visualization of its core concepts.
     """
-    core_node_threshold = 750
+    core_node_threshold = 2750
     brain_file_path = DEFAULT_BRAIN_FILE
 
     print(f"🔍 Searching for brain file at:\n   {brain_file_path}")

@@ -80,15 +80,22 @@ class MockResponse:
 
 
 def test_download_model_script(monkeypatch, tmp_path: Path):
+    """Verifies that the downloader script saves the correct file."""
     monkeypatch.chdir(tmp_path)
+
+    # Mock the HTTP response so we don't actually download 8GB
     mock_content = b"This is a fake GGUF model file."
     mock_response = MockResponse(content=mock_content)
     monkeypatch.setattr(requests, "get", lambda *args, **kwargs: mock_response)
+
+    # Run the main function
     download_main()
-    model_file = tmp_path / "models" / "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+
+    # --- FIX: Update the expected filename to match Gemma 3 ---
+    model_file = tmp_path / "models" / "gemma-3-12b-it-Q4_K_M.gguf"
+
     assert model_file.exists()
     assert model_file.read_bytes() == mock_content
-    print("✅ download_model.py script test passed.")
 
 
 def test_chat_script_loop(monkeypatch):

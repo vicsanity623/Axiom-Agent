@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 
 from ..logging_config import setup_logging
-from ..metacognitive_engine import PerformanceMonitor
+from ..metacognitive_engine import CodeIntrospector, PerformanceMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,10 @@ def main():
 
     logger.info("--- [Log Analyzer]: Starting analysis of '%s'... ---", args.log)
     monitor = PerformanceMonitor()
-    result = monitor.find_optimization_target(args.log)
+    introspector = CodeIntrospector()  # <--- 1. CREATE AN INSTANCE
+    result = monitor.find_optimization_target(
+        args.log, introspector
+    )  # <--- 2. PASS IT HERE
 
     if result:
         logger.info("\n[bold green]=== Optimization Target Identified ===[/bold green]")

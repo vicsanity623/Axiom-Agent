@@ -4,11 +4,11 @@ import json
 import logging
 import os
 import time
+import typing
 import uuid
-from collections import defaultdict
 from typing import TYPE_CHECKING, Any, TypedDict
 
-import networkx as nx
+from neo4j import GraphDatabase
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,6 +26,7 @@ class ConceptNodeData(TypedDict):
     properties: PropertyData | None
     value: float
     activation: float
+    embedding: list[float] | None
 
 
 class ConceptNode:
@@ -39,6 +40,7 @@ class ConceptNode:
         value: float = 0.5,
         activation: float = 0.0,
         id_: str | None = None,
+        embedding: list[float] | None = None,
     ) -> None:
         self.id = id_ or str(uuid.uuid4())
         self.name = name.lower()
@@ -46,6 +48,7 @@ class ConceptNode:
         self.value = value
         self.activation = activation
         self.properties: PropertyData = properties or {}
+        self.embedding = embedding
 
     def to_dict(self) -> ConceptNodeData:
         """Serialize the ConceptNode instance to a dictionary."""
@@ -56,6 +59,7 @@ class ConceptNode:
             "properties": self.properties,
             "value": self.value,
             "activation": self.activation,
+            "embedding": self.embedding,
         }
 
     @classmethod
@@ -68,6 +72,7 @@ class ConceptNode:
             properties=data.get("properties"),
             value=data.get("value", 0.5),
             activation=data.get("activation", 0.0),
+            embedding=data.get("embedding"),
         )
 
 
@@ -141,88 +146,268 @@ class RelationshipEdge:
 class ConceptGraph:
     """A manager for the agent's knowledge graph, built on NetworkX."""
 
-    __slots__ = ("graph", "name_to_id", "_type_index")
+    __slots__ = ("driver",)
 
     def __init__(self) -> None:
-        """Initialize an empty ConceptGraph."""
-        self.graph = nx.MultiDiGraph()
-        self.name_to_id: dict[str, str] = {}
-        self._type_index: dict[str, set[str]] = defaultdict(set)
+        """Initialize the ConceptGraph with Neo4j connection."""
+        self._load_env()
+        uri = os.environ.get("NEO4J_URI")
+        user = os.environ.get("NEO4J_USERNAME")
+        password = os.environ.get("NEO4J_PASSWORD")
+
+        if not all([uri, user, password]):
+            logger.warning(
+                "Neo4j credentials not found in environment. Graph will be disabled."
+            )
+            self.driver = None
+        else:
+            try:
+                # MyPy doesn't know these are not None here
+                self.driver = GraphDatabase.driver(uri, auth=(user, password))  # type: ignore
+                self.driver.verify_connectivity()
+                logger.info("Connected to Neo4j database.")
+            except Exception as e:
+                logger.error(f"Failed to connect to Neo4j: {e}")
+                self.driver = None
+
+    def _load_env(self) -> None:
+        """Load environment variables from .env file."""
+        if os.path.exists(".env"):
+            with open(".env") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if "=" in line:
+                        k, v = line.split("=", 1)
+                        os.environ[k] = v
+
+    def close(self) -> None:
+        """Close the Neo4j driver connection."""
+        if self.driver:
+            self.driver.close()
 
     def rename_node_by_id(self, node_id: str, new_name: str) -> None:
         """Renames a node and updates the name-to-ID mapping."""
-        if node_id in self.graph:
-            old_name = self.graph.nodes[node_id].get("name")
-            if old_name and old_name in self.name_to_id:
-                del self.name_to_id[old_name]
+        if not self.driver:
+            return
 
-            self.graph.nodes[node_id]["name"] = new_name
-            self.name_to_id[new_name] = node_id
-            logger.info(
-                f"   - Renamed node {node_id} from '{old_name}' to '{new_name}'."
-            )
+        query = "MATCH (n:Concept {id: $id}) SET n.name = $name"
+        with self.driver.session() as session:
+            session.run(query, id=node_id, name=new_name)
+            logger.info(f"   - Renamed node {node_id} to '{new_name}'.")
 
     def get_edges_by_type(self, node_id: str, edge_type: str) -> list[RelationshipEdge]:
         """Gets all outgoing edges of a specific type from a node."""
-        if node_id not in self.graph:
+        if not self.driver:
             return []
-        return [
-            edge for edge in self.get_edges_from_node(node_id) if edge.type == edge_type
-        ]
+
+        safe_type = edge_type.replace(" ", "_").upper()
+        query = f"MATCH (a:Concept {{id: $id}})-[r:`{safe_type}`]->(b:Concept) RETURN a.id, b.id, r"
+
+        edges = []
+        with self.driver.session() as session:
+            result = session.run(query, id=node_id)
+            for record in result:
+                r = record["r"]
+                r_props = {}
+                if "properties" in r and isinstance(r["properties"], str):
+                    try:
+                        r_props = json.loads(r["properties"])
+                    except Exception:
+                        pass
+                edges.append(
+                    RelationshipEdge(
+                        source=record["a.id"],
+                        target=record["b.id"],
+                        type=r.get("type", edge_type),
+                        weight=r.get("weight", 0.5),
+                        id=r.get("id"),
+                        properties=typing.cast("PropertyData | None", r_props),
+                    )
+                )
+        return edges
 
     def has_relationship(
         self, source_node: ConceptNode, relation_type: str, object_name: str
     ) -> bool:
         """Checks if a specific relationship exists from a source node."""
-        for edge in self.get_edges_from_node(source_node.id):
-            if edge.type == relation_type:
-                target_node = self.get_node_by_id(edge.target)
-                if target_node and target_node.name == object_name:
-                    return True
-        return False
+        if not self.driver:
+            return False
+
+        safe_type = relation_type.replace(" ", "_").upper()
+        query = (
+            f"MATCH (a:Concept {{id: $id}})-[r:`{safe_type}`]->(b:Concept) "
+            "WHERE toLower(b.name) = toLower($obj_name) "
+            "RETURN count(r) > 0 as exists"
+        )
+        with self.driver.session() as session:
+            result = session.run(query, id=source_node.id, obj_name=object_name)
+            record = result.single()
+            return record["exists"] if record else False
 
     def add_node(self, node: ConceptNode) -> ConceptNode:
         """Add or update a concept node in the graph."""
-        if existing_id := self.name_to_id.get(node.name):
-            self.graph.nodes[existing_id].update(node.to_dict())
-            return self.get_node_by_id(existing_id) or node
+        if not self.driver:
+            return node
 
-        self.graph.add_node(node.id, **node.to_dict())
-        self.name_to_id[node.name] = node.id
-        self._type_index[node.type].add(node.id)
+        # Check for existing node by name to ensure idempotency
+        existing_node = self.get_node_by_name(node.name)
+        if existing_node:
+            node.id = existing_node.id
+            # Merge properties
+            if existing_node.properties and node.properties:
+                existing_node.properties.update(node.properties)
+                node.properties = existing_node.properties
+            elif existing_node.properties:
+                node.properties = existing_node.properties
+
+        props_json = json.dumps(node.properties) if node.properties else "{}"
+
+        query = (
+            "MERGE (n:Concept {id: $id}) "
+            "ON CREATE SET n.name = $name, n.type = $type, n.value = $value, "
+            "n.activation = $activation, n.properties = $properties, n.embedding = $embedding "
+            "ON MATCH SET n.name = $name, n.type = $type, n.value = $value, "
+            "n.activation = $activation, n.properties = $properties, n.embedding = $embedding "
+            "RETURN n"
+        )
+        with self.driver.session() as session:
+            session.run(
+                query,
+                id=node.id,
+                name=node.name,
+                type=node.type,
+                value=node.value,
+                activation=node.activation,
+                properties=props_json,
+                embedding=node.embedding,
+            )
         return node
 
     def get_node_by_name(self, name: str) -> ConceptNode | None:
         """Find and retrieve a concept node from the graph by its name."""
-        node_id = self.name_to_id.get(name.lower())
-        if node_id:
-            return self.get_node_by_id(node_id)
+        if not self.driver:
+            return None
+
+        query = "MATCH (n:Concept) WHERE toLower(n.name) = toLower($name) RETURN n"
+        with self.driver.session() as session:
+            result = session.run(query, name=name)
+            record = result.single()
+            if record:
+                node_data = dict(record["n"])
+                if "properties" in node_data and isinstance(
+                    node_data["properties"], str
+                ):
+                    try:
+                        node_data["properties"] = json.loads(node_data["properties"])
+                    except Exception:
+                        node_data["properties"] = {}
+                return ConceptNode.from_dict(typing.cast("ConceptNodeData", node_data))
         return None
+
+    def get_nearest_nodes(
+        self, query_embedding: list[float], top_k: int = 5, threshold: float = 0.0
+    ) -> list[tuple[ConceptNode, float]]:
+        """
+        Finds the nodes with embeddings most similar to the query embedding.
+        Uses a linear scan, which is sufficient for graph sizes < 100k nodes.
+        """
+        from axiom.vector_store import VectorStore
+
+        store = VectorStore()
+        candidates = []
+
+        # Fetch all nodes with embeddings from Neo4j
+        # Optimization: We could store embeddings in a vector index in Neo4j
+        # but for now we stick to the existing logic of fetching and comparing.
+        all_nodes = self.get_all_nodes()
+
+        for node in all_nodes:
+            if node.embedding:
+                score = store.cosine_similarity(query_embedding, node.embedding)
+                if score >= threshold:
+                    candidates.append((node, score))
+
+        # Sort by score descending
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return candidates[:top_k]
 
     def get_node_by_id(self, node_id: str) -> ConceptNode | None:
         """Retrieve a single ConceptNode object from the graph by its ID."""
-        if self.graph.has_node(node_id):
-            node_data = self.graph.nodes[node_id].copy()
-            node_data["id"] = node_id
-            return ConceptNode.from_dict(node_data)
+        if not self.driver:
+            return None
+
+        query = "MATCH (n:Concept {id: $id}) RETURN n"
+        with self.driver.session() as session:
+            result = session.run(query, id=node_id)
+            record = result.single()
+            if record:
+                node_data = dict(record["n"])
+                if "properties" in node_data and isinstance(
+                    node_data["properties"], str
+                ):
+                    try:
+                        node_data["properties"] = json.loads(node_data["properties"])
+                    except Exception:
+                        node_data["properties"] = {}
+                return ConceptNode.from_dict(typing.cast("ConceptNodeData", node_data))
         return None
 
     def get_nodes_by_type(self, node_type: str) -> list[ConceptNode]:
-        """Efficiently retrieves all nodes of a specific type using the index."""
-        node_ids = self._type_index.get(node_type, set())
-        return [node for node_id in node_ids if (node := self.get_node_by_id(node_id))]
+        """Efficiently retrieves all nodes of a specific type."""
+        if not self.driver:
+            return []
+
+        query = "MATCH (n:Concept {type: $type}) RETURN n"
+        nodes = []
+        with self.driver.session() as session:
+            result = session.run(query, type=node_type)
+            for record in result:
+                node_data = dict(record["n"])
+                if "properties" in node_data and isinstance(
+                    node_data["properties"], str
+                ):
+                    try:
+                        node_data["properties"] = json.loads(node_data["properties"])
+                    except Exception:
+                        node_data["properties"] = {}
+                nodes.append(
+                    ConceptNode.from_dict(typing.cast("ConceptNodeData", node_data))
+                )
+        return nodes
 
     def get_all_nodes(self) -> list[ConceptNode]:
         """Retrieve all nodes in the graph as ConceptNode objects."""
-        return [
-            node
-            for node_id in self.graph.nodes
-            if (node := self.get_node_by_id(node_id))
-        ]
+        if not self.driver:
+            return []
+
+        query = "MATCH (n:Concept) RETURN n"
+        nodes = []
+        with self.driver.session() as session:
+            result = session.run(query)
+            for record in result:
+                node_data = dict(record["n"])
+                if "properties" in node_data and isinstance(
+                    node_data["properties"], str
+                ):
+                    try:
+                        node_data["properties"] = json.loads(node_data["properties"])
+                    except Exception:
+                        node_data["properties"] = {}
+                nodes.append(
+                    ConceptNode.from_dict(typing.cast("ConceptNodeData", node_data))
+                )
+        return nodes
 
     def get_all_node_names(self) -> list[str]:
         """Retrieve a list of all concept names in the graph."""
-        return list(self.name_to_id.keys())
+        if not self.driver:
+            return []
+        query = "MATCH (n:Concept) RETURN n.name"
+        with self.driver.session() as session:
+            result = session.run(query)
+            return [record["n.name"] for record in result if record["n.name"]]
 
     def add_edge(
         self,
@@ -233,140 +418,233 @@ class ConceptGraph:
         properties: PropertyData | None = None,
     ) -> RelationshipEdge | None:
         """
-        Add a directed edge (relationship) between two nodes, correctly handling
-        duplicates in a MultiDiGraph.
+        Add a directed edge (relationship) between two nodes.
         """
+        if not self.driver:
+            return None
+
         if not all([source_node, target_node]):
             raise ValueError("Source or target node missing")
 
         self.add_node(source_node)
         self.add_node(target_node)
 
-        # We must check all outgoing edges from the source to find a true duplicate.
-        for edge in self.get_edges_from_node(source_node.id):
-            if edge.type == relation_type:
-                # Check if this edge points to the same target node.
-                if edge.target == target_node.id:
-                    # A true duplicate was found. Update its properties and return.
-                    edge_data = self.graph.edges[edge.source, edge.target, edge.id]
-                    edge_data["weight"] = max(edge_data["weight"], weight)
-                    if properties:
-                        edge_data.setdefault("properties", {}).update(properties)
-
-                    # Return the updated edge object
-                    full_edge_data = edge_data.copy()
-                    return RelationshipEdge.from_dict(full_edge_data)
-
-        # If the loop completes, no exact duplicate was found. Create a new edge.
-        new_edge = RelationshipEdge(
-            source_node.id,
-            target_node.id,
-            relation_type,
-            weight,
-            properties=properties,
+        # Check for existing edge to merge properties
+        # This is expensive but necessary for full compatibility with NetworkX behavior
+        existing_edges = self.get_edges_from_node(source_node.id)
+        existing_edge = next(
+            (
+                e
+                for e in existing_edges
+                if e.target == target_node.id and e.type == relation_type
+            ),
+            None,
         )
-        self.graph.add_edge(
-            new_edge.source,
-            new_edge.target,
-            key=new_edge.id,
-            **new_edge.to_dict(),
+
+        props = properties or {}
+        if existing_edge and existing_edge.properties:
+            if props:
+                existing_edge.properties.update(props)
+                props = existing_edge.properties
+            else:
+                props = existing_edge.properties
+
+        props_json = json.dumps(props) if props else "{}"
+        safe_type = relation_type.replace(" ", "_").upper()
+        new_id = str(uuid.uuid4())
+
+        query = (
+            f"MATCH (a:Concept {{id: $source}}), (b:Concept {{id: $target}}) "
+            f"MERGE (a)-[r:`{safe_type}`]->(b) "
+            "ON CREATE SET r.id = $new_id, r.weight = $weight, r.properties = $properties, r.type = $type "
+            "ON MATCH SET r.weight = CASE WHEN $weight > r.weight THEN $weight ELSE r.weight END, r.properties = $properties "
+            "RETURN r"
         )
-        return new_edge
+
+        with self.driver.session() as session:
+            result = session.run(
+                query,
+                source=source_node.id,
+                target=target_node.id,
+                weight=weight,
+                properties=props_json,
+                new_id=new_id,
+                type=relation_type,
+            )
+            record = result.single()
+            if record:
+                r = record["r"]
+                r_props = {}
+                if "properties" in r and isinstance(r["properties"], str):
+                    try:
+                        r_props = json.loads(r["properties"])
+                    except Exception:
+                        pass
+                # Merge new properties if it was a match?
+                # The query didn't update properties on match to avoid overwriting with empty.
+                # If we want to merge, we should do it here or in query.
+                # For now, let's assume the returned edge is the source of truth.
+                return RelationshipEdge(
+                    source=source_node.id,
+                    target=target_node.id,
+                    type=relation_type,
+                    weight=r.get("weight", weight),
+                    id=r.get("id"),
+                    properties=typing.cast("PropertyData | None", r_props),
+                )
+        return None
 
     def get_edges_from_node(self, node_id: str) -> list[RelationshipEdge]:
         """Retrieve all outgoing edges (relationships) from a specific node."""
-        if not self.graph.has_node(node_id):
+        if not self.driver:
             return []
+
+        query = "MATCH (a:Concept {id: $id})-[r]->(b:Concept) RETURN a.id, b.id, r"
         edges = []
-        for u, v, data in self.graph.out_edges(node_id, data=True):
-            full_data = data.copy()
-            edges.append(RelationshipEdge.from_dict(full_data))
+        with self.driver.session() as session:
+            result = session.run(query, id=node_id)
+            for record in result:
+                r = record["r"]
+                r_props = {}
+                if "properties" in r and isinstance(r["properties"], str):
+                    try:
+                        r_props = json.loads(r["properties"])
+                    except Exception:
+                        pass
+                edges.append(
+                    RelationshipEdge(
+                        source=record["a.id"],
+                        target=record["b.id"],
+                        type=r.get("type", r.type),  # Use stored type or rel type
+                        weight=r.get("weight", 0.5),
+                        id=r.get("id"),
+                        properties=typing.cast("PropertyData | None", r_props),
+                    )
+                )
         return edges
 
     def get_edges_to_node(self, node_id: str) -> list[RelationshipEdge]:
         """Retrieve all incoming edges (relationships) to a specific node."""
-        if not self.graph.has_node(node_id):
+        if not self.driver:
             return []
+
+        query = "MATCH (a:Concept)-[r]->(b:Concept {id: $id}) RETURN a.id, b.id, r"
         edges = []
-        for u, v, data in self.graph.in_edges(node_id, data=True):
-            full_data = data.copy()
-            edges.append(RelationshipEdge.from_dict(full_data))
+        with self.driver.session() as session:
+            result = session.run(query, id=node_id)
+            for record in result:
+                r = record["r"]
+                r_props = {}
+                if "properties" in r and isinstance(r["properties"], str):
+                    try:
+                        r_props = json.loads(r["properties"])
+                    except Exception:
+                        pass
+                edges.append(
+                    RelationshipEdge(
+                        source=record["a.id"],
+                        target=record["b.id"],
+                        type=r.get("type", r.type),
+                        weight=r.get("weight", 0.5),
+                        id=r.get("id"),
+                        properties=typing.cast("PropertyData | None", r_props),
+                    )
+                )
         return edges
 
     def get_all_edges(self) -> list[RelationshipEdge]:
         """Retrieve all edges in the graph as RelationshipEdge objects."""
-        return [
-            RelationshipEdge.from_dict(data)
-            for _, _, data in self.graph.edges(data=True)
-        ]
+        if not self.driver:
+            return []
+
+        query = "MATCH (a:Concept)-[r]->(b:Concept) RETURN a.id, b.id, r"
+        edges = []
+        with self.driver.session() as session:
+            result = session.run(query)
+            for record in result:
+                r = record["r"]
+                r_props = {}
+                if "properties" in r and isinstance(r["properties"], str):
+                    try:
+                        r_props = json.loads(r["properties"])
+                    except Exception:
+                        pass
+                edges.append(
+                    RelationshipEdge(
+                        source=record["a.id"],
+                        target=record["b.id"],
+                        type=r.get("type", r.type),
+                        weight=r.get("weight", 0.5),
+                        id=r.get("id"),
+                        properties=typing.cast("PropertyData | None", r_props),
+                    )
+                )
+        return edges
 
     def decay_activations(self, decay_rate: float = 0.1) -> None:
         """Apply a decay function to the activation level of all nodes."""
-        for node_id in self.graph.nodes:
-            current_activation = self.graph.nodes[node_id].get("activation", 0.0)
-            self.graph.nodes[node_id]["activation"] = max(
-                0.0, current_activation - decay_rate
-            )
+        if not self.driver:
+            return
+
+        query = (
+            "MATCH (n:Concept) "
+            "SET n.activation = CASE "
+            "WHEN n.activation - $decay < 0.0 THEN 0.0 "
+            "ELSE n.activation - $decay END"
+        )
+        with self.driver.session() as session:
+            session.run(query, decay=decay_rate)
 
     def save_to_file(self, filename: Path | str) -> None:
         """Serialize the entire knowledge graph to a JSON file."""
-        graph_data = {
-            "nodes": [data for _, data in self.graph.nodes(data=True)],
-            "links": [data for _, _, data in self.graph.edges(data=True)],
-        }
-        with open(filename, "w", encoding="utf-8") as f:
-            json.dump(graph_data, f, indent=4)
+        logger.info("ConceptGraph is now backed by Neo4j. save_to_file is a no-op.")
 
     @classmethod
     def load_from_dict(cls, data: dict[str, Any]) -> Self:
         """Create a new ConceptGraph instance from a dictionary."""
-        instance = cls()
-        nodes = data.get("nodes", [])
-        links = data.get("links", [])
-
-        for node_data in nodes:
-            node_id = node_data.get("id")
-            if not node_id:
-                continue
-            instance.graph.add_node(node_id, **node_data)
-            if "name" in node_data:
-                instance.name_to_id[node_data["name"].lower()] = node_id
-            if "type" in node_data:
-                instance._type_index[node_data["type"]].add(node_id)
-
-        for link_data in links:
-            source = link_data.get("source")
-            target = link_data.get("target")
-            key = link_data.get("id")
-            if not all([source, target, key]):
-                continue
-            instance.graph.add_edge(source, target, key=key, **link_data)
-
         logger.info(
-            "[green]   - Brain loaded from dictionary. Nodes: %d, Edges: %d[/green]",
-            len(instance.graph.nodes),
-            len(instance.graph.edges),
+            "ConceptGraph is backed by Neo4j. load_from_dict creates a new instance connected to DB."
         )
-        return instance
+        return cls()
 
     @classmethod
     def load_from_file(cls, filename: Path | str) -> Self:
         """Create a new ConceptGraph instance from a JSON file."""
-        if os.path.exists(filename):
-            try:
-                with open(filename, encoding="utf-8") as f:
-                    graph_data = json.load(f)
-                return cls.load_from_dict(graph_data)
-            except Exception as e:
-                logger.error(
-                    "Error loading brain from %s: %s. Creating a fresh brain.",
-                    filename,
-                    e,
-                )
-                return cls()
-        else:
-            logger.info("No saved brain found at %s. Creating a fresh brain.", filename)
-            return cls()
+        logger.info(
+            "ConceptGraph is backed by Neo4j. load_from_file creates a new instance connected to DB."
+        )
+        return cls()
+
+    def remove_node(self, node_id: str) -> None:
+        """Remove a node and its relationships from the graph."""
+        if not self.driver:
+            return
+
+        query = "MATCH (n:Concept {id: $id}) DETACH DELETE n"
+        with self.driver.session() as session:
+            session.run(query, id=node_id)
+
+    def get_node_count(self) -> int:
+        """Return the total number of nodes in the graph."""
+        if not self.driver:
+            return 0
+
+        query = "MATCH (n:Concept) RETURN count(n) as count"
+        with self.driver.session() as session:
+            result = session.run(query)
+            record = result.single()
+            return record["count"] if record else 0
+
+    def get_edge_count(self) -> int:
+        """Return the total number of edges in the graph."""
+        if not self.driver:
+            return 0
+
+        query = "MATCH ()-[r]->() RETURN count(r) as count"
+        with self.driver.session() as session:
+            result = session.run(query)
+            record = result.single()
+            return record["count"] if record else 0
 
     def get_conflicting_facts(self, relation: RelationData) -> list[ConceptNode]:
         """
@@ -388,13 +666,9 @@ class ConceptGraph:
             return []
 
         conflicts: list[ConceptNode] = []
-        for _, v, key, data in self.graph.out_edges(
-            subject_node.id,
-            keys=True,
-            data=True,
-        ):
-            if data.get("type") == relation_type:
-                if target_node := self.get_node_by_id(v):
+        for edge in self.get_edges_from_node(subject_node.id):
+            if edge.type == relation_type:
+                if target_node := self.get_node_by_id(edge.target):
                     conflicts.append(target_node)
         return conflicts
 
@@ -404,29 +678,54 @@ class ConceptGraph:
         updates: dict[str, object],
         merge: bool = True,
     ) -> None:
-        """Safely update or merge properties on an existing edge.
-
-        Args:
-            edge: The `RelationshipEdge` to update.
-            updates: A dictionary of new or updated key-value pairs.
-            merge: If True (default), merge into existing properties.
-                   If False, replace the entire dictionary.
-        """
-        if not self.graph.has_edge(edge.source, edge.target, key=edge.id):
-            logger.warning(
-                "[Graph Core Warning]: Edge %s not found for property update.",
-                edge.id,
-            )
+        """Safely update or merge properties on an existing edge."""
+        if not self.driver:
             return
 
-        edge_data = self.graph.edges[edge.source, edge.target, edge.id]
+        safe_type = edge.type.replace(" ", "_").upper()
 
-        if merge:
-            edge_data["properties"].update(updates)
-        else:
-            edge_data["properties"] = updates
+        with self.driver.session() as session:
+            # Read existing properties
+            query_read = f"MATCH (a:Concept {{id: $source}})-[r:`{safe_type}` {{id: $id}}]->(b:Concept {{id: $target}}) RETURN r.properties"
+            result = session.run(
+                query_read, source=edge.source, target=edge.target, id=edge.id
+            )
+            record = result.single()
 
-        edge_data["properties"]["last_modified"] = time.time()
+            if not record:
+                logger.warning(
+                    "[Graph Core Warning]: Edge %s not found for property update.",
+                    edge.id,
+                )
+                return
+
+            current_props = {}
+            if record["r.properties"]:
+                try:
+                    current_props = json.loads(record["r.properties"])
+                except Exception:
+                    pass
+
+            if merge:
+                current_props.update(updates)
+            else:
+                current_props = updates  # type: ignore
+
+            current_props["last_modified"] = time.time()
+
+            # Write back
+            new_props_json = json.dumps(current_props)
+            query_write = (
+                f"MATCH (a:Concept {{id: $source}})-[r:`{safe_type}` {{id: $id}}]->(b:Concept {{id: $target}}) "
+                "SET r.properties = $props"
+            )
+            session.run(
+                query_write,
+                source=edge.source,
+                target=edge.target,
+                id=edge.id,
+                props=new_props_json,
+            )
 
     def find_exclusive_conflict(
         self,
@@ -495,11 +794,7 @@ class ConceptGraph:
         rank_table: dict[str, int] | None = None,
     ) -> None:
         """Update an edge's confidence weight with provenance-aware adjustment."""
-        if not self.graph.has_edge(edge.source, edge.target, key=edge.id):
-            logger.warning(
-                "[Graph Core Warning]: Could not find edge %s to update weight.",
-                edge.id,
-            )
+        if not self.driver:
             return
 
         rank_table = rank_table or {
@@ -509,39 +804,79 @@ class ConceptGraph:
             "system": 4,
         }
 
-        edge_data = self.graph.edges[edge.source, edge.target, edge.id]
-        old_weight = edge_data.get("weight", 0.5)
-        old_provenance = edge_data.get("properties", {}).get("provenance", "user")
+        safe_type = edge.type.replace(" ", "_").upper()
 
-        rank_current = self.normalize_provenance_rank(rank_table, old_provenance)
-        rank_new = self.normalize_provenance_rank(rank_table, provenance)
+        with self.driver.session() as session:
+            # Read existing
+            query_read = f"MATCH (a:Concept {{id: $source}})-[r:`{safe_type}` {{id: $id}}]->(b:Concept {{id: $target}}) RETURN r.weight, r.properties"
+            result = session.run(
+                query_read, source=edge.source, target=edge.target, id=edge.id
+            )
+            record = result.single()
 
-        adjusted_weight = self.compute_confidence_adjustment(
-            old_weight,
-            new_weight,
-            rank_current,
-            rank_new,
-        )
+            if not record:
+                logger.warning(
+                    "[Graph Core Warning]: Could not find edge %s to update weight.",
+                    edge.id,
+                )
+                return
 
-        edge_data["weight"] = round(max(0.0, min(1.0, adjusted_weight)), 4)
-        edge_data.setdefault("properties", {}).update(
-            {
-                "provenance": provenance,
-                "last_modified": time.time(),
-                "confidence_updated": True,
-            },
-        )
+            old_weight = record["r.weight"] or 0.5
+            current_props = {}
+            if record["r.properties"]:
+                try:
+                    current_props = json.loads(record["r.properties"])
+                except Exception:
+                    pass
 
-        logger.info(
-            "[Graph Update]: Edge '%s' confidence updated "
-            "%.2f -> %.2f "
-            "(provenance: %s -> %s)",
-            edge.type,
-            old_weight,
-            edge_data["weight"],
-            old_provenance,
-            provenance,
-        )
+            old_provenance = current_props.get("provenance", "user")
+
+            rank_current = self.normalize_provenance_rank(rank_table, old_provenance)
+            rank_new = self.normalize_provenance_rank(rank_table, provenance)
+
+            adjusted_weight = self.compute_confidence_adjustment(
+                old_weight,
+                new_weight,
+                rank_current,
+                rank_new,
+            )
+
+            final_weight = round(max(0.0, min(1.0, adjusted_weight)), 4)
+
+            current_props.update(
+                {
+                    "provenance": provenance,
+                    "last_modified": time.time(),
+                    "confidence_updated": True,
+                }
+            )
+
+            new_props_json = json.dumps(current_props)
+
+            # Write back
+            query_write = (
+                f"MATCH (a:Concept {{id: $source}})-[r:`{safe_type}` {{id: $id}}]->(b:Concept {{id: $target}}) "
+                "SET r.weight = $weight, r.properties = $props"
+            )
+            session.run(
+                query_write,
+                source=edge.source,
+                target=edge.target,
+                id=edge.id,
+                weight=final_weight,
+                props=new_props_json,
+            )
+
+            logger.info(
+                "[Graph Update]: Edge '%s' confidence updated "
+                "%.2f -> %.2f "
+                "(provenance: %s -> %s)",
+                edge.type,
+                old_weight,
+                final_weight,
+                old_provenance,
+                provenance,
+            )
 
     def revise_conflicting_edge(
         self,
@@ -571,6 +906,7 @@ class ConceptGraph:
                 rank_table,
             )
             existing_edge.properties["revision_status"] = "replaced"
+            existing_edge.properties["provenance"] = new_provenance
             return "replaced"
 
         if rank_new == rank_existing:

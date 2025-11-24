@@ -106,7 +106,23 @@ The agent has now completed its most critical architectural evolution to date in
 
 ---
 
-# Phase 7 — Semantic Mastery: Homonym Disambiguation (CURRENT PHASE)
+# Phase 7 — Axiom Studio & Integrated Environment (COMPLETE)
+
+**Goal:** Create a unified, powerful, and user-friendly Integrated Development Environment (IDE) for the agent, streamlining the "Train, Observe, Improve" loop.
+
+### Key Features
+*   **Axiom Studio IDE:** A PyQt6-based application integrating code editing, terminal, and agent visualization.
+*   **Integrated Terminal:** A VS Code-style bottom panel terminal for running `axiom-train` and other commands directly within the UI.
+*   **Live Knowledge Graph:** Real-time visualization of the agent's knowledge graph stats (nodes, edges, deferred tasks) and a live trend chart.
+*   **AI Chat Panel:** A fully integrated chat interface with:
+    *   **Context Awareness:** The agent is aware of the file currently open in the editor.
+    *   **Model Selection:** Support for switching between models and loading local GGUF files.
+    *   **Markdown Support:** Rich text rendering for code blocks and explanations.
+    *   **Chat Management:** Ability to clear history and start fresh.
+
+---
+
+# Phase 8 — Semantic Mastery: Homonym Disambiguation (COMPLETE)
 
 **Goal:** Solve the problem of linguistic ambiguity by enabling the agent to understand that a single word can have multiple, distinct meanings. This is the next critical step to prevent graph corruption and unlock deeper reasoning.
 
@@ -118,36 +134,38 @@ The agent has now completed its most critical architectural evolution to date in
 
 ---
 
-# Phase 8 — The Symbolic Synthesizer & Advanced Semantics
+# Phase 9 — The Symbolic Synthesizer & Advanced Semantics [COMPLETE]
 
-**Goal:** Complete the end-to-end symbolic loop by building a "fast path" for language generation, and deepen the agent's understanding of language nuance.
+**Goal:** Complete the end-to-end symbolic loop by building a "fast path" for language generation (`SymbolicSynthesizer`) and deepening the agent's understanding of language nuance through advanced relationship extraction and temporal reasoning.
 
 ### Key Features
-*   **Symbolic Synthesizer:** Create a fast, template-based `SymbolicSynthesizer` to handle the generation of simple, factual responses. This will be the mirror image of the `SymbolicParser` and will complete the "Symbolic-First" architecture, allowing for entire conversations with zero LLM calls.
-*   **Advanced Relationship Extraction:** Enhance the `UniversalInterpreter` to extract and the `ConceptGraph` to represent multi-part, qualified relationships (e.g., `(person, born_in, city, on_date, date)`), moving beyond simple S-V-O.
+*   **Symbolic Synthesizer:** A deterministic engine that converts graph data (triples) into natural language, bypassing the LLM for simple queries.
+*   **Advanced Relationship Extraction:** Update the `UniversalInterpreter` to extract "qualified" relationships (e.g., `(Obama, born_in, Hawaii, {date: 1961})`).
 *   **Temporal Reasoning:** Upgrade the `_filter_facts_for_temporal_query` to handle a wider range of date/time formats and relative queries (e.g., "before 2020," "last year").
 
 ---
 
-# Phase 9 — The Logical Reasoner (Procedural Thought)
+# Phase 10 — The Metacognitive Dreamer (Episodic Memory & Self-Optimization) [COMPLETE]
 
-**Goal:** Evolve beyond semantic knowledge to incorporate procedural and logical reasoning by introducing "Tools."
+**Goal:** Enable the agent to maintain long-term context across sessions and proactively optimize its own knowledge graph during idle time ("dreaming").
 
 ### Key Features
-*   **CAUTION: This phase introduces significant security risks (e.g., prompt injection, arbitrary code execution). Proceed with extreme caution and a focus on sandboxing.**
-*   **Tool Use Framework:** Create a `ToolManager` and a formal "Tool" interface that the agent can use.
-*   **Mathematical Capability (First Tool):** A `MathTool` that integrates a symbolic math library like `SymPy`.
-*   **Real-Time Data (Second Tool):** A `WebSearchTool` and a `CurrentDateTool` to fetch live data from the internet.
-*   **Code Execution (Advanced Tool):** A sandboxed `PythonInterpreterTool` that can execute simple Python code to answer complex procedural questions.
+*   **Episodic Memory Store:** Index past conversation summaries in the `VectorStore` to allow recall of previous interactions (e.g., "As we discussed last time...").
+*   **Dream Cycle:** A background process that runs when idle to:
+    *   **Consolidate:** Merge duplicate or highly similar nodes.
+    *   **Prune:** Remove low-confidence or unused isolated nodes.
+    *   **Hypothesize:** Generate new `INVESTIGATE` tasks based on graph topology (e.g., nodes with few edges).
 
 ---
 
-# Phase 10 — The Autonomous Operator
+# Phase 11 — The Linguistic Scaffolding (Symbolic Text Generation)
 
-**Goal:** Grant the agent the agency to act upon its own conclusions, evolving from a "Verified Advisor" to a "Human-in-the-Loop Operator."
+**Goal:** Evolve beyond LLM-dependent synthesis by learning linguistic patterns as symbolic graph structures, enabling pure symbolic text generation.
 
 ### Key Features
-*   **Action Proposal System:** Enhance the `MetacognitiveEngine` to not only suggest code changes but also to generate `git patch` files and open draft Pull Requests.
-*   **Interactive Review:** Develop a conversational interface where a human developer can review a proposed action and give a simple "approve" or "deny" command.
-*   **Automated Execution:** Upon approval, the agent will be granted the ability to execute the verified action (e.g., `git apply patch.diff`, `git commit`, `git push`).
-*   **Rollback Capability:** Implement a safety protocol where the agent can automatically revert its last action if post-deployment monitoring detects a critical failure.
+*   **Syntactic Pattern Graph:** Build a separate graph of sentence templates and transformation rules (e.g., `statement → question`, `active → passive`).
+*   **Pattern Learner:** Extract and store reusable linguistic patterns from analyzed sentences (e.g., `"{subject} can {verb} {object}"`).
+*   **Compositional Generator:** Generate coherent text by traversing the knowledge graph and filling pattern templates.
+*   **Code Template Library:** Learn programming syntax patterns as graph structures for symbolic code generation.
+
+---

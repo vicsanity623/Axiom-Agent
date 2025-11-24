@@ -17,7 +17,9 @@ from datetime import datetime
 from functools import cached_property
 from hashlib import sha256
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, NamedTuple, cast
+
+# Added 'Any' to imports
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
 import google.generativeai as genai
 
@@ -37,11 +39,11 @@ try:
     from sentence_transformers import SentenceTransformer
 
     EMBEDDING_MODEL_AVAILABLE = True
-    _EMB_MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+    # Added type annotation ': Any' here so MyPy allows it to be None later
+    _EMB_MODEL: Any = SentenceTransformer("all-MiniLM-L6-v2")
 except ImportError:
     _EMB_MODEL = None
     EMBEDDING_MODEL_AVAILABLE = False
-
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -263,7 +265,17 @@ class PerformanceMonitor:
 
     def _parse_log_file(self, log_file: Path) -> _LogAnalysisData:
         """Parses a log file, including high-priority heuristics for critical issues."""
-        lines = log_file.read_text(encoding="utf-8").splitlines()
+        # Optimization: Read only the last 2000 lines to avoid O(N) slowdown
+        try:
+            import collections
+
+            with open(log_file, encoding="utf-8") as f:
+                raw_lines = collections.deque(f, 2000)
+                lines = [line.rstrip() for line in raw_lines]
+        except Exception as e:
+            logger.warning(f"[Metacognition]: Error reading log file {log_file}: {e}")
+            return _LogAnalysisData()
+
         analysis_data = _LogAnalysisData()
         i = 0
         while i < len(lines):
@@ -281,6 +293,19 @@ class PerformanceMonitor:
                     relevant_logs=message,
                 )
                 analysis_data.deferred_targets.append(target)
+                i += 1
+                continue
+
+            if "[SymbolicParser Failure]" in line:
+                entry = _LogEntry(
+                    function_name="SymbolicParser._interpret",
+                    message=line.strip(),
+                    timestamp=int(time.time()),
+                    log_level="WARNING",
+                    execution_time=None,
+                    traceback=None,
+                )
+                analysis_data.entries_by_func["SymbolicParser._interpret"].append(entry)
                 i += 1
                 continue
 
@@ -322,7 +347,14 @@ class PerformanceMonitor:
                 else:
                     i -= 1
 
-            entry = _LogEntry(func, message, ts, log_level, exec_time, traceback_str)
+            entry = _LogEntry(
+                function_name=func,
+                message=message,
+                timestamp=ts,
+                log_level=log_level,
+                execution_time=exec_time,
+                traceback=traceback_str,
+            )
             analysis_data.entries_by_func[func].append(entry)
         return analysis_data
 
@@ -574,7 +606,15 @@ class CodeIntrospector:
         function_map: dict[str, Path] = {}
 
         for file_path in Path(SRC_ROOT).rglob("*.py"):
-            if "tests" in file_path.parts:
+            # Optimization: Skip hidden directories and common non-source dirs
+            parts = file_path.parts
+            if (
+                any(p.startswith(".") for p in parts)
+                or "venv" in parts
+                or "__pycache__" in parts
+                or "site-packages" in parts
+                or "tests" in parts
+            ):
                 continue
             try:
                 source_code = file_path.read_text(encoding="utf-8")
@@ -867,28 +907,32 @@ class SandboxVerifier:
 
                 logger.info("  [Sandbox]: Running multi-pass auto-fixer (Ruff)...")
 
-                subprocess.run(
-                    ["ruff", "check", "--select", "F821", "--add-noqa", "."],
-                    capture_output=True,
-                    text=True,
-                    cwd=sandbox_root,
-                )
+                # Run ruff checks and auto-fix if available; ignore if ruff is not installed.
+                try:
+                    subprocess.run(
+                        ["ruff", "check", "--select", "F821", "--add-noqa", "."],
+                        capture_output=True,
+                        text=True,
+                        cwd=sandbox_root,
+                    )
+                    subprocess.run(
+                        ["ruff", "format", "."],
+                        capture_output=True,
+                        text=True,
+                        cwd=sandbox_root,
+                    )
+                    fix_process = subprocess.run(
+                        ["ruff", "check", "--fix", "."],
+                        capture_output=True,
+                        text=True,
+                        cwd=sandbox_root,
+                    )
+                except FileNotFoundError:
+                    # ruff not installed; skip linting steps.
+                    fix_process = None
 
-                subprocess.run(
-                    ["ruff", "format", "."],
-                    capture_output=True,
-                    text=True,
-                    cwd=sandbox_root,
-                )
-
-                fix_process = subprocess.run(
-                    ["ruff", "check", "--fix", "."],
-                    capture_output=True,
-                    text=True,
-                    cwd=sandbox_root,
-                )
-
-                if fix_process.returncode != 0:
+                # If ruff was run, evaluate its result; otherwise, continue.
+                if fix_process is not None and fix_process.returncode != 0:
                     logger.error(
                         "  [Sandbox]: ❌ Ruff auto-fix FAILED. The suggestion is likely unrecoverable."
                     )

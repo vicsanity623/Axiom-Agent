@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 import logging
+import os
 import re
 import shutil
 import threading
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 
 from nltk.stem import WordNetLemmatizer
 
+from .coding_agent import CodingAgent
 from .config import DEFAULT_BRAIN_FILE, DEFAULT_LLM_PATH, DEFAULT_STATE_FILE
 from .constants import CONTRACTION_MAP, RELATION_TYPE_MAP
 from .conversation_manager import ConversationManager
@@ -45,6 +47,7 @@ from .universal_interpreter import (
     Task,
     UniversalInterpreter,
 )
+from .vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +89,9 @@ class CognitiveAgent:
         self.inference_mode = inference_mode
         self.interaction_lock = threading.Lock()
 
+        # Initialize Vector Store
+        self.vector_store = VectorStore()
+
         self.graph: ConceptGraph
         self.interpreter: UniversalInterpreter
         self.lexicon: LexiconManager
@@ -115,6 +121,7 @@ class CognitiveAgent:
         self.interpreter = UniversalInterpreter(
             model_path=DEFAULT_LLM_PATH, load_llm=enable_llm
         )
+        self.coding_agent = CodingAgent(self.interpreter)  # Initialize Coding Agent
         self.lexicon = LexiconManager(self)
         self.parser = SymbolicParser(self)
         self.goal_manager = GoalManager(self)
@@ -123,6 +130,11 @@ class CognitiveAgent:
 
         self.knowledge_manager = KnowledgeManager(self)
         self.conversation_manager = ConversationManager(self)
+
+        # Initialize Symbolic Synthesizer (Phase 9)
+        from .symbolic_synthesizer import SymbolicSynthesizer
+
+        self.synthesizer = SymbolicSynthesizer(self)
 
         if load_from_file:
             if not self.brain_file.exists():
@@ -190,9 +202,30 @@ class CognitiveAgent:
 
         self._initialize_identity()
 
-    def chat(self, user_input: str) -> str:
-        """Public entry point for user interaction, delegated to the ConversationManager."""
+    def chat(self, user_input: str) -> str | dict[str, Any]:
+        """Public entry point for user interaction."""
+        # Check for Coding Mode command
+        if user_input.strip().startswith("/code"):
+            return self.coding_agent.process_request(user_input)
+
         return self.conversation_manager.chat(user_input)
+
+    def semantic_search(
+        self, query: str, top_k: int = 5
+    ) -> list[tuple[ConceptNode, float]]:
+        """
+        Perform a semantic search over the knowledge graph using vector embeddings.
+        Returns a list of (ConceptNode, similarity_score) tuples.
+        """
+        if not self.vector_store.is_available:
+            logger.warning("Semantic search requested but VectorStore is unavailable.")
+            return []
+
+        query_embedding = self.vector_store.encode(query)
+        if not query_embedding:
+            return []
+
+        return self.graph.get_nearest_nodes(query_embedding, top_k=top_k)
 
     def _initialize_identity(self):
         """
@@ -218,9 +251,24 @@ class CognitiveAgent:
         if not self.state_file.exists():
             logger.info("   - No agent state file found. Starting with a fresh state.")
             return
+
+        def sanitize_llm_artifacts(obj):
+            """Recursively remove LLM instruction tokens from strings in nested structures."""
+            if isinstance(obj, str):
+                return obj.replace("[/INST]", "").replace("[INST]", "").strip()
+            if isinstance(obj, dict):
+                return {k: sanitize_llm_artifacts(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [sanitize_llm_artifacts(item) for item in obj]
+            return obj
+
         try:
             with self.state_file.open("r", encoding="utf-8") as f:
                 state_data = json.load(f)
+
+            # Sanitize all loaded data to prevent Rich markup crashes
+            state_data = sanitize_llm_artifacts(state_data)
+
             self.learning_goals = state_data.get("learning_goals", [])
             self.high_priority_tasks = state_data.get("high_priority_tasks", [])
             self.autonomous_cycle_count = state_data.get("autonomous_cycle_count", 0)
@@ -241,7 +289,7 @@ class CognitiveAgent:
             self.goal_manager.goals = {}
 
     def save_state(self) -> None:
-        """Save the agent's complete operational state to its state file."""
+        """Save the agent's complete operational state to its state file atomically."""
         logger.info(f"   - Saving agent's operational state to '{self.state_file}'...")
         try:
             state_data = {
@@ -254,24 +302,35 @@ class CognitiveAgent:
                 ),
                 "goals": self.goal_manager.goals,
             }
-            with self.state_file.open("w", encoding="utf-8") as f:
+
+            # Atomic write: write to temp file then rename
+            temp_file = self.state_file.with_suffix(".tmp")
+            with temp_file.open("w", encoding="utf-8") as f:
                 json.dump(state_data, f, indent=4)
+
+            os.replace(temp_file, self.state_file)
             logger.info("   - Agent state saved successfully.")
         except Exception as e:
             logger.error(f"   - CRITICAL ERROR: Failed to save agent state. Error: {e}")
 
     def save_brain(self) -> None:
-        """Save the current knowledge graph to its JSON file."""
+        """Save the current knowledge graph to its JSON file atomically."""
         if self.inference_mode:
             return
-        lock_file = self.brain_file.parent / f"{self.brain_file.name}.lock"
+
+        # If using Neo4j, persistence is handled automatically
+        if self.graph.driver:
+            # We might still want to save state, but brain is in DB
+            return
+
         try:
-            lock_file.touch()
-            self.graph.save_to_file(self.brain_file)
+            # Atomic write
+            temp_file = self.brain_file.with_suffix(".tmp")
+            self.graph.save_to_file(temp_file)
+            os.replace(temp_file, self.brain_file)
             logger.info(f"[cyan]   - Agent brain saved to {self.brain_file}[/cyan]")
-        finally:
-            if lock_file.exists():
-                lock_file.unlink()
+        except Exception as e:
+            logger.error(f"   - CRITICAL ERROR: Failed to save brain. Error: {e}")
 
     def log_autonomous_cycle_completion(self) -> None:
         """Increment the autonomous cycle counter and trigger an interpreter reboot if needed."""
@@ -403,3 +462,145 @@ class CognitiveAgent:
             if len(object_.split()) == 1 and object_[0].isupper():
                 return "has name"
         return RELATION_TYPE_MAP.get(verb, verb)
+
+    def _answer_question_about(self, topic: str, user_input: str | None = None) -> str:
+        """
+        Generates a natural language answer about a specific topic by querying the graph.
+        Handles ambiguity by checking for 'has_sense' edges.
+        """
+        clean_topic = self._clean_phrase(topic)
+
+        # --- Meta-Question Gate ---
+        if "agent" in clean_topic and user_input:
+            # Specific case for "what is your name?"
+            if "name" in user_input.lower():
+                agent_node = self.graph.get_node_by_name("agent")
+                if agent_node:
+                    name_edge = next(
+                        (
+                            edge
+                            for edge in self.graph.get_edges_from_node(agent_node.id)
+                            if edge.type == "has_name"
+                        ),
+                        None,
+                    )
+                    if name_edge:
+                        name_node = self.graph.get_node_by_id(name_edge.target)
+                        if name_node:
+                            return f"My name is {name_node.name.capitalize()}."
+                        return "I know I have a name, but I can't seem to recall it right now."
+                    return "I don't have a name yet."
+                return "I don't seem to have a concept of myself right now."
+            # General case for "who are you?", "what are you?", etc.
+            return "I am Axiom, a cognitive agent designed to learn, reason, and understand."
+
+        node = self.graph.get_node_by_name(clean_topic)
+
+        if not node:
+            return f"I don't have any information about '{topic}' yet."
+
+        # --- AMBIGUITY CHECK ---
+        sense_edges = self.graph.get_edges_by_type(node.id, "has_sense")
+        if sense_edges:
+            senses = []
+            for edge in sense_edges:
+                sense_node = self.graph.get_node_by_id(edge.target)
+                if sense_node:
+                    # Extract the sense description from the name "bank (financial institution)"
+                    match = re.search(r"\((.*?)\)", sense_node.name)
+                    if match:
+                        senses.append(match.group(1))
+                    else:
+                        senses.append(sense_node.name)
+
+            if senses:
+                response = (
+                    f"The term '{topic}' can mean multiple things. Did you mean:\n"
+                )
+                for i, sense in enumerate(senses, 1):
+                    response += f"{i}. {sense.capitalize()}\n"
+                return response.strip()
+
+        # Standard Fact Retrieval
+        facts_with_props = self.conversation_manager._gather_facts_multihop(
+            node.id, max_hops=1
+        )
+
+        # --- Temporal Filtering ---
+        # Check if the user is asking about a specific time or "now"
+        is_temporal_query = False
+        if user_input:
+            is_temporal_query = any(
+                keyword in user_input.lower()
+                for keyword in [
+                    "now",
+                    "currently",
+                    "today",
+                    "this year",
+                    "when",
+                    "year",
+                    "date",
+                ]
+            ) or bool(re.search(r"\b(19|20)\d{2}\b", user_input))
+
+        if is_temporal_query and user_input:
+            filtered_facts = self.conversation_manager._filter_facts_for_temporal_query(
+                facts_with_props, user_input
+            )
+            if not filtered_facts:
+                return f"I don't have any information about '{topic}' for that specific time."
+
+            # If we filtered down to specific facts, we might want to synthesize them directly
+            # or pass them to the synthesizer if they are simple enough.
+            # For now, let's just use the LLM synthesizer for these specific temporal answers
+            # as they might be nuanced.
+            return self.interpreter.synthesize(list(filtered_facts), topic)
+
+        if not facts_with_props:
+            return (
+                f"I know of '{topic}', but I don't have any specific details about it."
+            )
+
+        # --- Phase 9: Try Symbolic Synthesis FIRST ---
+        # Convert the complex tuple structure back to a list of (fact_str, edge) for the synthesizer
+        # _gather_facts_multihop returns: tuple[tuple[str, tuple[tuple[str, str], ...]], ...]
+        # We need to fetch the actual edge objects. This is a bit inefficient, we might want to refactor
+        # _gather_facts_multihop to return edges directly or IDs.
+        # For now, let's just re-fetch or pass the data the synthesizer needs.
+
+        # Actually, let's look at what _gather_facts_multihop returns.
+        # It returns a tuple of (fact_string, properties_tuple).
+        # The synthesizer needs RelationshipEdge objects to be fully effective (for types).
+        # But wait, the synthesizer I wrote takes `list[tuple[str, "RelationshipEdge"]]`.
+        # _gather_facts_multihop DOES NOT return edges. It returns strings and props.
+
+        # Let's use a simpler retrieval for the synthesizer for now, or update _gather_facts_multihop.
+        # Better yet, let's just get the direct edges for the synthesizer, as it's meant for simple facts.
+
+        direct_edges = self.graph.get_edges_from_node(node.id)
+        # Filter out low weight
+        valid_edges = [
+            e for e in direct_edges if e.weight >= 0.5 and e.type != "might_relate"
+        ]
+
+        # Prepare data for synthesizer: list of (fact_str, edge)
+        # We construct a dummy fact string or just pass the edge.
+        # The synthesizer uses the edge to get source/target/type.
+        # It uses the fact_str only for logging or if we passed it.
+
+        synthesizer_input = []
+        for edge in valid_edges:
+            synthesizer_input.append(("", edge))  # Empty string as placeholder
+
+        symbolic_response = self.synthesizer.synthesize(synthesizer_input, topic)
+
+        if symbolic_response:
+            logger.info(
+                f"   - ✅ Synthesized response via SymbolicSynthesizer: {symbolic_response}"
+            )
+            return symbolic_response
+
+        # Fallback to LLM Synthesis
+        # We need to convert facts_with_props to the list of strings expected by interpreter.synthesize
+        facts_list = [f[0] for f in facts_with_props]
+        return self.interpreter.synthesize(facts_list, topic)

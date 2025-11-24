@@ -9,7 +9,7 @@ package = true
 
 [project]
 name = "axiom"
-version = "0.6.5"
+version = "1.0.1"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
@@ -38,15 +38,31 @@ dependencies = [
     "scipy",
     "blis>=0.9.0",
     "neo4j",
+    "sentence-transformers",
 ]
 
 # if you want the small version of en core web use this:
     # en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl
 
 [project.optional-dependencies]
+studio = [
+    "pyqt6>=6.10.0",
+    "pyqt6-qt6>=6.10.0",
+    "pyqt6-sip>=13.10.2",
+    "pyqt6-webengine>=6.10.0",
+    "pyqt6-webengine-qt6>=6.10.0",
+    "PyQt6-QScintilla",
+    "pyinstaller",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "terminado==0.17.1",
+    "tornado==6.2",
+]
+
 dev = [
+    "axiom[studio]",
     "mypy>=1.18.1",
-    "pyngrok",
     "pytest-cov>=4.0.0",
     "pytest>=6.0.0",
     "pytest-xdist",
@@ -54,6 +70,7 @@ dev = [
     "types-requests",
     "matplotlib",
     "pytest-mock",
+    "flask_sock",
 ]
 
 [project.urls]
@@ -62,6 +79,7 @@ dev = [
 
 [project.scripts]
 axiom-llm = "axiom.scripts.download_model:main"
+axiom-ide = "axiom.scripts.studio:main"
 axiom-reset = "axiom.scripts.reset_agent:main"
 axiom-train = "axiom.scripts.autonomous_trainer:main"
 axiom-render = "axiom.scripts.render_model:main"
@@ -71,6 +89,7 @@ axiom-galaxy1 = "axiom.scripts.visualize_fibonacci_galaxy:main"
 axiom-galaxy2 = "axiom.scripts.visualize_seed_of_life:main"
 axiom-webui = "axiom.scripts.app_model:main"
 axiom-webui_app = "axiom.scripts.app:main"
+axiom-studio = "axiom.scripts.studio_server:main"
 axiom-metatest = "axiom.scripts.test_metacog:main"
 axiom-extract = "axiom.scripts.extract_code_suggestion:main"
 axiom-analyze = "axiom.scripts.analyze_logs:main"

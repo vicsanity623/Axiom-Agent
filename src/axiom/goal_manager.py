@@ -33,7 +33,21 @@ class GoalManager:
 
     def _get_next_goal_id(self) -> str:
         """Generates a unique, sequential goal ID."""
-        self._goal_counter += 1
+        # Start goal IDs from 1 for clarity
+        if not self.goals:
+            self._goal_counter = 0
+
+        # If loading from state, find the max existing goal number
+        max_id = 0
+        for goal_id in self.goals:
+            if goal_id.startswith("goal_"):
+                try:
+                    num = int(goal_id.split("_")[1])
+                    if num > max_id:
+                        max_id = num
+                except (ValueError, IndexError):
+                    continue
+        self._goal_counter = max_id + 1
         return f"goal_{self._goal_counter}"
 
     def _get_random_pedagogical_style(self) -> str:
@@ -111,7 +125,8 @@ class GoalManager:
         main_goal: Goal = {
             "id": main_goal_id,
             "description": main_description,
-            "status": "in_progress",
+            # --- FIX: A parent goal's status is just 'pending' until all stages are complete ---
+            "status": "pending",
             "sub_goals": [],
             "stages": [],
             "parent_goal": parent_goal_id,
@@ -163,24 +178,63 @@ class GoalManager:
 
     def get_active_goal(self) -> Goal | None:
         """
-        Finds the highest-priority, 'in_progress' goal or stage.
+        Finds the single, unique, highest-priority goal or stage that is 'in_progress'.
         """
+        # --- FIX: Simplify the logic to find the one true active goal ---
         in_progress_goals = [
-            goal for goal in self.goals.values() if goal.get("status") == "in_progress"
+            goal
+            for goal in self.goals.values()
+            if goal.get("status") == "in_progress"
+            and goal.get("sub_goals")  # Only leaf-node goals can be active
         ]
+
         if not in_progress_goals:
             return None
 
-        highest_priority_goal = sorted(
-            in_progress_goals, key=lambda g: g.get("priority", 5), reverse=True
+        # If there's more than one, something is wrong, but we can recover by picking the highest priority one.
+        if len(in_progress_goals) > 1:
+            logger.warning(
+                "Multiple 'in_progress' goals found. This may indicate a state error. Picking highest priority."
+            )
+            return sorted(
+                in_progress_goals, key=lambda g: g.get("priority", 5), reverse=True
+            )[0]
+
+        return in_progress_goals[0]
+
+    def activate_next_pending_goal(self) -> bool:
+        """
+        Activates the highest priority pending goal if no goal is currently active.
+        Returns True if a goal was activated, False otherwise.
+        """
+        if self.get_active_goal():
+            return False
+
+        pending_goals = [
+            goal
+            for goal in self.goals.values()
+            if goal.get("status") == "pending"
+            and goal.get("sub_goals")  # Only activate goals with tasks ready
+        ]
+
+        if not pending_goals:
+            return False
+
+        # Sort by priority (descending) then by ID (ascending) for stability
+        next_goal = sorted(
+            pending_goals,
+            key=lambda g: (g.get("priority", 5), g.get("id")),
+            reverse=True,
         )[0]
 
-        if stages := highest_priority_goal.get("stages"):
-            for stage in stages:
-                if stage.get("status") == "in_progress":
-                    return stage
-
-        return highest_priority_goal
+        next_goal["status"] = "in_progress"
+        self.agent.learning_goals.extend(cast("list[str]", next_goal["sub_goals"]))
+        logger.info(
+            "[GoalManager]: Activated pending goal: '%s' (Priority: %d)",
+            next_goal.get("description"),
+            next_goal.get("priority", 5),
+        )
+        return True
 
     def check_goal_completion(self, goal_id: str):
         """Checks for completion of goals and activates the next stage if applicable."""
@@ -188,12 +242,23 @@ class GoalManager:
         if not goal or goal.get("status") != "in_progress":
             return
 
-        sub_goals_as_str = [
-            sg for sg in goal.get("sub_goals", []) if isinstance(sg, str)
-        ]
-        is_complete = not any(
-            sg in self.agent.learning_goals for sg in sub_goals_as_str
-        )
+        # A goal is complete if none of its sub_goals are in the main learning_goals queue.
+        # We must normalize the sub-goals to just their topic strings for a fair comparison.
+        sub_goal_topics = set()
+        for sg in goal.get("sub_goals", []):
+            if isinstance(sg, str):
+                sub_goal_topics.add(sg.replace("INVESTIGATE:", "").strip())
+            elif isinstance(sg, dict):
+                sub_goal_topics.add(sg.get("topic", ""))
+
+        agent_learning_goal_topics = set()
+        for lg in self.agent.learning_goals:
+            if isinstance(lg, str):
+                agent_learning_goal_topics.add(lg.replace("INVESTIGATE:", "").strip())
+            elif isinstance(lg, dict):
+                agent_learning_goal_topics.add(lg.get("topic", ""))
+
+        is_complete = not sub_goal_topics.intersection(agent_learning_goal_topics)
 
         if is_complete:
             goal["status"] = "completed"
@@ -218,8 +283,25 @@ class GoalManager:
                             "Activating next stage: '%s'", next_stage.get("description")
                         )
                     else:
+                        # All stages are done, so the parent goal is now complete.
                         parent_goal["status"] = "completed"
                         logger.info(
                             "🎉 All stages for '%s' are complete. Main goal achieved! 🎉",
                             parent_goal.get("description"),
                         )
+                        # --- FIX: Add the cleanup call here ---
+                        self._clear_all_goals()
+            else:
+                # This handles the case of a simple, non-staged goal being completed.
+                self._clear_all_goals()
+
+    # --- FIX: Add the new cleanup method ---
+    def _clear_all_goals(self) -> None:
+        """
+        Clears all goals from the manager, signaling the completion of the entire curriculum.
+        """
+        logger.info(
+            "--- [GoalManager]: Entire curriculum complete. Resetting goal state. ---"
+        )
+        self.goals.clear()
+        self._goal_counter = 0

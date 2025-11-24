@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0f0f11] text-gray-100">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Axiom Studio • Dashboard</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border-radius: 3px;
+    }
+
+    .log-line {
+      font-family: 'JetBrains Mono', monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: #a1a1aa;
+      border-left: 2px solid transparent;
+      padding-left: 8px;
+      margin-bottom: 4px;
+    }
+
+    .log-line:hover {
+      border-left-color: #6366f1;
+      background: rgba(255, 255, 255, 0.02);
+    }
+  </style>
+</head>
+
+<body class="h-full flex flex-col" hx-ext="sse">
+
+  <!-- Header -->
+  <header class="border-b border-[#27272a] bg-[#18181b] sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"></div>
+        <h1 class="text-xl font-bold text-gray-100 tracking-tight">
+          Axiom Agent <span class="text-gray-500 font-normal">Dashboard</span>
+        </h1>
+      </div>
+      <div class="flex items-center gap-4 text-sm text-gray-400">
+        <div class="flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full bg-green-500"></span>
+          <span>System Online</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Layout -->
+  <main class="flex-1 max-w-7xl mx-auto w-full p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
+
+    <!-- Left Column: Stats & Graph -->
+    <div class="lg:col-span-2 flex flex-col gap-6 overflow-hidden">
+
+      <!-- Stats Cards -->
+      <div id="graph-stats" class="grid grid-cols-3 gap-4" hx-get="/api/status" hx-trigger="load, every 5s"
+        hx-swap="none">
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">Total Nodes</div>
+          <div class="text-2xl font-bold text-white" id="stats-nodes">...</div>
+        </div>
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">Total Edges</div>
+          <div class="text-2xl font-bold text-white" id="stats-edges">...</div>
+        </div>
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">Deferred Tasks</div>
+          <div class="text-2xl font-bold text-indigo-400" id="stats-deferred">...</div>
+        </div>
+      </div>
+
+      <!-- System Stats Cards -->
+      <div id="system-stats" class="grid grid-cols-3 gap-4" hx-get="/api/system_stats" hx-trigger="load, every 3s"
+        hx-swap="none">
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">CPU Usage</div>
+          <div class="text-lg font-bold text-blue-400" id="stats-cpu">...</div>
+        </div>
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">RAM Usage</div>
+          <div class="text-lg font-bold text-green-400" id="stats-ram">...</div>
+        </div>
+        <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5">
+          <div class="text-gray-500 text-xs font-medium uppercase tracking-wider mb-1">GPU Usage</div>
+          <div class="text-lg font-bold text-purple-400" id="stats-gpu">...</div>
+        </div>
+      </div>
+
+      <!-- Graph -->
+      <div class="bg-[#18181b] border border-[#27272a] rounded-xl p-5 flex-1 min-h-[300px] flex flex-col">
+        <h3 class="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+          <i class="fas fa-chart-line text-indigo-500"></i> Live Deferred Tasks Trend
+        </h3>
+        <div class="flex-1 relative w-full h-full">
+          <canvas id="taskChart"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Active Curriculum -->
+    <div class="bg-[#18181b] border border-[#27272a] rounded-xl flex flex-col overflow-hidden h-full">
+      <div class="p-4 border-b border-[#27272a] bg-[#18181b] flex justify-between items-center">
+        <h3 class="text-sm font-semibold text-gray-300 flex items-center gap-2">
+          <i class="fas fa-graduation-cap text-indigo-500"></i> Active Curriculum
+        </h3>
+        <span
+          class="text-[10px] bg-[#27272a] text-indigo-400 px-2 py-1 rounded border border-indigo-500/20">LEARNING</span>
+      </div>
+      <div id="curriculum-panel" class="flex-1 overflow-hidden p-4 bg-[#0f0f11]" hx-get="/api/curriculum"
+        hx-trigger="load, every 3s" hx-swap="innerHTML">
+        <!-- Content loaded via HTMX -->
+        <div class="animate-pulse flex flex-col gap-4">
+          <div class="h-16 bg-[#18181b] rounded"></div>
+          <div class="h-8 bg-[#18181b] rounded w-3/4"></div>
+          <div class="space-y-2">
+            <div class="h-4 bg-[#18181b] rounded w-full"></div>
+            <div class="h-4 bg-[#18181b] rounded w-5/6"></div>
+            <div class="h-4 bg-[#18181b] rounded w-4/6"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Chart Script -->
+  <script>
+    const ctx = document.getElementById('taskChart').getContext('2d');
+
+    // Gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.2)');
+    gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
+
+    const chart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [{
+          label: 'Deferred Tasks',
+          data: [],
+          borderColor: '#6366f1',
+          backgroundColor: gradient,
+          borderWidth: 2,
+          tension: 0.4,
+          fill: true,
+          pointRadius: 0,
+          pointHoverRadius: 4
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: { legend: { display: false }, tooltip: { enabled: true } },
+        scales: {
+          y: {
+            beginAtZero: true,
+            grid: { color: '#27272a' },
+            ticks: { color: '#71717a', font: { family: 'Inter', size: 10 } }
+          },
+          x: {
+            grid: { display: false },
+            ticks: { color: '#71717a', font: { family: 'Inter', size: 10 }, maxTicksLimit: 6 }
+          }
+        }
+      }
+    });
+
+    // Update chart when stats refresh
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      if (e.detail.elt.id === 'graph-stats') {
+        try {
+          const data = JSON.parse(e.detail.xhr.response);
+          document.getElementById('stats-nodes').textContent = data.nodes.toLocaleString();
+          document.getElementById('stats-edges').textContent = data.edges.toLocaleString();
+          document.getElementById('stats-deferred').textContent = data.deferred.toLocaleString();
+
+          const now = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+          chart.data.labels.push(now);
+          chart.data.datasets[0].data.push(data.deferred || 0);
+
+          if (chart.data.labels.length > 30) {
+            chart.data.labels.shift();
+            chart.data.datasets[0].data.shift();
+          }
+          chart.update('none');
+        } catch (err) { console.error(err); }
+      }
+    });
+
+    // Update system stats when they refresh
+    document.body.addEventListener('htmx:afterRequest', (e) => {
+      if (e.detail.elt.id === 'system-stats') {
+        try {
+          const data = JSON.parse(e.detail.xhr.response);
+
+          // CPU
+          document.getElementById('stats-cpu').textContent = `${data.cpu_percent}%`;
+
+          // RAM
+          const ramText = data.ram_total_gb > 0
+            ? `${data.ram_used_gb}/${data.ram_total_gb} GB (${data.ram_percent}%)`
+            : 'N/A';
+          document.getElementById('stats-ram').textContent = ramText;
+
+          // GPU
+          const gpuText = data.gpu_percent > 0
+            ? `${data.gpu_percent}% (${data.gpu_memory_used_gb}/${data.gpu_memory_total_gb} GB)`
+            : 'N/A';
+          document.getElementById('stats-gpu').textContent = gpuText;
+        } catch (err) { console.error('System stats error:', err); }
+      }
+    });
+
+  </script>
+</body>
+
+</html>

@@ -63,6 +63,7 @@ class KnowledgeManager:
         node_type: str = "concept",
         context_relation_type: str | None = None,
         context_object_name: str | None = None,
+        context_sentence: str | None = None,
     ) -> ConceptNode | None:
         """
         Internal implementation for finding or creating a concept node, with
@@ -119,7 +120,38 @@ class KnowledgeManager:
             )
             return node
 
-        # Path 2: The word exists, but no context is provided. Use the existing node.
+        # Path 2: Check for existing senses (disambiguation)
+        # If we have a context sentence, we attempt disambiguation to see if we should map to a specific sense.
+        # This allows us to start splitting a concept into senses even if none exist yet.
+        if context_sentence:
+            sense_label = self.agent.interpreter.disambiguate_word(
+                clean_name, context_sentence
+            )
+            if sense_label:
+                specific_sense_name = f"{clean_name} ({sense_label})"
+                existing_sense = self.agent.graph.get_node_by_name(specific_sense_name)
+                if existing_sense:
+                    logger.info(
+                        f"   - Resolved '{clean_name}' to existing sense: '{specific_sense_name}'"
+                    )
+                    return existing_sense
+
+                # Create new sense node
+                logger.info(
+                    f"   - Creating new sense for '{clean_name}': '{specific_sense_name}'"
+                )
+                determined_type = existing_node.type  # Inherit type usually
+                default_props = create_default_properties(determined_type)
+                new_sense_node = ConceptNode(
+                    specific_sense_name,
+                    node_type=determined_type,
+                    properties=default_props,
+                )
+                self.agent.graph.add_node(new_sense_node)
+                self.agent.graph.add_edge(existing_node, new_sense_node, "has_sense")
+                return new_sense_node
+
+        # Path 3: The word exists, but no context is provided OR disambiguation failed. Use the existing node.
         if not context_relation_type or not context_object_name:
             return existing_node
 
@@ -129,17 +161,18 @@ class KnowledgeManager:
             if edge.type == context_relation_type
         ]
 
-        # Path 3: No relationships of this type exist yet. Use the base node.
+        # Path 4: No relationships of this type exist yet. Use the base node.
         if not conflicting_edges:
             return existing_node
 
-        # Path 4: Check if a relationship already points to our target object.
+        # Path 5: Check if a relationship already points to our target object.
         for edge in conflicting_edges:
             target_node = self.agent.graph.get_node_by_id(edge.target)
             if target_node and target_node.name == context_object_name:
                 return existing_node
 
-        # Path 5: A true ambiguity is detected. Create a new "sense" node.
+        # Path 6: A true ambiguity is detected via conflicting facts. Create a new "sense" node.
+        # This is the fallback if LLM disambiguation wasn't triggered but we see a conflict.
         new_sense_name = f"{clean_name} ({context_object_name})"
         logger.info(
             f"   - Ambiguity detected for '{clean_name}'. Creating specific sense: '{new_sense_name}'"
@@ -165,6 +198,9 @@ class KnowledgeManager:
         )
 
         node = self.agent.graph.add_node(new_node_obj)
+        # Link base to sense
+        self.agent.graph.add_edge(existing_node, node, "has_sense")
+
         logger.info(
             f"[cyan]   - Added new concept to graph: {new_sense_name} ({node.type})[/cyan]"
         )
@@ -244,10 +280,17 @@ class KnowledgeManager:
         )
 
         obj_node = self.get_or_create_concept(object_name)
-        sub_node = self.get_or_create_concept(
+
+        # Reconstruct context sentence if possible, or use what we have
+        # relation.get("properties", {}).get("full_text_rephrased") might be available if we passed it down
+        # For now, we can reconstruct a simple one:
+        context_sentence = f"{subject_name} {verb_name} {object_name}"
+
+        sub_node = self._get_or_create_concept_node(
             subject_name,
             context_relation_type=relation_type,
             context_object_name=object_name,
+            context_sentence=context_sentence,
         )
 
         if not sub_node or not obj_node:

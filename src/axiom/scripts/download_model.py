@@ -5,9 +5,9 @@ from pathlib import Path
 import requests
 from tqdm import tqdm
 
-MODEL_URL = "https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+MODEL_URL = "https://huggingface.co/AIIntentionz/gemma-3-12b-it-Q4_K_M.gguf/resolve/main/gemma-3-12b-it-Q4_K_M.gguf"
 MODELS_FOLDER = Path("models")
-MODEL_NAME = "mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+MODEL_NAME = "gemma-3-12b-it-Q4_K_M.gguf"
 DESTINATION_PATH = MODELS_FOLDER / MODEL_NAME
 
 

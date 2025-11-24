@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900 text-gray-300">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Axiom Chat</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Add Highlight.js for syntax highlighting -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body class="w-full h-full flex flex-col overflow-hidden font-sans">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-4 py-3 bg-[#18181b] border-b border-[#27272a] shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <span class="text-xs font-bold text-gray-300 uppercase tracking-wider">Axiom Studio</span>
+            </div>
+            <!-- Context Badge -->
+            <span id="context-badge"
+                class="hidden px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                Context Active
+            </span>
+        </div>
+        <div class="flex items-center gap-3">
+            <!-- Model Selector -->
+            <select id="model-select"
+                class="bg-[#27272a] border border-[#3f3f46] text-xs text-gray-300 rounded px-2 py-1.5 focus:outline-none focus:border-indigo-500 transition-colors">
+                <option value="gemma">Gemma 3 12B (Default)</option>
+                <option value="browse">Browse...</option>
+            </select>
+
+            <!-- New Chat Button -->
+            <button id="new-chat-btn" class="p-1.5 hover:bg-[#27272a] rounded text-gray-400 hover:text-white transition"
+                title="New Chat">
+                <i class="fas fa-trash-alt text-xs"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chat Log -->
+    <div id="chat-log" class="chat-messages scroll-smooth">
+        <!-- Welcome Message -->
+        <div class="message agent">
+            <div class="message-content">
+                Hello! I'm your AI coding assistant. I can help you understand code, write new features, or answer
+                questions about the project.
+            </div>
+        </div>
+    </div>
+
+    <!-- Command Input -->
+    <div class="border-t border-[#27272a] bg-[#18181b] p-4 flex-shrink-0">
+
+        <form id="chat-form" class="flex flex-col gap-3" onsubmit="handleSubmit(event)">
+
+            <!-- Hidden Context Fields -->
+            <input type="hidden" name="active_file_name" id="input-file-name" value="">
+            <input type="hidden" name="active_file_content" id="input-file-content" value="">
+
+            <!-- Context Indicator (Visual) -->
+            <div id="context-bar" class="hidden flex items-center gap-2">
+                <span class="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Context:</span>
+                <div class="flex items-center bg-indigo-500/10 border border-indigo-500/20 rounded px-2 py-0.5">
+                    <i class="fas fa-file-code text-indigo-400 text-xs mr-1.5"></i>
+                    <span id="active-file-name" class="text-xs text-indigo-300 font-mono">...</span>
+                </div>
+            </div>
+
+            <!-- Mode Toggles -->
+            <div class="flex items-center gap-4">
+                <!-- Code Mode Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <div class="relative">
+                        <input type="checkbox" id="coding-mode" class="peer sr-only">
+                        <div class="w-8 h-4 bg-[#27272a] rounded-full peer-checked:bg-indigo-600 transition-colors">
+                        </div>
+                        <div
+                            class="absolute left-0.5 top-0.5 w-3 h-3 bg-gray-400 rounded-full peer-checked:translate-x-4 peer-checked:bg-white transition-all">
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Code Mode</span>
+                </label>
+
+                <!-- Axiom Mode Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer group">
+                    <div class="relative">
+                        <input type="checkbox" id="axiom-mode" class="peer sr-only">
+                        <div class="w-8 h-4 bg-[#27272a] rounded-full peer-checked:bg-purple-600 transition-colors">
+                        </div>
+                        <div
+                            class="absolute left-0.5 top-0.5 w-3 h-3 bg-gray-400 rounded-full peer-checked:translate-x-4 peer-checked:bg-white transition-all">
+                        </div>
+                    </div>
+                    <span class="text-xs text-gray-400 group-hover:text-gray-300 transition-colors">Axiom Mode</span>
+                </label>
+            </div>
+
+            <!-- Input Container with Textarea -->
+            <div class="relative">
+                <textarea name="cmd" id="cmd-input" placeholder="Ask a question..." rows="1"
+                    class="w-full bg-[#27272a] border border-[#3f3f46] rounded-xl pl-10 pr-20 py-2 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all shadow-sm resize-none overflow-hidden"
+                    autocomplete="off" style="min-height: 36px; max-height: 120px;"></textarea>
+
+                <!-- File Upload Button -->
+                <button type="button" id="upload-btn"
+                    class="absolute left-2 top-1.5 bottom-1.5 text-gray-400 hover:text-white hover:bg-[#3f3f46] rounded-lg px-2 transition-colors flex items-center justify-center"
+                    title="Add text file context">
+                    <i class="fas fa-plus text-xs"></i>
+                </button>
+                <input type="file" id="file-input" class="hidden"
+                    accept=".txt,.py,.js,.html,.css,.md,.json,.c,.cpp,.h,.java,.ts">
+
+                <!-- Send Button -->
+                <button type="submit" id="send-btn"
+                    class="absolute right-2 top-1.5 bottom-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg px-3 transition-colors flex items-center justify-center shadow-sm">
+                    <i class="fas fa-paper-plane text-xs"></i>
+                </button>
+
+                <!-- Stop Button (hidden by default) -->
+                <button type="button" id="stop-btn" style="display: none;" onclick="cancelChat()"
+                    class="absolute right-2 top-1.5 bottom-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg px-3 transition-colors flex items-center justify-center shadow-sm">
+                    <i class="fas fa-stop-circle text-xs"></i>
+                </button>
+            </div>
+
+            <!-- Helper Text -->
+            <div class="text-xs text-gray-500 mt-1 px-1 flex items-center gap-3">
+                <span>Press <kbd
+                        class="kbd-hint px-1.5 py-0.5 bg-[#3f3f46] rounded text-gray-300 font-mono text-[10px]">Ctrl+Enter</kbd>
+                    to send</span>
+                <span><kbd
+                        class="kbd-hint px-1.5 py-0.5 bg-[#3f3f46] rounded text-gray-300 font-mono text-[10px]">Enter</kbd>
+                    for new line</span>
+            </div>
+    </div>
+    </form>
+    </div>
+
+    <script>
+        // API called by Python host
+        window.setActiveFile = function (fileName, content) {
+            const bar = document.getElementById('context-bar');
+            const badge = document.getElementById('context-badge');
+            const label = document.getElementById('active-file-name');
+            const inputName = document.getElementById('input-file-name');
+            const inputContent = document.getElementById('input-file-content');
+
+            if (fileName) {
+                bar.classList.remove('hidden');
+                if (badge) badge.classList.remove('hidden');
+                label.textContent = fileName;
+                inputName.value = fileName;
+                inputContent.value = content;
+            } else {
+                bar.classList.add('hidden');
+                if (badge) badge.classList.add('hidden');
+                inputName.value = "";
+                inputContent.value = "";
+            }
+        };
+
+        // Handle Mode Toggles (Mutually Exclusive)
+        const codingMode = document.getElementById('coding-mode');
+        const axiomMode = document.getElementById('axiom-mode');
+
+        codingMode.addEventListener('change', () => {
+            if (codingMode.checked) axiomMode.checked = false;
+        });
+
+        axiomMode.addEventListener('change', () => {
+            if (axiomMode.checked) codingMode.checked = false;
+        });
+
+        // Emergency Chat Stop
+        let isThinking = false;
+        const sendBtn = document.getElementById('send-btn');
+        const stopBtn = document.getElementById('stop-btn');
+
+        function showStopButton() {
+            isThinking = true;
+            sendBtn.style.display = 'none';
+            stopBtn.style.display = 'flex';
+        }
+
+        function showSendButton() {
+            isThinking = false;
+            sendBtn.style.display = 'flex';
+            stopBtn.style.display = 'none';
+        }
+
+        async function cancelChat() {
+            try {
+                await fetch('/api/cancel_chat', { method: 'POST' });
+                showSendButton();
+                appendMessage('[Response cancelled]', 'agent');
+            } catch (err) {
+                console.error('Failed to cancel chat:', err);
+            }
+        }
+
+
+        // Handle Form Submission with Streaming
+        async function handleSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('cmd-input');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // 1. Render User Bubble Immediately
+            appendMessage(message, 'user');
+            input.value = '';
+
+            // 2. Show Thinking Bubble and Stop Button
+            const thinkingId = showThinking();
+            showStopButton();
+
+            // 3. Prepare Form Data
+            const formData = new URLSearchParams();
+            formData.append('cmd', message);
+            formData.append('active_file_name', document.getElementById('input-file-name').value);
+            formData.append('active_file_content', document.getElementById('input-file-content').value);
+
+            if (codingMode.checked) formData.append('coding_mode', 'true');
+            if (axiomMode.checked) formData.append('axiom_mode', 'true');
+
+            // 4. Use EventSource for streaming
+            try {
+                const url = `/api/command_stream?${formData.toString()}`;
+
+                // Create streaming bubble
+                const log = document.getElementById('chat-log');
+                const streamBubble = document.createElement('div');
+                streamBubble.className = 'message agent';
+                streamBubble.innerHTML = `
+                    <div class="message-wrapper">
+                        <div class="message-content streaming-content"></div>
+                        <div class="message-actions">
+                            <button class="action-menu-btn" title="Actions">
+                                <i class="fas fa-ellipsis-v"></i>
+                            </button>
+                            <div class="action-menu hidden">
+                                <button class="action-item" data-action="copy"><i class="fas fa-copy"></i> Copy</button>
+                                <button class="action-item" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                log.appendChild(streamBubble);
+                const streamContent = streamBubble.querySelector('.streaming-content');
+                let accumulatedText = '';
+
+                // Setup hamburger menu
+                setupMessageActions(streamBubble);
+
+                // Remove thinking bubble as streaming starts
+                removeThinking(thinkingId);
+
+                // Use fetch with ReadableStream instead of EventSource (better POST support)
+                const response = await fetch('/api/command_stream', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'Accept': 'text/event-stream'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Stream request failed');
+                }
+
+                // Check if response is JSON (code edit) or event-stream (streaming text)
+                const contentType = response.headers.get('content-type');
+
+                if (contentType && contentType.includes('application/json')) {
+                    // Remove stream bubble since we got a structured edit instead
+                    streamBubble.remove();
+                    removeThinking(thinkingId);
+                    showSendButton();
+
+                    // Handle as code edit
+                    const editData = await response.json();
+                    handleCodeEdit(editData);
+                    return;
+                }
+
+                // Otherwise, handle as streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.substring(6));
+
+                                if (data.token) {
+                                    accumulatedText += data.token;
+                                    streamContent.textContent = accumulatedText;
+                                    scrollToBottom();
+                                } else if (data.done) {
+                                    // Stream complete - render markdown
+                                    streamBubble.dataset.originalText = accumulatedText;
+                                    streamContent.textContent = accumulatedText;
+                                    streamContent.classList.remove('streaming-content');
+                                    renderMarkdownInLog();
+                                    showSendButton();
+                                } else if (data.error) {
+                                    streamContent.textContent = `Error: ${data.error}`;
+                                    showSendButton();
+                                }
+                            } catch (e) {
+                                console.error('Failed to parse SSE data:', e);
+                            }
+                        }
+                    }
+                }
+
+            } catch (err) {
+                removeThinking(thinkingId);
+                showSendButton();
+                appendMessage(`Error: ${err.message}`, 'agent');
+                console.error('Streaming error:', err);
+            }
+        }
+
+        function handleCodeEdit(editData) {
+            /**
+             * Renders a code edit proposal with diff view and approve/reject buttons
+             */
+            const log = document.getElementById('chat-log');
+            const bubble = document.createElement('div');
+            bubble.className = 'message agent';
+
+            // Create diff HTML
+            const diffHtml = createDiffHtml(editData.original, editData.modified);
+
+            bubble.innerHTML = `
+                <div class="message-content">
+                    <div class="mb-3">
+                        <div class="text-xs text-indigo-400 font-semibold mb-1">📝 Proposed Edit: ${escapeHtml(editData.file)}</div>
+                        <div class="text-sm text-gray-300">${escapeHtml(editData.explanation)}</div>
+                    </div>
+                    <div class="diff-container bg-[#0a0a0b] border border-[#27272a] rounded-lg overflow-hidden mb-3">
+                        ${diffHtml}
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="accept-btn px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded transition-colors">
+                            ✓ Accept Changes
+                        </button>
+                        <button class="reject-btn px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors">
+                            ✗ Reject
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            log.appendChild(bubble);
+            scrollToBottom();
+
+            // Add event listeners
+            const acceptBtn = bubble.querySelector('.accept-btn');
+            const rejectBtn = bubble.querySelector('.reject-btn');
+
+            acceptBtn.addEventListener('click', async () => {
+                acceptBtn.disabled = true;
+                acceptBtn.textContent = 'Applying...';
+
+                try {
+                    const response = await fetch('/api/apply_edit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            file: editData.file,
+                            content: editData.modified
+                        })
+                    });
+
+                    if (response.ok) {
+                        acceptBtn.textContent = '✓ Applied';
+                        acceptBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                        acceptBtn.classList.add('bg-gray-600');
+                        rejectBtn.disabled = true;
+                        rejectBtn.classList.add('opacity-50');
+
+                        // Notify parent window to refresh editor (if applicable)
+                        if (window.parent !== window) {
+                            window.parent.postMessage({
+                                type: 'code_edit_applied',
+                                file: editData.file,
+                                content: editData.modified
+                            }, '*');
+                        }
+
+                        appendMessage(`✓ Changes applied to ${editData.file}`, 'agent');
+                    } else {
+                        const error = await response.json();
+                        appendMessage(`Error applying changes: ${error.error}`, 'agent');
+                        acceptBtn.disabled = false;
+                        acceptBtn.textContent = '✓ Accept Changes';
+                    }
+                } catch (err) {
+                    appendMessage(`Error: ${err.message}`, 'agent');
+                    acceptBtn.disabled = false;
+                    acceptBtn.textContent = '✓ Accept Changes';
+                }
+            });
+
+            rejectBtn.addEventListener('click', () => {
+                rejectBtn.disabled = true;
+                acceptBtn.disabled = true;
+                rejectBtn.textContent = 'Rejected';
+                rejectBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+                rejectBtn.classList.add('bg-gray-600');
+                acceptBtn.classList.add('opacity-50');
+                appendMessage('Edit rejected', 'agent');
+            });
+        }
+
+        function createDiffHtml(original, modified) {
+            /**
+             * Creates a simple unified diff view
+             * For a production system, use a library like diff2html
+             */
+            const originalLines = original.split('\n');
+            const modifiedLines = modified.split('\n');
+
+            // Simple line-by-line comparison
+            let diffHtml = '<div class="diff-content font-mono text-xs p-3 overflow-x-auto" style="max-height: 400px; overflow-y: auto;">';
+
+            const maxLines = Math.max(originalLines.length, modifiedLines.length);
+            for (let i = 0; i < maxLines; i++) {
+                const origLine = originalLines[i] || '';
+                const modLine = modifiedLines[i] || '';
+
+                if (origLine === modLine) {
+                    // Unchanged line
+                    diffHtml += `<div class="text-gray-500"><span class="text-gray-600 mr-4">${i + 1}</span>${escapeHtml(origLine)}</div>`;
+                } else {
+                    // Changed/added/removed
+                    if (origLine && !modLine) {
+                        // Line removed
+                        diffHtml += `<div class="bg-red-900/20 text-red-300"><span class="text-red-600 mr-4">-${i + 1}</span>${escapeHtml(origLine)}</div>`;
+                    } else if (!origLine && modLine) {
+                        // Line added
+                        diffHtml += `<div class="bg-green-900/20 text-green-300"><span class="text-green-600 mr-4">+${i + 1}</span>${escapeHtml(modLine)}</div>`;
+                    } else {
+                        // Line modified - show both
+                        diffHtml += `<div class="bg-red-900/20 text-red-300"><span class="text-red-600 mr-4">-${i + 1}</span>${escapeHtml(origLine)}</div>`;
+                        diffHtml += `<div class="bg-green-900/20 text-green-300"><span class="text-green-600 mr-4">+${i + 1}</span>${escapeHtml(modLine)}</div>`;
+                    }
+                }
+            }
+
+            diffHtml += '</div>';
+            return diffHtml;
+        }
+
+
+        function appendMessage(text, type) {
+            const log = document.getElementById('chat-log');
+            const bubble = document.createElement('div');
+            bubble.className = `message ${type}`;
+            bubble.dataset.originalText = text;  // Store original text for editing
+
+            bubble.innerHTML = `
+                <div class="message-wrapper">
+                    <div class="message-content"></div>
+                    <div class="message-actions">
+                        <button class="action-menu-btn" title="Actions">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <div class="action-menu hidden">
+                            ${type === 'user' ? '<button class="action-item" data-action="edit"><i class="fas fa-edit"></i> Edit</button>' : ''}
+                            ${type === 'user' ? '<button class="action-item" data-action="rerun"><i class="fas fa-redo"></i> Re-run</button>' : ''}
+                            <button class="action-item" data-action="copy"><i class="fas fa-copy"></i> Copy</button>
+                            <button class="action-item" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Set the text content (not escaped, so markdown can be detected)
+            const messageContent = bubble.querySelector('.message-content');
+            messageContent.textContent = text;
+
+            log.appendChild(bubble);
+
+            // Add event listeners for hamburger menu
+            setupMessageActions(bubble);
+
+            // Immediately render markdown if applicable
+            renderMarkdownInLog();
+
+            scrollToBottom();
+        }
+
+        function showThinking() {
+            const log = document.getElementById('chat-log');
+            const id = 'thinking-' + Date.now();
+            const bubble = document.createElement('div');
+            bubble.id = id;
+            bubble.className = 'thinking-bubble';
+            bubble.innerHTML = `
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            `;
+            log.appendChild(bubble);
+            scrollToBottom();
+            return id;
+        }
+
+        function removeThinking(id) {
+            const el = document.getElementById(id);
+            if (el) el.remove();
+        }
+
+        function scrollToBottom() {
+            const log = document.getElementById('chat-log');
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Markdown Rendering Helper
+        function renderMarkdownInLog() {
+            const contents = document.querySelectorAll('.message-content:not(.markdown-rendered)');
+            contents.forEach(content => {
+                // Check if content contains markdown syntax (code blocks, lists, etc.)
+                const text = content.textContent;
+                const hasMarkdown = text.includes('```') || text.includes('\n-') || text.includes('\n*') || text.includes('#');
+
+                // Render markdown for AI messages always, and for user messages if they have markdown syntax
+                if (content.parentElement.classList.contains('agent') || hasMarkdown) {
+                    try {
+                        content.innerHTML = marked.parse(text);
+                        content.classList.add('markdown-rendered');
+
+                        // Apply syntax highlighting to code blocks
+                        content.querySelectorAll('pre code').forEach((block) => {
+                            hljs.highlightElement(block);
+                        });
+                    } catch (e) {
+                        console.error('Markdown/highlighting error:', e);
+                    }
+                }
+            });
+        }
+
+        function setupMessageActions(bubble) {
+            const menuBtn = bubble.querySelector('.action-menu-btn');
+            const menu = bubble.querySelector('.action-menu');
+            const actionItems = bubble.querySelectorAll('.action-item');
+
+            // Toggle menu
+            menuBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                menu.classList.toggle('hidden');
+            });
+
+            // Close menu when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!menu.contains(e.target) && e.target !== menuBtn) {
+                    menu.classList.add('hidden');
+                }
+            });
+
+            // Handle action clicks
+            actionItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const action = item.dataset.action;
+                    const text = bubble.dataset.originalText;
+                    const messageContent = bubble.querySelector('.message-content');
+
+                    menu.classList.add('hidden');
+
+                    switch (action) {
+                        case 'edit':
+                            editMessage(bubble, text);
+                            break;
+                        case 'rerun':
+                            rerunMessage(text);
+                            break;
+                        case 'copy':
+                            copyMessage(messageContent.textContent);
+                            break;
+                        case 'delete':
+                            deleteMessage(bubble);
+                            break;
+                    }
+                });
+            });
+        }
+
+        function editMessage(bubble, originalText) {
+            const content = bubble.querySelector('.message-content');
+            const currentText = originalText;
+
+            // Replace with input
+            content.innerHTML = `
+                <textarea class="edit-textarea">${escapeHtml(currentText)}</textarea>
+                <div class="edit-actions">
+                    <button class="save-edit-btn">Save & Send</button>
+                    <button class="cancel-edit-btn">Cancel</button>
+                </div>
+            `;
+
+            const textarea = content.querySelector('.edit-textarea');
+            const saveBtn = content.querySelector('.save-edit-btn');
+            const cancelBtn = content.querySelector('.cancel-edit-btn');
+
+            textarea.focus();
+            textarea.select();
+
+            saveBtn.addEventListener('click', () => {
+                const newText = textarea.value.trim();
+                if (newText) {
+                    // Update the message
+                    bubble.dataset.originalText = newText;
+                    content.textContent = newText;
+                    // Re-submit the message
+                    submitMessage(newText);
+                }
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                content.textContent = currentText;
+            });
+        }
+
+        function rerunMessage(text) {
+            submitMessage(text);
+        }
+
+        function copyMessage(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Show toast notification (optional)
+                console.log('Copied to clipboard');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+            });
+        }
+
+        function deleteMessage(bubble) {
+            bubble.remove();
+        }
+
+        function submitMessage(text) {
+            // Programmatically submit the message
+            const input = document.getElementById('cmd-input');
+            input.value = text;
+            document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+        }
+
+        // --- New Chat Logic ---
+        document.getElementById('new-chat-btn').addEventListener('click', function () {
+            fetch('/api/reset_chat', { method: 'POST' })
+                .then(() => {
+                    const log = document.getElementById('chat-log');
+                    log.innerHTML = `
+                        <div class="message agent">
+                            <div class="message-content">
+                                Chat history cleared. Ready for a new task!
+                            </div>
+                        </div>
+                    `;
+                });
+        });
+
+        // --- Model Selection Logic ---
+        const modelSelect = document.getElementById('model-select');
+        modelSelect.addEventListener('change', function () {
+            if (this.value === 'browse') {
+                window.location.href = "axiom://browse-model";
+                this.value = 'gemma';
+            }
+        });
+
+        window.addModelOption = function (modelName, modelPath) {
+            const option = document.createElement('option');
+            option.value = modelPath;
+            option.text = modelName;
+            option.selected = true;
+            const browseOption = modelSelect.querySelector('option[value="browse"]');
+            modelSelect.insertBefore(option, browseOption);
+        };
+
+        // --- File Upload Logic ---
+        const uploadBtn = document.getElementById('upload-btn');
+        const fileInput = document.getElementById('file-input');
+        const cmdInput = document.getElementById('cmd-input');
+
+        uploadBtn.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', function () {
+            if (this.files && this.files[0]) {
+                const file = this.files[0];
+
+                // Simple check for text/code files based on extension or type
+                // Gemma 3 is text-only, so we warn if it looks like an image
+                if (file.type.startsWith('image/')) {
+                    alert("Gemma 3 currently only supports text-based file context. Image support is coming soon!");
+                    this.value = '';
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const content = e.target.result;
+                    // Append to input or set as context?
+                    // Let's append it to the input in a structured way so the user sees it
+                    // and can edit if needed, or just send it.
+                    // Actually, for better UX, let's just inject it into the message box
+                    // with a header.
+                    const fileHeader = `\n\n[FILE: ${file.name}]\n\`\`\`\n${content}\n\`\`\`\n`;
+                    cmdInput.value += fileHeader;
+                    cmdInput.focus();
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        // Textarea Auto-Resize and Ctrl+Enter Logic
+        // cmdInput is already defined above, no need to redefine
+
+        // Auto-resize textarea as user types
+        cmdInput.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // Handle Ctrl+Enter to submit, Enter for new line
+        cmdInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                if (e.ctrlKey || e.metaKey) {
+                    // Ctrl+Enter or Cmd+Enter → Submit form
+                    e.preventDefault();
+                    document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+                }
+                // Normal Enter → allow default (new line)
+            }
+        });
+
+    </script>
+</body>
+
+</html>

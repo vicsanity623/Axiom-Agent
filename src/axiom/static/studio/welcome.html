@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0f0f11] text-gray-100">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Axiom Studio • Welcome</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .logo-glow {
+            filter: drop-shadow(0 0 20px rgba(99, 102, 241, 0.3));
+        }
+    </style>
+</head>
+
+<body class="h-full flex flex-col items-center justify-center select-none">
+
+    <div class="w-full max-w-2xl p-8 flex flex-col items-center gap-10 animate-fade-in">
+
+        <!-- Logo Section -->
+        <div class="flex flex-col items-center gap-4">
+            <div
+                class="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-2xl logo-glow mb-2">
+                <i class="fas fa-atom text-4xl text-white"></i>
+            </div>
+            <h1 class="text-3xl font-bold tracking-tight text-white">Axiom Studio</h1>
+            <p class="text-gray-500 text-sm">Advanced Agentic Coding Environment</p>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-col gap-3 w-full max-w-md">
+            <button onclick="window.location.href='axiom://open-folder'"
+                class="group w-full bg-indigo-600 hover:bg-indigo-500 text-white h-12 rounded-lg font-medium transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-900/20">
+                <i class="fas fa-folder-open group-hover:scale-110 transition-transform"></i>
+                Open Folder
+            </button>
+
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="window.location.href='axiom://open-agent-manager'"
+                    class="w-full bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] hover:border-[#3f3f46] text-gray-300 h-10 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2">
+                    <i class="fas fa-robot text-gray-500"></i>
+                    Agent Manager
+                </button>
+                <button onclick="window.location.href='axiom://clone-repo'"
+                    class="w-full bg-[#18181b] hover:bg-[#27272a] border border-[#27272a] hover:border-[#3f3f46] text-gray-300 h-10 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2">
+                    <i class="fab fa-github text-gray-500"></i>
+                    Clone Repository
+                </button>
+            </div>
+        </div>
+
+        <!-- Recent Workspaces -->
+        <div class="w-full max-w-md mt-4">
+            <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 ml-1">Recent Workspaces</h2>
+            <div id="recent-list" class="flex flex-col gap-1">
+                <!-- Populated via JS -->
+                <div class="text-center text-gray-600 text-xs py-4 italic">No recent workspaces</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        function loadRecents() {
+            fetch('/api/recent_workspaces')
+                .then(res => res.json())
+                .then(data => {
+                    const list = document.getElementById('recent-list');
+                    if (data.length > 0) {
+                        list.innerHTML = '';
+                        data.forEach(path => {
+                            const item = document.createElement('div');
+                            item.className = 'group flex items-center justify-between p-3 rounded-lg hover:bg-[#18181b] cursor-pointer border border-transparent hover:border-[#27272a] transition-all';
+                            item.onclick = () => window.location.href = `axiom://open-recent?path=${encodeURIComponent(path)}`;
+
+                            const name = path.split('/').pop();
+                            // Escape path for onclick handler
+                            const escapedPath = path.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
+                            item.innerHTML = `
+                            <div class="flex flex-col overflow-hidden flex-1 mr-4">
+                                <span class="text-sm text-gray-200 font-medium truncate group-hover:text-indigo-400 transition-colors">${name}</span>
+                                <span class="text-[10px] text-gray-500 truncate">${path}</span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="deleteWorkspace('${escapedPath}', event)" class="opacity-0 group-hover:opacity-100 p-2 hover:bg-red-500/10 text-gray-600 hover:text-red-500 rounded transition-all" title="Remove from list">
+                                    <i class="fas fa-trash-alt text-xs"></i>
+                                </button>
+                                <i class="fas fa-chevron-right text-gray-600 opacity-0 group-hover:opacity-100 text-xs transition-opacity"></i>
+                            </div>
+                        `;
+                            list.appendChild(item);
+                        });
+                    } else {
+                        list.innerHTML = '<div class="text-center text-gray-600 text-xs py-4 italic">No recent workspaces</div>';
+                    }
+                })
+                .catch(err => console.error('Failed to load recents:', err));
+        }
+
+        async function deleteWorkspace(path, event) {
+            event.stopPropagation();
+            if (!confirm('Remove this workspace from recent history?')) return;
+
+            try {
+                await fetch('/api/recent_workspaces', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+                loadRecents();
+            } catch (err) {
+                console.error('Failed to delete workspace:', err);
+            }
+        }
+
+        // Initial load
+        loadRecents();
+    </script>
+
+</body>
+
+</html>
