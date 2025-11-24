@@ -9,7 +9,7 @@ package = true
 
 [project]
 name = "axiom"
-version = "1.0.0"
+version = "1.0.1"
 description = "A cognitive architecture for a new type of symboli-first AI designed for self-directed learning."
 authors = [
     { name = "Victor Nevarez", email = "vicsanity623@gmail.com" },
@@ -38,6 +38,7 @@ dependencies = [
     "scipy",
     "blis>=0.9.0",
     "neo4j",
+    "sentence-transformers",
 ]
 
 # if you want the small version of en core web use this:

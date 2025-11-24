@@ -11,6 +11,9 @@ from axiom.symbolic_synthesizer import SymbolicSynthesizer
 def mock_agent():
     agent = MagicMock(spec=CognitiveAgent)
     agent.graph = MagicMock()
+    # Mock vector_store with is_available=False to skip episodic memory indexing
+    agent.vector_store = MagicMock()
+    agent.vector_store.is_available = False
     return agent
 
 

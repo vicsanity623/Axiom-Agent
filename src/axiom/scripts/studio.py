@@ -205,12 +205,18 @@ class AxiomStudio(QMainWindow):
         # 1. File Browser (Left)
         self.file_browser = FileBrowser(self)
         self.file_system_model = QFileSystemModel()
-        self.file_system_model.setRootPath(str(PROJECT_ROOT))
+        # Don't set root path yet - will be set when workspace is opened
+        # This prevents indexing unnecessary directories on startup
         self.file_system_model.setReadOnly(
             False
         )  # Enable write operations for drag/drop
+
+        # Add filters to exclude common large/unnecessary directories
+        self.file_system_model.setNameFilterDisables(False)  # Hide filtered items
+        # Note: Name filters work on display, not on indexing
+
         self.file_browser.setModel(self.file_system_model)
-        self.file_browser.setRootIndex(self.file_system_model.index(str(PROJECT_ROOT)))
+        # Don't set root index yet - will be set when workspace opens
         self.file_browser.setColumnWidth(0, 250)
         self.file_browser.doubleClicked.connect(self.open_file_in_editor)
         main_splitter.addWidget(self.file_browser)
@@ -251,9 +257,9 @@ class AxiomStudio(QMainWindow):
         )  # Tabs at bottom like VS Code
         self.center_splitter.addWidget(self.bottom_panel)
 
-        # Initial Terminal
-        self.create_new_terminal()
-        # self.create_new_terminal() # This function is not yet defined, commenting out for now.
+        # Initial Terminal - Create placeholder, load content later for faster startup
+        # Performance: Defer terminal webview load
+        # self.create_new_terminal() will be called when panel is first shown
 
         # Set initial sizes (70% editor, 30% terminal)
         self.center_splitter.setSizes([700, 300])
@@ -618,7 +624,26 @@ class AxiomStudio(QMainWindow):
 
         # Apply Colors AND FONT to Lexer Styles
         # We must explicitly set the font for every style to prevent overlapping
-        for style in range(33):  # Python lexer has ~33 styles
+        # Performance optimization: Only set essential styles initially
+        essential_styles = [
+            1,  # Comment
+            2,  # Number
+            3,  # Double-quoted string
+            4,  # Single-quoted string
+            5,  # Keyword
+            6,  # Triple-quoted string
+            7,  # Triple-single-quoted string
+            8,  # Class name
+            9,  # Function name
+            10,  # Operator
+            11,  # Identifier
+            12,  # Comment block
+            13,  # Unclosed string
+            14,  # Highlighted identifier
+            15,  # Decorator
+        ]
+
+        for style in essential_styles:
             lexer.setColor(color_foreground, style)
             lexer.setPaper(color_background, style)
             lexer.setFont(editor_font, style)
@@ -692,22 +717,62 @@ class AxiomStudio(QMainWindow):
 
     def open_workspace(self, folder_path: str):
         """Switches the workspace to the given folder and updates history."""
+        from urllib.parse import unquote
+
+        # Decode URL-encoded paths (e.g., from axiom://open-recent links)
+        folder_path = unquote(folder_path)
+        folder_path = str(Path(folder_path).resolve())
+
+        print(f"--- [Axiom Studio]: Opening workspace: {folder_path} ---")
+
         # Set the root path for the file system model
         self.file_system_model.setRootPath(folder_path)
 
+        # CRITICAL FIX: Wait for the model to finish fetching the directory
+        # This prevents the race condition where the UI tries to display before indexing completes
+        from PyQt6.QtCore import QCoreApplication
+
+        # Process events to allow the file system model to populate
+        for _ in range(10):  # Give it up to 10 event loop iterations
+            QCoreApplication.processEvents()
+            if self.file_system_model.canFetchMore(
+                self.file_system_model.index(folder_path)
+            ):
+                self.file_system_model.fetchMore(
+                    self.file_system_model.index(folder_path)
+                )
+                QCoreApplication.processEvents()
+
         # Set the file browser to show only this workspace
         root_index = self.file_system_model.index(folder_path)
+
+        # Verify the index is valid
+        if not root_index.isValid():
+            print(
+                f"--- [Axiom Studio]: ERROR: Invalid index for path {folder_path} ---"
+            )
+            return
+
+        print(
+            f"--- [Axiom Studio]: Setting file browser root to: {self.file_system_model.filePath(root_index)} ---"
+        )
+
         self.file_browser.setRootIndex(root_index)
 
-        # Expand the root to show immediate children
+        # Force the browser to update and expand the root
+        self.file_browser.update()
         self.file_browser.expand(root_index)
 
-        print(f"--- [Axiom Studio]: Workspace changed to {folder_path} ---")
+        # Scroll to ensure the root is visible
+        self.file_browser.scrollTo(root_index)
+
+        print(
+            f"--- [Axiom Studio]: Workspace successfully changed to {folder_path} ---"
+        )
 
         # Update history
         self._add_recent_workspace(folder_path)
 
-        # Reveal Panels
         # Reveal Panels
         self.file_browser.show()
         if hasattr(self, "toggle_browser_btn"):
@@ -857,6 +922,9 @@ class AxiomStudio(QMainWindow):
             if hasattr(self, "toggle_term_btn"):
                 self.toggle_term_btn.setChecked(False)
         else:
+            # Lazy initialization: Create first terminal if none exists
+            if self.bottom_panel.count() == 0:
+                self.create_new_terminal()
             self.bottom_panel.show()
             if hasattr(self, "toggle_term_btn"):
                 self.toggle_term_btn.setChecked(True)
@@ -866,7 +934,7 @@ class AxiomStudio(QMainWindow):
         Handles the 'Play Start' button click by injecting the 'axiom-train'
         command into the terminal web view.
         """
-        # Ensure we have a terminal
+        # Ensure we have a terminal (lazy initialization)
         if self.bottom_panel.count() == 0:
             self.create_new_terminal()
 

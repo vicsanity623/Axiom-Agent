@@ -4,6 +4,7 @@ import logging
 import re
 from datetime import date, datetime
 from functools import lru_cache
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from thefuzz import process
@@ -22,6 +23,12 @@ class ConversationManager:
     def __init__(self, agent: CognitiveAgent):
         """Initializes the ConversationManager with a reference to the main agent."""
         self.agent = agent
+
+        # Initialize Episodic Memory (Phase 10)
+        from .episodic_memory import EpisodicMemory
+
+        memory_file = Path("data") / "episodic_memory.json"
+        self.episodic_memory = EpisodicMemory(agent, memory_file)
 
     def chat(self, user_input: str) -> str:
         """
@@ -71,6 +78,14 @@ class ConversationManager:
 
         if synthesizer_was_used and not self.agent.inference_mode:
             self._learn_from_introspection(final_response, interpretations[0])
+
+        # Index conversation in episodic memory (Phase 10)
+        key_entities = [
+            entity["name"] for entity in interpretations[0].get("entities", [])
+        ]
+        self.episodic_memory.index_conversation(
+            user_input, final_response, key_entities
+        )
 
         return final_response
 
@@ -694,17 +709,19 @@ class ConversationManager:
             "[border][CleanCache]: Cleared reasoning cache due to knowledge correction.[/border]"
         )
         updated_any = False
-        for u, v, key, data in list(
-            self.agent.graph.graph.out_edges(subject_node.id, keys=True, data=True)
-        ):
-            if data.get("type") == relation_type:
-                target_node = self.agent.graph.get_node_by_id(v)
+        updated_any = False
+        edges = self.agent.graph.get_edges_from_node(subject_node.id)
+        for edge in edges:
+            if edge.type == relation_type:
+                target_node = self.agent.graph.get_node_by_id(edge.target)
                 if (
                     target_node
                     and self.agent._clean_phrase(target_node.name)
                     == correct_answer_name
                 ):
-                    self.agent.graph.graph[u][v][key]["weight"] = 1.0
+                    self.agent.graph.update_edge_weight(
+                        edge, 1.0, provenance="user_correction"
+                    )
                     logger.info(
                         "    - REINFORCED: %s --[%s]--> %s",
                         subject_name,
@@ -713,7 +730,9 @@ class ConversationManager:
                     )
                     updated_any = True
                 else:
-                    self.agent.graph.graph[u][v][key]["weight"] = 0.1
+                    self.agent.graph.update_edge_weight(
+                        edge, 0.1, provenance="user_correction"
+                    )
                     if target_node:
                         logger.info(
                             "    - PUNISHED: %s --[%s]--> %s",
@@ -722,13 +741,14 @@ class ConversationManager:
                             target_node.name,
                         )
                     updated_any = True
+
+        # Check if the correct edge exists
+        edges_now = self.agent.graph.get_edges_from_node(subject_node.id)
         if not any(
-            (node := self.agent.graph.get_node_by_id(v))
+            (node := self.agent.graph.get_node_by_id(edge.target))
             and self.agent._clean_phrase(node.name) == correct_answer_name
-            and data.get("type") == relation_type
-            for u, v, key, data in self.agent.graph.graph.out_edges(
-                subject_node.id, keys=True, data=True
-            )
+            and edge.type == relation_type
+            for edge in edges_now
         ):
             logger.info(
                 "  [Curiosity]: Adding missing edge for clarification: %s --[%s]--> %s",

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+import typing
+from typing import TYPE_CHECKING, Any
 
 from .graph_core import ConceptNode
 from .knowledge_base import validate_and_add_relation
@@ -83,10 +84,17 @@ class LexiconManager:
             )
 
         # Ensure the main node has its lexical property
-        props = self.agent.graph.graph.nodes[node.id].setdefault("properties", {})
-        promoted_as = props.setdefault("lexical_promoted_as", {})
+        if node.properties is None:
+            node.properties = {}  # type: ignore
+
+        # Cast to dict to allow arbitrary keys (bypassing PropertyData TypedDict limits)
+        props_dict = typing.cast("dict[str, Any]", node.properties)
+        promoted_as = props_dict.setdefault("lexical_promoted_as", {})
         if isinstance(promoted_as, dict):
             promoted_as[pos_lower] = max(promoted_as.get(pos_lower, 0.0), confidence)
+
+        # Update the node in the graph
+        self.agent.graph.add_node(node)
 
         # Step 2: Get or Create the part-of-speech node itself
         pos_node: ConceptNode | None

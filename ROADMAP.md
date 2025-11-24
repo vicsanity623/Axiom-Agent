@@ -145,7 +145,7 @@ The agent has now completed its most critical architectural evolution to date in
 
 ---
 
-# Phase 10 — The Metacognitive Dreamer (Episodic Memory & Self-Optimization)
+# Phase 10 — The Metacognitive Dreamer (Episodic Memory & Self-Optimization) [COMPLETE]
 
 **Goal:** Enable the agent to maintain long-term context across sessions and proactively optimize its own knowledge graph during idle time ("dreaming").
 
@@ -155,5 +155,17 @@ The agent has now completed its most critical architectural evolution to date in
     *   **Consolidate:** Merge duplicate or highly similar nodes.
     *   **Prune:** Remove low-confidence or unused isolated nodes.
     *   **Hypothesize:** Generate new `INVESTIGATE` tasks based on graph topology (e.g., nodes with few edges).
+
+---
+
+# Phase 11 — The Linguistic Scaffolding (Symbolic Text Generation)
+
+**Goal:** Evolve beyond LLM-dependent synthesis by learning linguistic patterns as symbolic graph structures, enabling pure symbolic text generation.
+
+### Key Features
+*   **Syntactic Pattern Graph:** Build a separate graph of sentence templates and transformation rules (e.g., `statement → question`, `active → passive`).
+*   **Pattern Learner:** Extract and store reusable linguistic patterns from analyzed sentences (e.g., `"{subject} can {verb} {object}"`).
+*   **Compositional Generator:** Generate coherent text by traversing the knowledge graph and filling pattern templates.
+*   **Code Template Library:** Learn programming syntax patterns as graph structures for symbolic code generation.
 
 ---

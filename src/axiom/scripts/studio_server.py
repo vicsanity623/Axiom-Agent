@@ -514,18 +514,20 @@ async def status():
 async def get_curriculum():
     """Returns the active curriculum/goal state as an HTML fragment."""
     try:
-        # Prefer in-memory agent state if available for real-time updates
-        global agent
+        # Prefer in-memory agent state ONLY if we are running the training loop locally
+        global agent, training_thread
         state_data = {}
 
-        if agent:
+        # If training is running locally, the in-memory agent is the source of truth
+        if agent and training_thread and training_thread.is_alive():
             # Extract state from in-memory agent
             if hasattr(agent, "goal_manager") and agent.goal_manager.goals:
                 state_data["goals"] = agent.goal_manager.goals
             if hasattr(agent, "learning_goals"):
                 state_data["learning_goals"] = agent.learning_goals
 
-        # Fallback to disk if in-memory state is empty or agent not loaded
+        # Fallback to disk if in-memory state is empty or we are not training locally
+        # This allows the dashboard to reflect state from an external axiom-train process
         if not state_data and DEFAULT_STATE_FILE.exists():
             try:
                 state_data = json.loads(DEFAULT_STATE_FILE.read_text(encoding="utf-8"))

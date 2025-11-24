@@ -34,7 +34,7 @@ def main() -> None:
         f"[bold green]✅ Master brain created successfully at: {master_brain_path}[/bold green]"
     )
     console.print(
-        f"   - Nodes: {len(agent.graph.graph.nodes)}, Edges: {len(agent.graph.graph.edges)}"
+        f"   - Nodes: {agent.graph.get_node_count()}, Edges: {agent.graph.get_edge_count()}"
     )
     console.print(
         "[yellow]   - Remember to update pyproject.toml if this is a new file path.[/yellow]"

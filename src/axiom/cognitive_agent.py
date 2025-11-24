@@ -317,6 +317,12 @@ class CognitiveAgent:
         """Save the current knowledge graph to its JSON file atomically."""
         if self.inference_mode:
             return
+
+        # If using Neo4j, persistence is handled automatically
+        if self.graph.driver:
+            # We might still want to save state, but brain is in DB
+            return
+
         try:
             # Atomic write
             temp_file = self.brain_file.with_suffix(".tmp")

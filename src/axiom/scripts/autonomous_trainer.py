@@ -125,26 +125,39 @@ def _generate_or_set_initial_goal(
             f"[Curriculum Generation]: Attempt {curriculum_attempt + 1}/{max_curriculum_attempts}"
         )
         creative_seeds = [
-            # Tier 1: The Primitives of Code
-            "Generate a curriculum about the atomic building blocks of Python programming. Start with data types and basic syntax. Example topics: python, code, interpreter, variable, string, integer, float, boolean, syntax, comment, assign.",
-            "Generate a curriculum about basic operators and logic in programming. Start with math and comparisons. Example topics: add, subtract, multiply, divide, equals, not equals, greater than, true, false, logic, operator.",
-            # Tier 2: Control Flow & Logic
-            "Generate a curriculum about controlling the flow of execution in software. Start with decisions and loops. Example topics: if statement, else, elif, condition, loop, iteration, for loop, while loop, break, continue, block, indentation.",
-            # Tier 3: Data Structures & Organization
-            "Generate a curriculum about organizing data in memory using Python structures. Start with lists and mappings. Example topics: list, dictionary, tuple, set, index, key, value, append, pop, element, sequence, mutable, immutable.",
-            "Generate a curriculum about reusable code and modularity. Start with functions and scope. Example topics: function, def, return, call, argument, parameter, scope, global, local, module, import, library.",
-            # Tier 4: Object-Oriented Programming (OOP)
-            "Generate a curriculum about Object-Oriented Programming (OOP) concepts. Start with the blueprint of objects. Example topics: class, object, instance, instantiate, attribute, method, self, init, constructor, property.",
-            "Generate a curriculum about advanced OOP relationships. Start with how classes interact. Example topics: inheritance, parent class, child class, polymorphism, override, encapsulation, abstraction, interface, composition.",
-            # Tier 5: Code Quality, Error Handling, & Review
-            "Generate a curriculum about handling errors and preventing crashes. Start with exceptions. Example topics: error, bug, crash, exception, raise, try, except, finally, traceback, debugging.",
-            "Generate a curriculum about writing clean, maintainable, and professional code. Start with style and readability. Example topics: refactoring, readability, linting, pep8, docstring, annotation, type hint, clean code, review, testing.",
-            # Tier 6: Advanced Python Concepts
-            "Generate a curriculum about advanced Python features for efficient coding. Start with iterators and decorators. Example topics: iterator, generator, yield, decorator, wrapper, context manager, with statement, lambda, list comprehension.",
-            # Tier 7: Concurrency and Parallelism
-            "Generate a curriculum about executing multiple tasks simultaneously. Start with threads and processes. Example topics: thread, process, concurrency, parallelism, GIL, multiprocessing, asyncio, event loop, coroutine, thread safety.",
-            # Tier 8: Database Interaction and Persistence
-            "Generate a curriculum about interacting with databases and persisting data. Start with relational databases and SQL. Example topics: database, SQL, relational, table, schema, query, insert, update, delete, connection, persistence, ORM.",
+            # === ENGLISH LANGUAGE FUNDAMENTALS ===
+            # Tier 1: Basic English Building Blocks
+            "Generate a curriculum about the fundamental units of English language. Start with letters, sounds, and word formation. Example topics: alphabet, phoneme, vowel, consonant, syllable, word, letter, sound, pronunciation, spelling, morpheme.",
+            "Generate a curriculum about English word types and basic sentence structure. Start with parts of speech. Example topics: noun, verb, adjective, adverb, pronoun, preposition, conjunction, sentence, subject, predicate, article.",
+            # Tier 2: English Grammar and Semantics
+            "Generate a curriculum about how meaning is constructed in English. Start with word meanings and relationships. Example topics: definition, synonym, antonym, homonym, context, meaning, semantics, metaphor, literal, figurative, connotation, denotation.",
+            "Generate a curriculum about English sentence construction and grammar rules. Start with tenses and sentence types. Example topics: tense, past, present, future, punctuation, comma, period, question, exclamation, declarative, interrogative.",
+            # Tier 3: Advanced English Communication
+            "Generate a curriculum about complex English expression and writing. Start with paragraphs and composition. Example topics: paragraph, essay, argument, thesis, evidence, transition, coherence, style, tone, voice, rhetoric, persuasion.",
+            # === PYTHON PROGRAMMING FUNDAMENTALS ===
+            # Tier 4: Python Primitives and Syntax
+            "Generate a curriculum about the atomic building blocks of Python programming. Start with data types and basic syntax. Example topics: python, interpreter, variable, string, integer, float, boolean, type, assignment, literal, expression, statement.",
+            "Generate a curriculum about Python operators and expressions. Start with arithmetic and comparison. Example topics: operator, addition, subtraction, multiplication, division, comparison, equals, less than, greater than, boolean, logical, and, or, not.",
+            # Tier 5: Python Control Flow
+            "Generate a curriculum about controlling program execution in Python. Start with conditional logic and loops. Example topics: if, else, elif, condition, indentation, block, loop, for, while, range, iteration, break, continue, nested.",
+            # Tier 6: Python Data Structures
+            "Generate a curriculum about organizing and storing data in Python. Start with collections. Example topics: list, tuple, dictionary, set, index, slice, key, value, append, remove, mutable, immutable, sequence, collection.",
+            "Generate a curriculum about Python functions and code organization. Start with function definition. Example topics: function, def, return, parameter, argument, scope, local, global, module, import, package, reusability.",
+            # Tier 7: Python Object-Oriented Programming
+            "Generate a curriculum about Object-Oriented Programming in Python. Start with classes and objects. Example topics: class, object, instance, method, attribute, self, init, constructor, encapsulation, inheritance, polymorphism.",
+            # === COMPARATIVE UNDERSTANDING: LANGUAGE vs CODE ===
+            # Tier 8: Distinguishing Natural Language from Programming Language
+            "Generate a curriculum about understanding the fundamental differences between English and Python. Start with ambiguity versus precision. Example topics: ambiguity, precision, syntax rules, grammar, interpretation, execution, natural language, formal language, semantics, parsing, compiler.",
+            "Generate a curriculum about how English and Python each represent and communicate meaning. Start with human communication versus machine instructions. Example topics: intent, instruction, command, interpretation, literal meaning, context-free, context-dependent, abstraction, translation, communication.",
+            # Tier 9: Error Handling in Both Domains
+            "Generate a curriculum about mistakes and corrections in English versus Python. Start with grammar errors versus syntax errors. Example topics: grammar error, syntax error, typo, bug, exception, debugging, correction, validation, linting, proofreading, traceback.",
+            # Tier 10: Structure and Composition
+            "Generate a curriculum about how complex structures are built in English and Python. Start with composition principles. Example topics: composition, hierarchy, nesting, paragraph structure, code structure, modularity, organization, refactoring, clarity, readability.",
+            # === ADVANCED CONCEPTS ===
+            # Tier 11: Advanced Python Features
+            "Generate a curriculum about advanced Python programming techniques. Start with iterators and comprehensions. Example topics: iterator, generator, yield, comprehension, lambda, decorator, context manager, with statement, functional programming.",
+            # Tier 12: Meta-Understanding of Languages
+            "Generate a curriculum about understanding language systems themselves. Start with how languages evolve and are designed. Example topics: language design, evolution, standard, convention, idiom, pattern, best practice, style guide, pythonic, prescriptive, descriptive.",
         ]
         selected_seed = random.choice(creative_seeds)
         logger.info(

@@ -115,10 +115,21 @@ def session_agent(monkeypatch_session) -> Generator[CognitiveAgent, None, None]:
             MockUniversalInterpreter,
         )
 
-        agent = CognitiveAgent(
-            brain_file=brain_file, state_file=state_file, enable_llm=False
-        )
-        yield agent
+        # Patch Neo4j driver for the session agent
+        from unittest.mock import patch
+
+        from tests.mock_neo4j import MockNeo4jDriver
+
+        with patch(
+            "axiom.graph_core.GraphDatabase.driver", side_effect=MockNeo4jDriver
+        ):
+            agent = CognitiveAgent(
+                brain_file=brain_file, state_file=state_file, enable_llm=False
+            )
+            # Ensure driver is set
+            if agent.graph.driver is None:
+                agent.graph.driver = MockNeo4jDriver()
+            yield agent
 
 
 @pytest.fixture

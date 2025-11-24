@@ -7,7 +7,10 @@ from axiom.conversation_manager import ConversationManager
 
 @pytest.fixture
 def mock_agent():
-    return MagicMock()
+    agent = MagicMock()
+    # Mock vector_store with is_available=False to skip episodic memory indexing
+    agent.vector_store.is_available = False
+    return agent
 
 
 def test_conversation_manager_init(mock_agent):

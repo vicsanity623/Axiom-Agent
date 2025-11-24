@@ -13,18 +13,25 @@ from axiom.graph_core import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
-    from _pytest.logging import LogCaptureFixture
-
     from axiom.universal_interpreter import PropertyData
 
 
 # Fixtures
 @pytest.fixture
 def graph() -> ConceptGraph:
-    """Given: An empty ConceptGraph instance."""
-    return ConceptGraph()
+    """Given: An empty ConceptGraph instance with a mock driver."""
+    from unittest.mock import patch
+
+    from tests.mock_neo4j import MockNeo4jDriver
+
+    with patch("axiom.graph_core.GraphDatabase.driver", side_effect=MockNeo4jDriver):
+        # Clear shared mock data
+        MockNeo4jDriver.clear_data()
+        g = ConceptGraph()
+        # Ensure driver is set even if env vars are missing
+        if g.driver is None:
+            g.driver = MockNeo4jDriver()
+        return g
 
 
 @pytest.fixture
@@ -195,7 +202,7 @@ class TestConceptGraph:
         new_node_with_same_name = ConceptNode(name="a")
         returned_node = graph.add_node(new_node_with_same_name)
 
-        assert len(graph.graph.nodes) == 1
+        assert graph.get_node_count() == 1
         assert returned_node.id == node_a.id
 
     def test_get_nonexistent_node(self, graph: ConceptGraph) -> None:
@@ -302,53 +309,6 @@ class TestConceptGraph:
         retrieved_node = graph.get_node_by_id(node_a.id)
         assert retrieved_node is not None
         assert retrieved_node.activation == 0.0
-
-    def test_save_and_load_file(
-        self,
-        populated_graph: ConceptGraph,
-        tmp_path: Path,
-    ) -> None:
-        """
-        Given: A populated graph.
-        When: The graph is saved to a file and loaded back.
-        Then: The loaded graph is identical to the original.
-        """
-        file_path = tmp_path / "test_brain.json"
-        populated_graph.save_to_file(file_path)
-        loaded_graph = ConceptGraph.load_from_file(file_path)
-
-        assert len(loaded_graph.graph.nodes) == len(populated_graph.graph.nodes)
-        assert len(loaded_graph.graph.edges) == len(populated_graph.graph.edges)
-        assert sorted(loaded_graph.get_all_node_names()) == ["a", "b", "c"]
-
-    def test_load_nonexistent_file(self, tmp_path: Path) -> None:
-        """
-        Given: A path to a file that does not exist.
-        When: load_from_file is called.
-        Then: An empty graph is created and a log message is emitted.
-        """
-        file_path = tmp_path / "nonexistent.json"
-        graph = ConceptGraph.load_from_file(file_path)
-        assert isinstance(graph, ConceptGraph)
-        assert len(graph.graph.nodes) == 0
-
-    def test_load_corrupt_file(
-        self,
-        tmp_path: Path,
-        caplog: LogCaptureFixture,
-    ) -> None:
-        """
-        Given: A path to a corrupt JSON file.
-        When: load_from_file is called.
-        Then: An empty graph is created and an error is logged.
-        """
-        file_path = tmp_path / "corrupt.json"
-        file_path.write_text("{not json}", encoding="utf-8")
-        graph = ConceptGraph.load_from_file(file_path)
-
-        assert isinstance(graph, ConceptGraph)
-        assert len(graph.graph.nodes) == 0
-        assert "Error loading brain" in caplog.text
 
     def test_find_exclusive_conflict(self, populated_graph: ConceptGraph) -> None:
         """

@@ -43,18 +43,26 @@ class CycleManager:
         self.BASE_DISCOVERY_PHASE_DURATION = timedelta(minutes=3.2)
         self.BASE_REFINEMENT_PHASE_DURATION = timedelta(minutes=3)
         self.BASE_METACOGNITIVE_PHASE_DURATION = timedelta(minutes=7)
+        self.BASE_DREAM_PHASE_DURATION = timedelta(minutes=5)  # Phase 10
         self.CYCLE_DELAY_SECONDS = 60
         self.current_phase: str | None = None
         self.phase_start_time: datetime | None = None
         # Adaptive thresholds
         self.PENDING_RELATIONS_HIGH_THRESHOLD = 50
         self.PHASE_EXTENSION_FACTOR = 1.2  # Extend by 20%
+
+        # Initialize Dream Cycle (Phase 10)
+        from ..dream_cycle import DreamCycle
+
+        self.dream_cycle = DreamCycle(harvester.agent)
+
         fast_mode = os.getenv("AXIOM_FAST_TEST") == "1"
         if fast_mode:
             self.BASE_LEARNING_PHASE_DURATION = timedelta(minutes=5)
             self.BASE_DISCOVERY_PHASE_DURATION = timedelta(seconds=5)
             self.BASE_REFINEMENT_PHASE_DURATION = timedelta(minutes=5)
             self.BASE_METACOGNITIVE_PHASE_DURATION = timedelta(minutes=4)
+            self.BASE_DREAM_PHASE_DURATION = timedelta(minutes=2)
             self.CYCLE_DELAY_SECONDS = 2
 
     def start(self, duration_hours: float | None = None) -> None:
@@ -235,6 +243,25 @@ class CycleManager:
             max_instances=1,
         )
 
+    def _start_dream_phase(self) -> None:
+        """Start the Dream Phase for autonomous graph optimization (Phase 10)."""
+        minutes = self.BASE_DREAM_PHASE_DURATION.total_seconds() / 60
+        self.console.rule(
+            f"[bold magenta]Starting {minutes:.1f}-minute DREAM phase (graph optimization).[/bold magenta]",
+            style="border",
+        )
+        self._clear_all_jobs()
+        self.current_phase = "dream"
+        self.phase_start_time = datetime.now()
+        self.scheduler.add_job(
+            self._run_and_reschedule_cycle,
+            "date",
+            run_date=datetime.now(),
+            id="dream_cycle_job",
+            args=[self.dream_cycle.run_dream_phase, "dream_cycle_job", "dream"],
+            max_instances=1,
+        )
+
     def _manage_phases(self) -> None:
         """The main heartbeat, called every interval to check for phase transitions."""
         # --- FIX: Check the stop event at the very beginning of the heartbeat ---
@@ -277,6 +304,11 @@ class CycleManager:
             elif (
                 self.current_phase == "metacognitive"
                 and elapsed_time >= self.BASE_METACOGNITIVE_PHASE_DURATION
+            ):
+                self._start_dream_phase()
+            elif (
+                self.current_phase == "dream"
+                and elapsed_time >= self.BASE_DREAM_PHASE_DURATION
             ):
                 self._start_learning_phase()
 
